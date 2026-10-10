@@ -25,6 +25,10 @@ var _client: Node = null
 ## `--board`: the Tab scoreboard held open over the frame.
 var _board: bool = false
 
+## `--console=LINE`: typed at the player's console as the round starts (`net_stat 3`), so
+## the frame shows what the line does, through the same path a player's typing takes.
+var _console_line := ""
+
 
 func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -38,6 +42,8 @@ func _ready() -> void:
 			_board = true
 		elif arg.begins_with("--arena="):
 			_arena = arg.trim_prefix("--arena=")
+		elif arg.begins_with("--console="):
+			_console_line = arg.trim_prefix("--console=")
 
 	_client = WoClient.new()
 	_client.name = "Client"
@@ -51,6 +57,10 @@ func _run() -> void:
 	var game: WoGame = _client.get("game")
 	game.config.warmup_seconds = 0.0
 	game.config.countdown_seconds = 1.0
+
+	var console: DotConsoleController = _client.get("console")
+	if _console_line != "" and console != null:
+		var _ran := console.submit(_console_line)
 
 	match _view:
 		"arena":

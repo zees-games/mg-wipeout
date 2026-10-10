@@ -79,6 +79,9 @@ var audio: WoAudio = null
 ## The player's own settings and the screen Escape opens. See [WoSettings].
 var settings: WoSettings = null
 
+## The player's console. See [method DotConsoleKit.build].
+var console: DotConsoleController = null
+
 ## The weapons in this player's own hands, once they have picked one up in a final death.
 ##
 ## [b]Drawn, never decided.[/b] `authority` is false and every shot that matters is the
@@ -533,6 +536,10 @@ func _build_settings() -> void:
 		# Typing a line is the chat box's keyboard: Escape there closes the line, not
 		# opens the menu.
 		settings.menu.busy = func() -> bool: return chat != null and chat.is_typing()
+		# The console (the key under Escape): net_stat and every other setting by name, and
+		# the server's console when one runs in this process. One of the menu's overlays, so
+		# opening it stops the player and frees the pointer exactly as the menu does.
+		console = DotConsoleKit.build(self, settings.settings, settings.menu)
 		_wire_board()
 
 

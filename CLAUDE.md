@@ -84,6 +84,7 @@ godot --headless --path . res://examples/dedicated.tscn          # 6 sections, 2
 godot --headless --path . res://tools/trace_course.tscn -- --course=wo_log_roll --every=0.5
 tools/shot.sh --view=course --wo-course-ids=wo_grand_tour
 tools/shot.sh --view=finale
+tools/shot.sh --view=third --console="net_stat 3"   # a line typed at the player's console first
 ```
 
 `headless_courses` drives ticks **without** waiting on physics frames (ten courses at real time is half an hour; it takes ~30 s) — legitimate only because every moving piece is a static body written straight into the physics server. All suites free the previous world before building the next: every world is a child of the suite, they share one physics space, and every course is built at the origin — a world left standing kept its closed start gate exactly where the next runner had to go, which read as the gate never dropping.
