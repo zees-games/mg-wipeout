@@ -14,7 +14,7 @@ const WoPlayer := preload("../game/wo_player.gd")
 ## nothing but the stand-ins the module seats itself.
 
 const SECTIONS := 7
-const CHECKS := 26
+const CHECKS := 30
 
 const SERVER_DIR := "user://wo_dedicated"
 const PORT := 28931
@@ -223,6 +223,38 @@ func _test_a_round_runs() -> void:
 	_check(bots == game.config.minimum_players, "the module seated stand-ins up to the minimum", "%d" % bots)
 	_check(not rounds.is_empty(), "and a round was decided", str(rounds))
 	_check(not rounds.is_empty() and str(rounds[0][2]) != "", "with a sentence saying why", str(rounds))
+	# [b]A person takes a stand-in's place, and leaving gives it back[/b]: DotBotQuota's fill
+	# mode, the family's default. Driven by calling the roster check rather than waiting for
+	# its interval, with a person added through the bridge the way a test's player is (peer
+	# zero, not a stand-in), so the count is exact and nothing else moves under it.
+	var quota_module := _module()
+	var quota_bridge: Object = quota_module.get("bridge") if quota_module != null else null
+	_check(server.console.find_cvar("bot_quota") != null and server.console.find_cvar("bot_quota_mode") != null,
+		"the shared bot_quota cvars are registered")
+	var _alias := _run_command("wo_min_players 3")
+	_check(server.console.find_cvar("bot_quota") != null and server.console.find_cvar("bot_quota").get_int() == 3,
+		"and the old wo_min_players sets bot_quota",
+		server.console.find_cvar("bot_quota").get_string() if server.console.find_cvar("bot_quota") != null else "missing")
+
+	if quota_module != null and quota_bridge != null:
+		quota_module.call("_keep_the_round_full")
+		var bots_before: int = (quota_module.get("_bot_ids") as Array).size()
+		var joined: DotResult = quota_bridge.call("add_player", 0, 9001, "Person")
+		quota_module.call("_keep_the_round_full")
+		var bots_with: int = (quota_module.get("_bot_ids") as Array).size()
+		_check(joined.ok and bots_before == 3 and bots_with == bots_before - 1,
+			"a person joining takes a stand-in's place", "%d -> %d" % [bots_before, bots_with])
+		quota_bridge.call("remove_player", 9001)
+		quota_module.call("_keep_the_round_full")
+		var bots_after: int = (quota_module.get("_bot_ids") as Array).size()
+		_check(bots_after == bots_before, "and a stand-in comes back when they leave",
+			"%d -> %d" % [bots_with, bots_after])
+	else:
+		_check(false, "a person joining takes a stand-in's place", "no module")
+		_check(false, "and a stand-in comes back when they leave", "no module")
+
+	var _restored := _run_command("wo_min_players 3")
+
 	_check(_said(_run_command("wo_status"), "round"), "and wo_status still answers")
 	_finished()
 

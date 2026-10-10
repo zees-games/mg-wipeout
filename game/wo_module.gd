@@ -49,6 +49,10 @@ static var punishments_file: String = ""
 ## The `wo_bots` cvar, held so the tick does not look it up sixty times a second.
 var _bots: DotConVar = null
 
+## How many stand-ins, from how many people: dot-server's one rule for every game. See
+## [method _keep_the_round_full].
+var _quota: DotBotQuota = null
+
 var _since_roster_check: float = 0.0
 
 ## How many stand-ins this module has put in, so it can take them out again.
@@ -156,8 +160,16 @@ func _game_load() -> DotResult:
 
 	_bots = add_cvar(
 		"wo_bots", "1",
-		"Keep the round full with stand-ins. 0 leaves the server as empty as it is."
+		"Automatic stand-ins: 1 keeps as many as bot_quota and bot_quota_mode say, 0 none at all."
 	)
+
+	# [b]How many is dot-server's [DotBotQuota], so `bot_quota` and `bot_quota_mode` mean the
+	# same thing on every server in the family.[/b] The default is this game's own minimum
+	# (`minimum_players`, from the config file) in fill mode, which is the rule it ran before
+	# the policy was shared: stand-ins top the round up to that many players, a person who
+	# joins takes a stand-in's place, and the stand-in comes back when they leave. `wo_bots`
+	# stays the switch it always was, so a server config that sets it means what it meant.
+	_quota = DotBotQuota.install(self, world.config.minimum_players)
 
 	# [b]Started here and not in the world's own `_ready`.[/b] `start()` lays the field out
 	# and puts everybody on it, and a world that did that before the bridge existed would
@@ -311,9 +323,15 @@ func _add_tunables(world: WoGame) -> void:
 			config.spectate_camera = clampi(int(value), 0, 2)
 			if world.spectate != null:
 				world.spectate.set_force_camera(config.spectate_camera))
+	# [b]Deprecated: the count is `bot_quota` now[/b], and this forwards to it. Kept rather than
+	# removed because every shipped server config sets it; left as its own number it would be
+	# a second cvar deciding the same count, and whichever was read last would win.
 	_tunable("wo_min_players", float(config.minimum_players),
-		"How many players the server keeps in a round with stand-ins",
-		func(value: float) -> void: config.minimum_players = clampi(int(value), 0, 24))
+		"Deprecated, sets bot_quota. How many players the server keeps in a round with stand-ins",
+		func(value: float) -> void:
+			config.minimum_players = clampi(int(value), 0, 24)
+			if _quota != null and _quota.quota_cvar != null:
+				var _set := _quota.quota_cvar.set_value(str(config.minimum_players)))
 
 
 ## A number as an operator would type it: `34`, not `34.000000`.
@@ -392,10 +410,13 @@ func _note_pings() -> void:
 func _keep_the_round_full() -> void:
 	var world := game as WoGame
 
-	if world == null or bridge == null or _bots == null or not _bots.get_bool():
+	if world == null or bridge == null or _quota == null:
 		return
 
-	var wanted := world.config.minimum_players
+	# People only. A stand-in is not one, and neither is a bot somebody put in by hand through
+	# the bridge (a test, an admin): those are never in `_bot_ids` either, so they are left
+	# alone and outside the count. A leaver is gone from `players` the moment the bridge
+	# removes them, so nobody half-disconnected is counted.
 	var humans := 0
 
 	for id: StringName in world.players:
@@ -408,9 +429,15 @@ func _keep_the_round_full() -> void:
 		if not world.players.has(_bot_ids[index]):
 			_bot_ids.remove_at(index)
 
-	var short := wanted - humans - _bot_ids.size()
+	# `wo_bots 0` takes the stand-ins out as well as not adding more: a switch that left the
+	# ones already in until a map change would be an operator with no way to empty a server.
+	var wanted := 0
 
-	for _i in range(maxi(short, 0)):
+	if _bots == null or _bots.get_bool():
+		var slots: int = server.config.max_players if server != null and server.config != null else -1
+		wanted = _quota.wanted(humans, slots)
+
+	for _i in range(maxi(wanted - _bot_ids.size(), 0)):
 		var bot: WoPlayer = bridge.call("add_bot", _bot_name())
 
 		if bot == null:
@@ -418,10 +445,9 @@ func _keep_the_round_full() -> void:
 
 		_bot_ids.append(bot.player_id)
 
-	for _i in range(maxi(humans + _bot_ids.size() - wanted, 0)):
-		if _bot_ids.is_empty():
-			break
-
+	# Newest first, so the stand-in a person replaces is the one that arrived last and the
+	# ones that have been playing longest keep playing.
+	while _bot_ids.size() > wanted:
 		var leaving: StringName = _bot_ids.pop_back()
 		bridge.call("remove_player", WoNetBridge.session_of(leaving))
 
