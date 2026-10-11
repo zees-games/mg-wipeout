@@ -48,8 +48,8 @@ enum Shape {
 ##
 ## [b]Measured per model rather than guessed, and every one of them needed a different
 ## number.[/b] Kenney's survival box is 0.25 m across and the car kit's tyre is 0.6 m, so
-## one scale for the kit would make half the catalogue the wrong size. The figures are in
-## this repository's CLAUDE.md so nobody has to measure them twice.
+## one scale for the kit would make half the catalogue the wrong size. Each prop's scale
+## is set in that prop's own scene (props/wo_*.tscn), next to the art it scales.
 @export var model_scale: float = 1.0
 
 ## Metres the model is moved down by, so a model whose origin is at its foot is centred on
