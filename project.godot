@@ -15,6 +15,10 @@ config/description="Players race obstacle courses over open water; if two or mor
 config/features=PackedStringArray("4.7")
 run/main_scene="res://game/wo.tscn"
 
+[audio]
+
+driver/enable_input=true
+
 [physics]
 
 ; [b]Godot's own 9.8, and that is deliberate here where three other 3D games in this
