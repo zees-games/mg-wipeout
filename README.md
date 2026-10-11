@@ -77,12 +77,15 @@ wo_weapons_per_side 2       // weapons on the arena floor
 wo_knock_min 8              // how hard the obstacles throw you
 wo_progress_decides 1       // 0 = a round nobody finishes is a draw
 wo_bot_fumble 12            // how clumsy the bots are
+mp_teammate_passthrough 1   // shots and team-mates: 0 a team-mate is hit and blocks, 1 through one at the muzzle, 2 through every team-mate
 bot_quota 3                 // players a round is kept at with bots; each person who joins replaces one
 bot_quota_mode fill         // fill (as above), fixed (that many bots), per_player (that many per person) or off
 wo_bots 1                   // 0 = no bots
 ```
 
 The bot cvars are the family's shared ones (dot-server's `DotBotQuota`). `wo_min_players` still works and sets `bot_quota`; it is deprecated.
+
+`mp_teammate_passthrough` is the family's shared one from dot-combat, live from the next shot. At 2 a team-mate in the line never stops a shot; splash still reaches them.
 
 `--wo-course-ids=<ids>` and `--wo-arena-ids=<ids>` limit a server to some courses and arenas.
 

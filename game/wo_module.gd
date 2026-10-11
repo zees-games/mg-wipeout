@@ -164,6 +164,14 @@ func _game_load() -> DotResult:
 	_wire_map(world)
 	_wire_progress(world)
 	_add_tunables(world)
+
+	# Whether shots pass through team-mates: `mp_teammate_passthrough` 0 never, 1 a team-mate
+	# holding the muzzle (the default), 2 every team-mate in the line. dot-combat's cvar,
+	# defined there once for every game; live from the next shot, and a value the operator set
+	# first (argv, content.yml) is read back. NOTIFY, because players should know.
+	if world.combat != null:
+		var _passthrough := world.combat.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
+
 	_build_vote(world)
 
 	_bots = add_cvar(
