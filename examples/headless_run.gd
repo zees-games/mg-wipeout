@@ -6,7 +6,9 @@ const WoContent := preload("../game/wo_content.gd")
 const WoCourse := preload("../game/wo_course.gd")
 const WoCourseDoc := preload("../game/wo_course_doc.gd")
 const WoAudio := preload("../game/wo_audio.gd")
+const WoClient := preload("../game/wo_client.gd")
 const WoGame := preload("../game/wo_game.gd")
+const WoHud := preload("../game/wo_hud.gd")
 const WoPaths := preload("../game/wo_paths.gd")
 const WoPlayer := preload("../game/wo_player.gd")
 const WoProgress := preload("../game/wo_progress.gd")
@@ -18,9 +20,9 @@ const WoProgress := preload("../game/wo_progress.gd")
 ## because the section announced itself on the way in. mg-smash-copter and dot-settings both
 ## have the story; every total here was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 22
+const SECTIONS := 23
 
-const CHECKS := 106
+const CHECKS := 111
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -65,6 +67,7 @@ func _run() -> void:
 	await _test_the_machinery_is_heard()
 	await _test_the_client_settings()
 	await _test_a_carrier_is_drawn_carrying()
+	await _test_the_hud()
 
 	for world in _worlds.duplicate():
 		await _dispose(world)
@@ -904,6 +907,63 @@ func _test_a_carrier_is_drawn_carrying() -> void:
 	_check(carrier.figure != null and not carrier.figure.carrying and left != null
 			and not is_equal_approx(left.rotation.x, -PI * 0.5),
 		"and down again when it is let go")
+	_finished()
+
+
+## The HUD's health and clock are dot-ui's glance pieces, handed this world's numbers; health
+## only in a final death; the plate above the chat box's full log. A headless viewport is
+## 64 x 64, so the layout is checked as arithmetic on two bottom-anchored things, and looked
+## at with `tools/shot.sh --view=finale`.
+func _test_the_hud() -> void:
+	_section("the HUD draws health and the clock through dot-ui")
+	var game := await _world(func(c: WoConfig) -> void: c.countdown_seconds = 0.2)
+	var me := game.add_player(&"u1", "Ada")
+	var _other := game.add_player(&"u2", "Bo")
+	game.start()
+	await _step(game, int(0.4 * TICK_RATE))
+
+	var hud := WoHud.new()
+	add_child(hud)
+	hud.bind(game, me)
+	hud._process(0.0)
+	_check(
+		game.phase == WoGame.Phase.COURSE and hud.strip.clock == DotScoreStrip.clock_text(game.seconds_left())
+		and hud.strip.under_text() == hud._phase_line(),
+		"on a course the strip shows the clock with the phase line under it",
+		"%s / %s" % [hud.strip.clock, hud.strip.under_text()]
+	)
+	_check(not hud.vitals.visible, "and no health: nothing on a course can hurt you")
+
+	game.phase = WoGame.Phase.FINALE
+	me.health.health = 17.4
+	hud._process(0.0)
+	_check(
+		hud.vitals.visible and hud.vitals.number_text() == "18" and hud.vitals.is_low(),
+		"in a final death DotVitals shows health, red at a quarter",
+		"%s low=%s" % [hud.vitals.number_text(), str(hud.vitals.is_low())]
+	)
+
+	var chat := WoClient.new_chat()
+	add_child(chat)
+	var w: DotChatWindow = chat.window
+	var log_top := w.margin_bottom + w.entry_height + float(w.max_lines) * (w.line_height + w.line_gap)
+	var plate_bottom := -(hud.vitals.offset_top + hud.vitals.footprint().end.y)
+	_check(
+		plate_bottom >= log_top,
+		"a full chat log stays under the health plate",
+		"log reaches %.0f px off the bottom, the plate ends %.0f off it" % [log_top, plate_bottom]
+	)
+	chat.queue_free()
+
+	# A pack naming these classes does not parse on a shell whose dot-ui predates them, so
+	# the requires.json dot-ci derives must ask for dot-ui 4, and nothing may lower it.
+	var asks := DotAddonApi.derive()
+	_check(
+		int(asks.get("dot_ui", 0)) >= 4 and not FileAccess.file_exists("res://" + DotAddonApi.FLOOR_FILE),
+		"the pack asks a shell for dot-ui level 4, the glance pieces",
+		str(asks.get("dot_ui"))
+	)
+	hud.queue_free()
 	_finished()
 
 

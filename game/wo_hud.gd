@@ -22,9 +22,11 @@ const WoPlayer := preload("wo_player.gd")
 var game: WoGame = null
 var player: WoPlayer = null
 
-var _clock: Label = null
-var _phase: Label = null
-var _health: Label = null
+## The clock with the phase line under it: dot-ui's [DotScoreStrip], clock alone.
+var strip: DotScoreStrip = null
+## Health in a final death: dot-ui's [DotVitals], bar and number on one plate, red at a
+## quarter. Hidden on a course; see the class note.
+var vitals: DotVitals = null
 var _field: Label = null
 var _special: Label = null
 var _shout: Label = null
@@ -57,6 +59,25 @@ var blind_overlay: ColorRect = null
 const BLIND_FADE_SEC := 0.25
 
 const BLIND_COLOUR := Color(0.01, 0.01, 0.015)
+
+## Seconds left at which the clock turns red.
+const LOW_CLOCK_SEC := 10.0
+
+## The course name's amber, which is also the glance pieces' highlight.
+const AMBER := Color(0.98, 0.78, 0.33)
+
+
+## The glance pieces' colours in this game's palette: a deep violet-slate plate that holds
+## over pastel tiles, bright sky and water alike, the course name's amber as highlight. The
+## numbers stay white ringed in dark. Static so a render tool can use it.
+static func piece_theme() -> Theme:
+	var t := Theme.new()
+	var type := DotHudPiece.THEME_TYPE
+	t.set_color(&"plate", type, Color(0.10, 0.08, 0.20, 0.62))
+	t.set_color(&"plate_edge", type, Color(AMBER, 0.3))
+	t.set_color(&"highlight", type, AMBER)
+	t.set_color(&"low", type, Color(1.0, 0.34, 0.36))
+	return t
 
 
 func bind(p_game: WoGame, p_player: WoPlayer) -> void:
@@ -95,24 +116,26 @@ func _build() -> void:
 
 	var size := 22
 
-	_clock = _label(size + 14)
-	_clock.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	_clock.offset_top = 16.0
-	_clock.offset_bottom = 72.0
-	_clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# The glance pieces read their colours from the theme on the type DotHudPiece; set on
+	# the root, every piece under it inherits them. See [method piece_theme].
+	_root.theme = piece_theme()
 
-	_phase = _label(size)
-	_phase.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	_phase.offset_top = 74.0
-	_phase.offset_bottom = 108.0
-	_phase.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# The clock, and the phase line under it. Full width, because the strip centres itself
+	# on its own middle; the course name sits under it.
+	strip = DotScoreStrip.new()
+	strip.name = "Clock"
+	strip.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	strip.offset_top = 16.0
+	strip.offset_bottom = 96.0
+	_root.add_child(strip)
 
 	_special = _label(size)
 	_special.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	_special.offset_top = 110.0
-	_special.offset_bottom = 144.0
+	# Right under the strip's line, which ends about 90 pixels down.
+	_special.offset_top = 94.0
+	_special.offset_bottom = 128.0
 	_special.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_special.add_theme_color_override("font_color", Color(0.98, 0.78, 0.33))
+	_special.add_theme_color_override("font_color", AMBER)
 
 	_shout = _label(size + 20)
 	_shout.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
@@ -128,12 +151,19 @@ func _build() -> void:
 	# one on top of the other — which is exactly the shape of the bug game-buses-from-hell
 	# shipped with four HUD labels, and is invisible to a headless suite because a headless
 	# viewport is 64 x 64 and nothing there can overlap anything.
-	_health = _label(size + 16)
-	_health.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	_health.offset_left = 30.0
-	_health.offset_right = 300.0
-	_health.offset_top = -210.0
-	_health.offset_bottom = -150.0
+	# The plate is 56 tall and ends 206 pixels off the bottom, above the chat box's FULL
+	# eight-row log, which reaches 202 (checked in headless_run). The old number ended at 150,
+	# over the log's top rows; only a full log showed it.
+	vitals = DotVitals.new()
+	vitals.name = "Vitals"
+	vitals.bar_end = 220.0
+	vitals.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	vitals.offset_left = 24.0
+	vitals.offset_right = 24.0 + 340.0
+	vitals.offset_top = -262.0
+	vitals.offset_bottom = -206.0
+	vitals.visible = false
+	_root.add_child(vitals)
 
 	_field = _label(size)
 	_field.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -235,20 +265,21 @@ func _process(delta: float) -> void:
 		return
 
 	var left := game.seconds_left()
-	_clock.text = "%d:%02d" % [int(left) / 60, int(left) % 60]
-	_phase.text = _phase_line()
+	# No clock between rounds or while waiting: a plate reading 0:00 over "between rounds"
+	# says the same thing twice. Red for the last ten seconds.
+	var running := game.phase != WoGame.Phase.IDLE and game.sides_are_playable()
+	strip.show_clock(
+		DotScoreStrip.clock_text(left) if running else "", left <= LOW_CLOCK_SEC, _phase_line()
+	)
 	_special.text = str((game.stage.doc if game.stage != null else {}).get("name", ""))
 
 	var fighting := game.phase == WoGame.Phase.FINALE or game.phase == WoGame.Phase.HANDOVER
 
 	if player != null and player.health != null and fighting and not player.watching:
-		_health.text = "%d" % int(round(player.health.health))
-		var hurt := player.health.health <= player.health.max_health * 0.25
-		_health.add_theme_color_override(
-			"font_color", Color(1.0, 0.35, 0.3) if hurt else Color(1, 1, 1)
-		)
+		vitals.show_vitals(player.health.health, player.health.max_health)
+		vitals.visible = true
 	else:
-		_health.text = ""
+		vitals.visible = false
 
 	if fighting:
 		_field.text = "%d still up" % game.alive_count()
