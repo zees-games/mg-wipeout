@@ -20,7 +20,7 @@ const WoPaths := preload("wo_paths.gd")
 ## [b]Never on a server, and never deciding anything.[/b] Every hook here is called by
 ## [WoClient] from something the world or the wire already said.
 ##
-## [b]The beacon's ping is not here, deliberately[/b], as in mg-smash-copter: [WoBeacon]
+## [b]The beacon's ping is not here, deliberately[/b], as in mg-smash-copter: [DotFxBeacon]
 ## synthesises its own tone, and the day real audio ships `beacon` is the id it moves to.
 
 const CHANNEL := "wo.audio"

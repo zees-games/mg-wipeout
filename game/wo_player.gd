@@ -1,6 +1,5 @@
 extends CharacterBody3D
 
-const WoBeacon := preload("wo_beacon.gd")
 const WoConfig := preload("wo_config.gd")
 const WoController := preload("wo_controller.gd")
 const WoCourse := preload("wo_course.gd")
@@ -126,7 +125,7 @@ var blinded: bool = false
 ## An administrator's `beacon`: a ring, a column and a ping every client draws.
 var beacon: bool = false
 
-var beacon_marker: WoBeacon = null
+var beacon_marker: DotFxBeacon = null
 
 ## What other people see this player as. Client side.
 var figure: WoFigure = null
@@ -433,7 +432,7 @@ func present_beacon(delta: float, at: Vector3, local_view: bool) -> bool:
 		return false
 
 	if beacon_marker == null:
-		beacon_marker = WoBeacon.new()
+		beacon_marker = DotFxBeacon.new()
 		beacon_marker.name = "Beacon"
 		add_child(beacon_marker)
 
