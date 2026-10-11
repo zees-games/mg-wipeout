@@ -10,11 +10,13 @@ extends Node
 ##   tools/shot.sh --view=third                     # third person, mid-course
 ##   tools/shot.sh --view=arena --arena=wo_arena_pit   # an arena, from above
 ##   tools/shot.sh --view=finale                    # a real final death, from a finisher's eyes
+##   tools/shot.sh --view=third --ballot            # the course vote's ballot, mid-vote
 ##
 ## Any `--wo-*` is the game's own configuration (see `WoConfig`), because `WoClient` reads it.
 
 const WoClient := preload("../game/wo_client.gd")
 const WoGame := preload("../game/wo_game.gd")
+const WoVote := preload("../game/wo_vote.gd")
 
 var _view := "eyes"
 var _seconds := 4.0
@@ -29,6 +31,11 @@ var _board: bool = false
 ## the frame shows what the line does, through the same path a player's typing takes.
 var _console_line := ""
 
+## `--ballot`: the course vote's ballot over the frame, as the client shell draws it — a
+## [DotBallotPanel] down the right-hand side — fed the state this game's own [WoVote] builds,
+## with a few votes cast.
+var _ballot: bool = false
+
 
 func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -40,6 +47,8 @@ func _ready() -> void:
 			_out = arg.trim_prefix("--out=")
 		elif arg == "--board":
 			_board = true
+		elif arg == "--ballot":
+			_ballot = true
 		elif arg.begins_with("--arena="):
 			_arena = arg.trim_prefix("--arena=")
 		elif arg.begins_with("--console="):
@@ -109,6 +118,10 @@ func _run() -> void:
 
 	if _board:
 		_client.call("_show_board", true)
+	if _ballot:
+		_show_ballot(game)
+		# The voters' discs slide to the row they chose; a frame too soon catches one between.
+		await _seconds_of(1.0)
 	await _frames(3)
 	var image := get_viewport().get_texture().get_image()
 	var path := ProjectSettings.globalize_path(_out)
@@ -116,6 +129,50 @@ func _run() -> void:
 	var saved := image.save_png(path)
 	print("saved %s (%s): %s" % [_out, _view, error_string(saved)])
 	get_tree().quit(0 if saved == OK else 1)
+
+
+## A real ballot from this game's vote: every course the client has, four voters, three of
+## whom have voted, drawn the way the client shell's notice overlay draws a `map_ballot`.
+func _show_ballot(game: WoGame) -> void:
+	var names := {&"1": "you", &"2": "bo", &"3": "quiet_one", &"4": "ana"}
+	var states: Array = []
+	var vote := WoVote.new()
+	vote.config_path = ""
+	vote.courses_fn = func() -> Array:
+		var out: Array = []
+		for id in game.catalogue.playable_courses(PackedStringArray()):
+			out.append([id, str((game.catalogue.courses.get(id, {}) as Dictionary).get("name", id))])
+		return out
+	vote.voters_fn = func() -> Array: return names.keys()
+	vote.people_fn = func(voter: StringName) -> Dictionary: return {"name": names.get(voter, "?"), "avatar": ""}
+	vote.ballot_fn = func(state: Dictionary) -> void: states.append(state)
+	add_child(vote)
+	var _set := vote.setup()
+	vote.note_course(StringName(str(game.course_doc.get("id", ""))))
+	var _opened := vote.director.open_vote(DotVoteClock.REASON_MANUAL)
+	var options := vote.director.ballot.option_ids()
+	var _a := vote.director.cast_one(&"1", options[0])
+	var _b := vote.director.cast_one(&"2", options[1 % options.size()])
+	var _c := vote.director.cast_one(&"3", options[0])
+	vote.feed.poll()
+
+	var layer := CanvasLayer.new()
+	layer.layer = 50
+	add_child(layer)
+	var box := VBoxContainer.new()
+	box.anchor_left = 1.0
+	box.anchor_right = 1.0
+	box.anchor_bottom = 1.0
+	box.offset_left = -376.0
+	box.offset_right = -16.0
+	box.offset_top = 110.0
+	box.offset_bottom = -16.0
+	layer.add_child(box)
+	var panel := DotBallotPanel.new()
+	panel.ui_theme = DotUiTheme.space()
+	panel.local_voter = "1"
+	box.add_child(panel)
+	panel.show_state(states.back() if not states.is_empty() else {})
 
 
 func _overview(game: WoGame, reach_scale: float) -> void:

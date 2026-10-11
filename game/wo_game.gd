@@ -149,6 +149,10 @@ signal blast(at: Vector3, radius: float)
 var stage: WoCourse = null
 
 var catalogue: WoCatalogue = null
+
+## The course the next round plays, set by the players' vote ([code]game/wo_vote.gd[/code]) or
+## an operator, and used once. Empty lets the rotation choose.
+var next_course_id: StringName = &""
 var props: DotPropSpawner = null
 var prop_damage: DotPropDamage = null
 var combat: DotCombatManager = null
@@ -871,10 +875,20 @@ func _lay_out_course() -> void:
 	if catalogue == null:
 		return
 
-	var doc := catalogue.next_course(
-		config.course_ids, config.shuffle_courses, random.stream(&"course"),
-		StringName(str(course_doc.get("id", "")))
-	)
+	var doc: Dictionary = {}
+
+	# What the players voted for, once, if it is still a course this server plays (a
+	# wo_reload between the vote and the round can take it away). The rotation otherwise.
+	if next_course_id != &"" and catalogue.playable_courses(config.course_ids).has(next_course_id):
+		doc = catalogue.courses[next_course_id]
+
+	next_course_id = &""
+
+	if doc.is_empty():
+		doc = catalogue.next_course(
+			config.course_ids, config.shuffle_courses, random.stream(&"course"),
+			StringName(str(course_doc.get("id", "")))
+		)
 
 	# The round's weather, drawn here and sent inside the document, so every machine reads
 	# the same gusts and strikes and nothing more travels per tick.

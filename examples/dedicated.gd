@@ -13,8 +13,8 @@ const WoPlayer := preload("../game/wo_player.gd")
 ## [DotGameModule]'s order runs, a cvar is typed at a console and a round is played by
 ## nothing but the stand-ins the module seats itself.
 
-const SECTIONS := 7
-const CHECKS := 30
+const SECTIONS := 8
+const CHECKS := 46
 
 const SERVER_DIR := "user://wo_dedicated"
 const PORT := 28931
@@ -50,6 +50,7 @@ func _run() -> void:
 		_test_the_commands()
 		await _test_a_round_runs()
 		await _test_a_reload_keeps_delivered_courses()
+		_test_the_course_vote()
 		await _test_it_unloads_cleanly()
 
 	_test_no_message_preloads_itself()
@@ -307,6 +308,111 @@ func _test_a_reload_keeps_delivered_courses() -> void:
 		DirAccess.remove_absolute(path)
 		path = path.get_base_dir()
 	DirAccess.remove_absolute("res://dot_cloud")
+	_finished()
+
+
+## The players' vote decides the next course, end to end through what a player types: a
+## nomination, the ballot opening on its own clock with the nomination on it, a vote by
+## number, the round's end putting the winner on the next round, and rock-the-vote opening a
+## ballot early. Commands run at the console, which is where a `!vote` typed in chat lands
+## (`_on_chat_command` runs it as the player); the console's voter is "console", so the
+## voter list is that one name. Stand-ins are not voters, and a server of stand-ins never
+## opens a ballot by itself.
+##
+## Synchronous from the round's end to the course laid: the stand-ins' rounds are running,
+## and one that started in a frame between would lay the voted course itself and leave the
+## check reading the rotation's.
+func _test_the_course_vote() -> void:
+	_section("the course vote")
+	var module := _module()
+	var vote: Node = module.get("vote") if module != null else null
+	_check(vote != null, "the module built a course vote")
+
+	if vote == null:
+		_finished()
+		return
+
+	var commands_there := true
+
+	for name in ["vote", "rtv", "nominate"]:
+		commands_there = commands_there and server.console.find_command(name) != null
+
+	_check(commands_there, "and registered dot-vote's vote, rtv and nominate")
+
+	# Hibernation: DotGameModule hands the director the server, the ballot's timer waits with
+	# it, and waking starts both again from the top.
+	var director: DotVoteDirector = vote.get("director")
+	_check(server.hibernation_changed.is_connected(director.set_hibernating),
+		"the vote follows the server's hibernation without a line of this game's")
+	vote.set("_opened_this_course", true)
+	server.console.execute("sv_hibernate_when_empty 1")
+	_check(server.is_hibernating() and director.hibernating, "an empty server sleeps, and the vote with it",
+		server.state_name())
+	var on_course: float = vote.get("_on_course_sec")
+	vote.call("advance", 600.0)
+	_check(is_equal_approx(vote.get("_on_course_sec"), on_course), "ten minutes asleep do not count towards the ballot")
+	server.console.execute("sv_hibernate_when_empty 0")
+	_check(is_zero_approx(vote.get("_on_course_sec")) and not vote.get("_opened_this_course") and not director.hibernating,
+		"waking wakes the vote, and the course ballot is owed again from the top")
+
+	# Every course in the directory, not only this suite's practice course.
+	game.config.course_ids = PackedStringArray()
+	vote.call("refresh_courses")
+	var ids: Array = []
+
+	for choice: DotVoteChoice in (vote.get("source") as DotVoteListSource).entries:
+		ids.append(String(choice.id))
+
+	_check(ids.has("wo_grand_tour") and ids.has("wo_log_roll") and not ids.has("wo_arena_pit"),
+		"it offers the courses, and no arena", str(ids))
+
+	# A course that is not the one being played, so it can be nominated.
+	var playing := String(game.stage.id()) if game.stage != null and not game.stage.is_arena() \
+		else str(game.course_doc.get("id", ""))
+	director.begin(StringName(playing))
+	var wanted := "wo_log_roll" if playing != "wo_log_roll" else "wo_grand_tour"
+	var captured: Array = []
+	vote.set("voters_fn", func() -> Array: return [&"console"])
+	vote.set("ballot_fn", func(state: Dictionary) -> void: captured.append(state))
+
+	_check(_said(_run_command("nominate %s" % wanted), "Nominated"), "a player nominates a course", wanted)
+
+	vote.set("_on_course_sec", 0.0)
+	vote.set("_opened_this_course", false)
+	vote.call("advance", float(vote.get("open_after_sec")) + 0.1)
+	var options: Array[StringName] = director.ballot.option_ids() if director.is_voting() else ([] as Array[StringName])
+	_check(director.is_voting() and options.has(StringName(wanted)),
+		"the ballot opens on its own clock, with the nomination on it", str(options))
+	# The feed is polled each tick before the ballot timer opens one, so it sees it next tick.
+	(vote.get("feed") as DotVoteBallotFeed).poll()
+	var drawn: Dictionary = captured.back() if not captured.is_empty() else {}
+	_check(bool(drawn.get("open", false)) and str(drawn.get("command", "")) == "vote" \
+			and (drawn.get("options", []) as Array).size() == options.size(),
+		"and the ballot a client draws says so, with the command that votes", str(drawn.keys()))
+
+	_check(_said(_run_command("vote %d" % (options.find(StringName(wanted)) + 1)), "Voted"),
+		"a vote by the number on the ballot counts")
+	# Everybody has voted; the director closes on its next advance, which is the server's tick.
+	vote.call("advance", 0.05)
+	_check(director.pending_id() == StringName(wanted), "and decides it, waiting for the round's end",
+		str(director.pending_id()))
+
+	vote.call("note_round_end")
+	_check(game.next_course_id == StringName(wanted), "the round's end hands it to the world", str(game.next_course_id))
+	game.call("_lay_out_course")
+	_check(game.stage.id() == StringName(wanted) and game.next_course_id == &"",
+		"and the next course laid is the one voted for, once", "%s / %s" % [game.stage.id(), game.next_course_id])
+
+	# The course laid is a world_rebuilt, which starts the director over on it; rocking the
+	# vote then brings the ballot forward instead of waiting for open_after_sec.
+	_check(director.current_id() == StringName(wanted) and not director.is_voting(),
+		"the new course starts the vote over", str(director.current_id()))
+	# Past dot-vote's cooldown between two ballots, on the director alone so the course's own
+	# ballot timer does not open one first. In play a course outlasts it.
+	director.advance(director.rules.vote_cooldown_sec + 0.1)
+	var _rocked := _run_command("rtv")
+	vote.call("advance", 0.05)
+	_check(director.is_voting(), "and rock-the-vote opens a ballot before its time", str(_rocked))
 	_finished()
 
 

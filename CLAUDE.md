@@ -8,7 +8,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 
 | Read | Before |
 | --- | --- |
-| [docs/design.md](docs/design.md) | the course, obstacles, the wire, rounds, damage, weather, the final death, points, delivery |
+| [docs/design.md](docs/design.md) | the course, obstacles, the wire, rounds, the course vote, damage, weather, the final death, points, delivery |
 | [docs/stand-ins.md](docs/stand-ins.md) | the bots, route flags, or a course a bot cannot finish |
 | [docs/history.md](docs/history.md) | where this came from, and what running it found |
 
@@ -23,7 +23,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 | `game/wo_config.gd` | every rule a course is played under |
 | `game/wo_controller.gd`, `wo_player.gd` | `DotFpsController` with the pre/post-simulate hooks; one person: movement, carry/knock, progress, hands |
 | `game/wo_rules.gd` | a `DotMatchRules` whose outcome is whatever `WoGame` decided |
-| `game/wo_module.gd`, `wo_services.gd`, `wo_server.gd` | the `DotGameModule` (cvars, `wo_status` / `wo_courses` / `wo_reload`, stand-ins, delivered courses); chat, voice and moderation over dot-game |
+| `game/wo_module.gd`, `wo_services.gd`, `wo_server.gd`, `wo_vote.gd` | the `DotGameModule` (cvars, `wo_status` / `wo_courses` / `wo_reload`, stand-ins, delivered courses); chat, voice and moderation over dot-game; the course vote over dot-vote |
 | `game/wo_client.gd`, `wo_hud.gd`, `wo_audio.gd`, `wo_figure.gd`, `wo_settings.gd` | the local player, drawing and weather view; HUD; sounds and machinery; watcher figures; dot-menu settings |
 | `game/wo_content.gd`, `wo_textures.gd`, `wo_paths.gd`, `wo_avatars.gd` | final-death props; surface roles and tints; `rebase()` for delivery; site avatars |
 | `game/net/` | the codec (`STAGE`, `PROGRESS`, `PICKUP`…), the link, two behaviours, the bridge |
@@ -38,7 +38,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 - `headless_courses` runs every course with a stand-in and stands in every arena. It drives ticks **without** waiting on physics frames, legitimate only because every moving piece is a static body written straight into the physics server. It runs with damage and weather off, because it proves a course can be finished.
 - `headless_net` proves both ends agree: obstacles at five ticks, the course digest, the final death.
 - **Every suite frees the previous world before building the next**: they share one physics space and every course is built at the origin.
-- `tools/shot.sh --view=course --wo-course-ids=wo_grand_tour`, `--view=finale`, `--view=tiles`, `--view=third --board`, `--view=third --console="net_stat 3"` (a line typed at the player's console first). Every view change wants a rendered frame.
+- `tools/shot.sh --view=course --wo-course-ids=wo_grand_tour`, `--view=finale`, `--view=tiles`, `--view=third --board`, `--view=third --ballot` (the course vote's ballot), `--view=third --console="net_stat 3"` (a line typed at the player's console first). Every view change wants a rendered frame.
 - **Arming**: `headless_net`'s obstacle agreement and every suite's total are armed; most other checks are not yet armed one by one. Arm a check before trusting it.
 
 ## Rules that bite
@@ -55,6 +55,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 - `game.yml` names no courses pack; a server owner names mg-wipeout-maps in their map config. Re-add delivered courses after `wo_reload`. [design](docs/design.md#delivery-the-courses-are-a-second-pack)
 - Every `res://` string naming the game's own files goes through `WoPaths.rebase()` (the family's delivery rule; [dot-server-deploy](../dot-server-deploy/docs/delivery-constraint.md)).
 - A route flag is earned by a traced failure; `onward` is opt-in per point. [stand-ins](docs/stand-ins.md)
+- The course vote opens `wo_vote_after` into a course and applies at the round's end (MANUAL, `END_OF_ROUND`), rocked votes too; under MANUAL `WoVote` opens a passed rock-the-vote itself, or `!rtv` does nothing. [design](docs/design.md#the-course-vote)
 - Set the audio listener before the machinery plays, or the manager culls everything by distance from the origin. [design](docs/design.md#decision-1-an-obstacle-is-a-pure-function-of-the-tick)
 
 ## Open items

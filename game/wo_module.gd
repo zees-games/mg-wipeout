@@ -6,6 +6,7 @@ const WoServices := preload("wo_services.gd")
 const WoGame := preload("wo_game.gd")
 const WoPlayer := preload("wo_player.gd")
 const WoAvatars := preload("wo_avatars.gd")
+const WoVote := preload("wo_vote.gd")
 
 ## This game, as a module a dedicated server loads.
 ##
@@ -57,6 +58,12 @@ var _since_roster_check: float = 0.0
 
 ## How many stand-ins this module has put in, so it can take them out again.
 var _bot_ids: Array[StringName] = []
+
+## The players' vote for the next course; null when it could not be built.
+var vote: WoVote = null
+
+## The drawn ballot's notice topic. The client shell draws one menu per topic.
+const COURSE_BALLOT_TOPIC := &"map_ballot"
 
 
 func _module_name() -> String:
@@ -157,6 +164,7 @@ func _game_load() -> DotResult:
 	_wire_map(world)
 	_wire_progress(world)
 	_add_tunables(world)
+	_build_vote(world)
 
 	_bots = add_cvar(
 		"wo_bots", "1",
@@ -177,6 +185,10 @@ func _game_load() -> DotResult:
 	# server knows about and no client is ever told about. They would be invisible floors:
 	# a player stands on nothing and the server says they are fine.
 	var _delivered: int = await _add_delivered_courses(world)
+
+	if vote != null:
+		vote.refresh_courses()
+
 	world.start()
 
 	log_info("the course is up", world.describe())
@@ -374,6 +386,17 @@ func _tunable(
 func _game_unload() -> void:
 	_bot_ids.clear()
 
+	if vote != null:
+		vote.queue_free()
+		vote = null
+
+
+## The server slept or woke. The vote's director follows it on its own (DotGameModule finds
+## it); the course ballot's timer is this game's, so it starts again here on waking.
+func _game_hibernation(hibernating: bool) -> void:
+	if not hibernating and vote != null:
+		vote.note_woke()
+
 
 ## Keeps enough people in the round for there to be one.
 ##
@@ -386,6 +409,9 @@ func _game_unload() -> void:
 ## A stand-in is removed the moment a person takes their place. They are here to make the
 ## game exist, not to take the fun half from the people who came to play it.
 func _game_tick(_tick: int, delta: float) -> void:
+	if vote != null:
+		vote.advance(delta)
+
 	_since_roster_check += delta
 
 	if _since_roster_check < ROSTER_INTERVAL:
@@ -483,6 +509,112 @@ func _wire_chat() -> void:
 ## The map a server browser shows is the stage: the course, and the arena while a final
 ## death is on. Reported on every rebuild, because the server forgets it whenever a game
 ## unloads and a browser showing last round's course is a browser lying.
+## The players' vote for the next course, over dot-vote: `!vote`, `!rtv`, `!nominate`.
+##
+## [b]Opened [member WoVote.open_after_sec] into every course and applied when the round ends[/b],
+## because a round here is a course; see [code]game/wo_vote.gd[/code]. A server owner turns
+## it off or reshapes it in `user://cfg/wipeout_vote.json` or `game.yml`'s
+## `metadata: course_vote:`, keyed as dot-vote's [DotVoteRules]. A vote that cannot be built
+## is a WARN and the rotation alone, never a server that will not start.
+func _build_vote(world: WoGame) -> void:
+	if world.catalogue == null:
+		return
+
+	vote = WoVote.new()
+	vote.name = "CourseVote"
+	vote.courses_fn = func() -> Array:
+		var out: Array = []
+
+		for id in world.catalogue.playable_courses(world.config.course_ids):
+			out.append([id, str((world.catalogue.courses.get(id, {}) as Dictionary).get("name", id))])
+
+		return out
+	vote.apply_fn = func(id: StringName) -> DotResult:
+		world.next_course_id = id
+		return DotResult.success(id)
+	# People only: a stand-in is not a voter, and a ballot it could swing is not the players'.
+	vote.voters_fn = func() -> Array:
+		var out: Array = []
+
+		for id: Variant in world.players:
+			var player: WoPlayer = world.players[id]
+
+			if player == null or player.is_bot:
+				continue
+
+			var userid := WoNetBridge.session_of(StringName(str(id)))
+
+			if userid > 0:
+				out.append(StringName(str(userid)))
+
+		return out
+	vote.announce_fn = func(line: String) -> void:
+		var chat: Object = services.get("chat") if services != null else null
+
+		if chat != null:
+			var _said: Variant = chat.call("announce", line, WoServices.CH_ALL)
+		elif server != null:
+			server.broadcast_message(line)
+	vote.is_admin_fn = func(voter: StringName) -> bool:
+		var session := server.session_by_userid(String(voter).to_int()) if server != null else null
+		return session != null and session.has_permission(DotAdminFlags.CHANGEMAP)
+	vote.ballot_fn = func(state: Dictionary) -> void:
+		if server == null:
+			return
+
+		for session in server.playing_sessions():
+			var data := state.duplicate()
+			data["you"] = str(session.userid)
+			server.send_notice(session, DotNotice.make(
+				&"", "", float(state.get("seconds", -1.0)), COURSE_BALLOT_TOPIC, data
+			))
+	vote.people_fn = func(voter: StringName) -> Dictionary:
+		var session := server.session_by_userid(String(voter).to_int()) if server != null else null
+
+		if session == null:
+			return {}
+
+		var avatar: Variant = session.identity.get("avatar_url") if session.identity != null else ""
+		return {"name": session.display_name, "avatar": avatar if avatar is String else ""}
+
+	add_child(vote)
+	var ready := vote.setup()
+
+	if not ready.ok:
+		DotLog.result(CHANNEL, "the course vote; the rotation alone chooses", ready)
+		vote.queue_free()
+		vote = null
+		return
+
+	var commanded := vote.install_commands(self)
+	DotLog.result(CHANNEL, "the course vote's commands", commanded)
+
+	_tunable("wo_vote_after", vote.open_after_sec,
+		"Seconds into a course before the vote for the next one opens",
+		func(value: float) -> void:
+			if vote != null:
+				vote.open_after_sec = maxf(value, 0.0))
+
+	# No note_course for the course already built: start() builds it again, which is a
+	# world_rebuilt, and two begin()s for one play is one play counted twice in the cooldowns.
+	# Not for a final death's arena either: that is the same round, on the same course's
+	# ballot, and a begin() on the arena's id would put an arena in the course history.
+	world.world_rebuilt.connect(func() -> void:
+		if vote != null and world.stage != null and not world.stage.is_arena():
+			vote.note_course(world.stage.id())
+	)
+	world.match_node.round_ended.connect(func(_number: int, _winner: int, _outcome: int) -> void:
+		if vote != null:
+			vote.note_round_end()
+	)
+
+	if server != null:
+		server.client_disconnected.connect(func(session: DotClientSession, _reason: String) -> void:
+			if vote != null:
+				vote.forget_voter(StringName(str(session.userid)))
+		)
+
+
 func _wire_map(world: WoGame) -> void:
 	if world.stage != null and not world.stage.doc.is_empty():
 		report_map(String(world.stage.id()))
@@ -630,6 +762,10 @@ func _cmd_reload(ctx: DotCmdContext) -> void:
 
 	var loaded := world.catalogue.load_from(world.config.course_directory)
 	loaded += await _add_delivered_courses(world)
+
+	if vote != null:
+		vote.refresh_courses()
+
 	ctx.reply("%d documents read; %d refused. The next round draws from them." % [
 		loaded, world.catalogue.refused.size()])
 
