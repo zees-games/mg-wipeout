@@ -70,7 +70,7 @@ static func rebase_onto(path: String, here: String) -> String:
 	# to load with a path long enough that the doubling is easy to miss.
 	#
 	# This is the seventh form of the family's one delivery bug. The other six are in
-	# ../../CLAUDE.md; what they share is that the thing being rewritten and the thing doing
+	# ../dot-server-deploy/docs/delivery-constraint.md; what they share is that the thing being rewritten and the thing doing
 	# the rewriting cannot see each other.
 	#
 	# Built in, [param here] is `res://` and every `res://` path is already under it, so this
