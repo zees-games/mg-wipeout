@@ -246,6 +246,13 @@ func _start_offline() -> void:
 # --- Connected -------------------------------------------------------------
 
 func _build_netcode() -> DotResult:
+	# The server's `mp_teammate_passthrough`, and every change to it, through the link: this
+	# end traces its own shots for tracers and impacts, and on its default 1 against a server
+	# on 0 or 2 they ended in (or went through) a team-mate where the server's did the
+	# opposite. An older shell's link cannot say, and the manager keeps its default.
+	if game.combat != null and link != null:
+		var _following := game.combat.follow_cvars(link)
+
 	net = DotNetManager.new()
 	net.name = "Net"
 	net.is_server = false

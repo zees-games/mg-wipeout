@@ -14,7 +14,7 @@ const WoPlayer := preload("../game/wo_player.gd")
 ## nothing but the stand-ins the module seats itself.
 
 const SECTIONS := 8
-const CHECKS := 46
+const CHECKS := 47
 
 const SERVER_DIR := "user://wo_dedicated"
 const PORT := 28931
@@ -200,6 +200,16 @@ func _test_the_commands() -> void:
 		"%.1f" % game.config.course_seconds)
 	var _back := _run_command("wo_teams 1")
 	_check(game.config.team_count == 0, "one team is not a mode, and is taken as solo")
+	# And it is REPLICATED: dot-server sends it to every client before its scene loads and on
+	# every change, so a client's own combat manager (following its link) predicts tracers
+	# under the server's level rather than its default.
+	var shared := server.console.find_cvar("mp_teammate_passthrough")
+	var _two := _run_command("mp_teammate_passthrough 2")
+	_check(shared != null and shared.has_flag(DotConVar.FLAG_REPLICATED)
+			and server.console.replicated_values().get("mp_teammate_passthrough", "") == "2",
+		"mp_teammate_passthrough is replicated: a client is sent the server's level",
+		str(server.console.replicated_values()))
+	var _one := _run_command("mp_teammate_passthrough 1")
 	_finished()
 
 

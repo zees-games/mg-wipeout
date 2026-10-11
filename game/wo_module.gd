@@ -168,9 +168,11 @@ func _game_load() -> DotResult:
 	# Whether shots pass through team-mates: `mp_teammate_passthrough` 0 never, 1 a team-mate
 	# holding the muzzle (the default), 2 every team-mate in the line. dot-combat's cvar,
 	# defined there once for every game; live from the next shot, and a value the operator set
-	# first (argv, content.yml) is read back. NOTIFY, because players should know.
+	# first (argv, content.yml) is read back. NOTIFY, because players should know; REPLICATED,
+	# because every client's own manager predicts its tracers under it (the client follows it
+	# through its link, see the client's _build_netcode).
 	if world.combat != null:
-		var _passthrough := world.combat.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
+		var _passthrough := world.combat.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)
 
 	_build_vote(world)
 
