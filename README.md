@@ -115,7 +115,7 @@ A course is a JSON file: a start pad, a list of pieces, checkpoints and a finish
 | `headless_net` | A server and a client in one process, over the network code |
 | `dedicated` | A real server: boots, loads the game, runs its commands |
 
-[`CLAUDE.md`](CLAUDE.md) has the design decisions and the reasoning behind them.
+[`docs/design.md`](docs/design.md) has the design decisions and the reasoning behind them.
 
 ## Not done yet
 - Bots finish every course, but they aren't clever about a crowded beam, and they are weak in the final death.
