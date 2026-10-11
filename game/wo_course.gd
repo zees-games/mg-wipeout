@@ -741,44 +741,31 @@ func _build_gallery() -> void:
 
 
 ## The sky, the sun and the water. Client side.
+##
+## [b]The light is a dot-lighting document made from the course's theme[/b]
+## ([method light_document]), so the family's look (game-arena's built-in maps: a warm sun
+## with soft shadows, a pale cool fill, filmic tone map, glow) and each course's own sky,
+## horizon, sun colour and water are one thing rather than two that can disagree.
 func _build_world() -> void:
 	var theme: Dictionary = doc.get("theme", {})
 
-	var sun := DirectionalLight3D.new()
-	sun.name = "Sun"
-	sun.rotation = Vector3(deg_to_rad(-52.0), deg_to_rad(34.0), 0.0)
-	# mg-smash-copter's number, measured under `gl_compatibility`: higher than this and every
-	# prototype surface comes back within a few percent of white, which on a course is every
-	# gap reading as floor.
-	sun.light_energy = 0.82
-	sun.light_color = theme.get("sun", Color(1.0, 0.96, 0.88))
-	sun.shadow_enabled = true
-	add_child(sun)
+	var lighting := Node3D.new()
+	lighting.name = "Lighting"
+	add_child(lighting)
+	var light := light_document(theme)
+	var sun := DotLightRig.apply(lighting, DotLightDocument.from_dictionary(light), light_profile())
+	if sun != null:
+		sun.shadow_blur = 1.5
 
-	var env := Environment.new()
-	env.background_mode = Environment.BG_SKY
-
-	var sky := Sky.new()
-	var material := ProceduralSkyMaterial.new()
-	material.sky_top_color = theme.get("sky", Color(0.52, 0.72, 0.92))
-	material.sky_horizon_color = theme.get("horizon", Color(0.82, 0.88, 0.94))
-	material.ground_bottom_color = (theme.get("water", Color(0.16, 0.42, 0.62)) as Color).darkened(0.4)
-	material.ground_horizon_color = theme.get("horizon", Color(0.82, 0.88, 0.94))
-	sky.sky_material = material
-	env.sky = sky
-
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.36
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 0.64
-	env.fog_enabled = true
-	env.fog_light_color = theme.get("horizon", Color(0.82, 0.88, 0.94))
-	env.fog_density = 0.0016
-
-	var world_env := WorldEnvironment.new()
-	world_env.name = "Environment"
-	world_env.environment = env
-	add_child(world_env)
+	for node in lighting.get_children():
+		if node is WorldEnvironment and (node as WorldEnvironment).environment.sky != null:
+			var material := (node as WorldEnvironment).environment.sky.sky_material as ProceduralSkyMaterial
+			if material != null:
+				# The theme's sky at the zenith (the rig draws it in the ambient colour), and
+				# the water's colour under the horizon, where the water plane ends: the sky
+				# under it must not be a second, brighter sea.
+				material.sky_top_color = theme.get("sky", Color(0.52, 0.72, 0.92))
+				material.ground_bottom_color = (theme.get("water", Color(0.16, 0.42, 0.62)) as Color).darkened(0.4)
 
 	# The water: what everybody who falls lands in. A plane, drawn only; the fall is a height
 	# comparison in [WoGame], for the reason mg-smash-copter gives — a trigger volume can be
@@ -799,6 +786,57 @@ func _build_world() -> void:
 	water.material_override = water_material
 	water.position = Vector3(0.0, water_height() - 0.4, 0.0)
 	add_child(water)
+
+
+## The dot-lighting document a course's theme describes.
+##
+## The angles are dot-lighting's source convention (a negative pitch is a sun in the sky),
+## high so a deck is not in its neighbour's shadow, and behind the start, so the faces a
+## runner runs toward are the lit ones: from the other side the start gate's orange and
+## every obstacle's front came out a shaded brown. The brightness is divided by the
+## profile's reference and square-rooted. The ambient is the light in the shade, a pale
+## cool grey whatever the theme: a saturated blue fill turns every shaded face navy. The
+## fog is the theme's horizon from 120 m out (source units, metres / 0.01905), so nothing a
+## player has to react to is hidden in it.
+static func light_document(theme: Dictionary) -> Dictionary:
+	var sun: Color = theme.get("sun", Color(1.0, 0.96, 0.88))
+	var horizon: Color = theme.get("horizon", Color(0.82, 0.88, 0.94))
+	return {
+		"sun": {
+			"pitch_src": -54.0,
+			"yaw_src": 145.0,
+			"colour": [sun.r, sun.g, sun.b],
+			"brightness": 380.0,
+			"spread_degrees": 1.0,
+			"ambient_colour": [0.74, 0.78, 0.92],
+		},
+		"fog": {
+			"enabled": true,
+			"colour": [horizon.r, horizon.g, horizon.b],
+			"start": 6300.0,
+			"end": 40000.0,
+			"max_density": 0.4,
+		},
+	}
+
+
+## What this machine draws of a course's light.
+##
+## [b]Shadows stay on in the browser[/b], unlike dot-lighting's `web()`: a course is a few
+## hundred boxes, and a mover's shadow on the deck is how a player sees where it is.
+## [b]The Compatibility renderer, which this game and the client shell use, has no headroom
+## above white[/b]: at Forward+'s numbers every deck clipped to white and the grid, which is
+## how far a jump is, was gone (mg-smash-copter found it first). So under `gl_compatibility`
+## the sun is divided by 700 instead of 200 and the fill is 0.62, game-arena's numbers,
+## checked here against a rendered frame in both renderers.
+static func light_profile() -> DotLightProfile:
+	var p := DotLightProfile.web() if OS.has_feature("web") else DotLightProfile.high()
+	p.sun_shadows = true
+	p.ambient_energy = 1.0
+	if RenderingServer.get_current_rendering_method() == "gl_compatibility":
+		p.brightness_reference = 700.0
+		p.ambient_energy = 0.62
+	return p
 
 
 # --- Where everything is ------------------------------------------------------

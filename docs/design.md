@@ -50,6 +50,14 @@ A knock costs health by how hard it threw you (`knock_damage_per_speed`, 1.0: a 
 - **A carrier is drawn carrying**: `WoPlayerNet.net_carrying` is one bit (the gun runs only on the server), `WoPlayer.is_carrying()` asks the gun where it runs and the bit where it mirrors, and `WoFigure` raises both arms.
 - **Weapons are found**: pickups on the floor (`PICKUP`/`PICKUP_GONE` events), taken by standing on them, which builds a `ZeeWeaponRig` the first time (`WoGame.arm`). The client draws each as zee's world model, spinning, with a light under it. Watchers see the weapon in the figure's hand (`WoFigure`, from mg-smash-copter), read off the rig for a simulated player and off `WoPlayer.dealt` for a mirrored one.
 
+## Colour and light
+
+The family's sunny look (game-arena's built-in maps) with this game's water and obstacles kept as they were: the obstacles are the only saturated things on screen.
+
+- **Surfaces** are roles (`WoTextures`): the deck, supports, safe ground and the arena floor all draw Kenney's light grid tinted a pastel (`INSTALLED_TINTS`: a hair-under-white deck, mid-lavender supports, mint safe ground, lavender arena); only what moves (Kenney's orange) and what throws you (Kenney's red) keep a colour tile of their own. A pure-white deck clipped under the sun and lost the grid, which is how far a jump is; charcoal supports were black posts in a sunny frame.
+- **Light is a dot-lighting document made from the course's theme** (`WoCourse.light_document`): the theme's sun colour, its sky at the zenith, its horizon as the fog from 120 m, its water darkened under the horizon; a warm high sun **behind the start**, so the faces a runner runs toward are lit (from the other side the orange start gate came out brown); a pale cool fill whatever the theme; filmic and glow. The theme is the course's identity (a lagoon, an overcast sea, a sunset) and stays in the course document; a repaint never touches geometry or the document's digest.
+- **Compatibility** (this game's and the shell's renderer) clips a sunlit pastel to white at Forward+'s numbers, so `WoCourse.light_profile()` divides the sun by 700 instead of 200 and drops the fill to 0.62 (game-arena's numbers). Shadows stay on in the browser. Check a look change in Forward+ too (`GODOT=<a wrapper that adds --rendering-method forward_plus> tools/shot.sh`).
+
 ## Points and the Tab board
 
 `WoPlayer.points` add up over a match: `finish_points` by place (10, 7, 5, then `finish_points_rest` 3) and `winner_points` (10) for the round's winning side, on the authority. `net_points` and `net_ping` replicate; the module copies each session's dot-server `ping_ms` onto its player. Tab holds dot-menu's `DotMenuScoreboard` with this game's columns (avatar, name, points, place or "out", time, ping). The avatar is the figure's head rendered once per skin into a small SubViewport (`WoClient._portrait`), because every person is the same mesh and a few atlases cover every player.

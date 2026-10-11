@@ -57,6 +57,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 - A route flag is earned by a traced failure; `onward` is opt-in per point. [stand-ins](docs/stand-ins.md)
 - The course vote opens `wo_vote_after` into a course and applies at the round's end (MANUAL, `END_OF_ROUND`), rocked votes too; under MANUAL `WoVote` opens a passed rock-the-vote itself, or `!rtv` does nothing. [design](docs/design.md#the-course-vote)
 - Set the audio listener before the machinery plays, or the manager culls everything by distance from the origin. [design](docs/design.md#decision-1-an-obstacle-is-a-pure-function-of-the-tick)
+- Only moving pieces and hazards keep a colour tile; every other role is the light grid under a pastel (`WoTextures.INSTALLED_TINTS`). The light is a dot-lighting document from the course theme (`WoCourse.light_document`), turned down under Compatibility. [design](docs/design.md#colour-and-light)
 
 ## Open items
 
