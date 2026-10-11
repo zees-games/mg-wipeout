@@ -20,7 +20,7 @@ The course closes when everybody is across or the clock runs out. Then:
 
 Every player is their own side by default. `wo_teams 2` (up to 6) plays in teams, and a team is through if anybody on it finishes.
 
-The courses live in their own repository, [mg-wipeout-maps](https://github.com/gamemann/mg-wipeout-maps): ten courses and five arenas, each a JSON file. Without it the game still runs, on one practice course built in.
+The courses live in their own repository, [mg-wipeout-maps](https://github.com/zees-games/mg-wipeout-maps): ten courses and five arenas, each a JSON file. Without it the game still runs, on one practice course built in.
 
 ## Controls
 
@@ -99,7 +99,7 @@ Console commands:
 These come from [dot-moderation](https://github.com/modcommunity/dot-moderation): `noclip`, `freeze`, `speed`, `gravity`, `god`, `buddha`, `hp`, `slay`, `slap`, `rename`, the teleports, `blind` and `beacon`. `respawn` puts a runner back at their last checkpoint. `give` and `strip` are turned off, because the weapons in a final death are the ones on its floor.
 
 ## Writing a course
-A course is a JSON file: a start pad, a list of pieces, checkpoints and a finish. The [mg-wipeout-maps](https://github.com/gamemann/mg-wipeout-maps) README describes the format and every kind of piece. The server sends the course to each player when the round starts, so players don't need the course files.
+A course is a JSON file: a start pad, a list of pieces, checkpoints and a finish. The [mg-wipeout-maps](https://github.com/zees-games/mg-wipeout-maps) README describes the format and every kind of piece. The server sends the course to each player when the round starts, so players don't need the course files.
 
 ## Testing
 
@@ -123,7 +123,7 @@ A course is a JSON file: a start pad, a list of pieces, checkpoints and a finish
 - There is no settings menu.
 
 ## Credits
-Every surface is Kenney's Prototype Textures; the props are from Kenney's Survival and Car kits and the players are Kenney's Blocky Characters ([kenney.nl](https://kenney.nl), CC0). The weapons are from [zee-dot-weapons](https://github.com/gamemann/zee-dot-weapons). Each kit's licence is next to its files.
+Every surface is Kenney's Prototype Textures; the props are from Kenney's Survival and Car kits and the players are Kenney's Blocky Characters ([kenney.nl](https://kenney.nl), CC0). The weapons are from [zee-dot-weapons](https://github.com/zees-games/zee-dot-weapons). Each kit's licence is next to its files.
 
 ## License
 MIT. See [LICENSE](LICENSE). The Kenney art is CC0, which is public domain.
