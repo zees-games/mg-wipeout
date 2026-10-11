@@ -3,7 +3,7 @@ extends Node
 const WoAudio := preload("wo_audio.gd")
 const WoFigure := preload("wo_figure.gd")
 const WoSettings := preload("wo_settings.gd")
-const WoClientChat := preload("wo_client_chat.gd")
+const WoServices := preload("wo_services.gd")
 const WoNetBridge := preload("net/wo_net_bridge.gd")
 const WoNetCommand := preload("net/wo_net_command.gd")
 const WoEvents := preload("net/wo_events.gd")
@@ -71,7 +71,7 @@ var board: DotMenuScoreboard = null
 
 ## When this client started, for an offline board's "time".
 var _started_msec: int = Time.get_ticks_msec()
-var chat: WoClientChat = null
+var chat: DotGameChatClient = null
 
 ## What the game sounds like. See [WoAudio].
 var audio: WoAudio = null
@@ -1078,8 +1078,7 @@ func _portrait(atlas: String) -> Texture2D:
 ## first line arrived would miss it — the backlog a joining player is sent is the first thing
 ## the server says.
 func _build_chat() -> void:
-	chat = WoClientChat.new()
-	chat.name = "Chat"
+	chat = new_chat()
 	add_child(chat)
 
 	# [b]Typing is not moving.[/b] The sampler is what turns keys into a command, so
@@ -1621,3 +1620,20 @@ func describe() -> Dictionary:
 		out["world"] = game.describe()
 
 	return out
+
+
+## dot-game's chat box and microphone, with this game's channels and voice format. It also
+## draws dot-server's own lines (the vote between games, joins, an admin's `say`), which arrive
+## on the shell's client link rather than on this game's bridge. Static so a suite can build
+## the same box the client does.
+static func new_chat() -> DotGameChatClient:
+	var box := DotGameChatClient.new()
+	box.name = "Chat"
+	box.channels = [
+		{"id": WoServices.CH_ALL, "label": "All", "colour": Color(0.93, 0.94, 0.96)},
+		{"id": WoServices.CH_TEAM, "label": "Team", "colour": Color(0.55, 0.82, 0.95)},
+		{"id": WoServices.CH_NEAR, "label": "Near", "colour": Color(0.82, 0.86, 0.72)},
+	]
+	box.max_length = WoServices.chat_rules().max_length
+	box.voice_config = WoServices.voice_format()
+	return box
