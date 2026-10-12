@@ -111,7 +111,8 @@ var _stage_seconds: float = -1.0
 var _captured: bool = false
 
 ## The camera rig, in third person. Null in first.
-var _arm: SpringArm3D = null
+var _arm: DotCameraBoom = null
+var _fade: DotCameraFade = null
 
 ## How far above the player's feet the camera, or in third person the arm, is hung.
 var _rig_height: float = 0.0
@@ -289,6 +290,10 @@ func _build_netcode() -> DotResult:
 	# The server's sv_ragdoll* set: this end draws the bodies.
 	if link != null:
 		var _bodies := game.ragdoll_rules.follow_cvars(link)
+		# The server's mp_forceview and mp_solidplayers: this end places its own camera and
+		# predicts its own player.
+		var _view := game.view_rules.follow_cvars(link)
+		var _solid := game.body_rules.follow_cvars(link)
 
 	net = DotNetManager.new()
 	net.name = "Net"
@@ -935,6 +940,19 @@ func _build_camera() -> void:
 	camera.fov = 92.0
 	camera.current = true
 
+	# Other players and stand-ins: hidden when one is at the lens, faded in third person when
+	# one stands between the camera and you. It rides the camera wherever the camera goes.
+	# Handed the figures rather than found by a query: a player's hull is off while
+	# mp_solidplayers is 0, and a body walking through you is exactly when it is needed.
+	_fade = DotCameraFade.new()
+	_fade.name = "Fade"
+	_fade.bodies_fn = _other_players
+	camera.add_child(_fade)
+
+	if not game.view_rules.changed.is_connected(_on_view_rules_changed):
+		game.view_rules.changed.connect(_on_view_rules_changed)
+	third_person = game.view_rules.resolve(third_person)
+
 	_place_camera()
 
 	# The weather's look: rain on a stormy course, each strike drawn on its tick.
@@ -949,8 +967,9 @@ func _build_camera() -> void:
 
 ## Puts the camera where this view mode wants it, rebuilding the rig if the mode changed.
 ##
-## [b]A spring arm in third person and nothing in first.[/b] The arm is what stops the
-## camera going through a wall or a gantry when the player backs into one.
+## [b]A boom in third person and nothing in first.[/b] dot-core's [DotCameraBoom] sweeps a
+## sphere from the eye and eases in ahead of a wall or a gantry; the spring arm it replaced
+## cast a ray from a pivot above the head and snapped to whatever it hit.
 func _place_camera() -> void:
 	if camera == null or player == null:
 		return
@@ -969,26 +988,40 @@ func _place_camera() -> void:
 		_rig_height = eye
 		camera.position = Vector3(0.0, eye, 0.0)
 		camera.rotation = Vector3.ZERO
+		if _fade != null:
+			_fade.focus = null
 		return
 
-	_arm = SpringArm3D.new()
+	_arm = DotCameraBoom.new()
 	_arm.name = "Chase"
 	_arm.spring_length = CHASE_BACK
-	# The player's own capsule is not what the arm should stop against, and the map is.
-	_arm.collision_mask = game.physics.collision_mask(&"player") if game.physics != null else 1
+	# The level, never players: they are faded instead (a stand-in behind you would pull the
+	# camera into your head).
+	_arm.collision_mask = _level_mask()
 	_arm.add_excluded_object(player.get_rid())
-	_rig_height = eye + CHASE_UP - WoPlayer.EYE_HEIGHT
+	# Swept from the eye, the height above it added in the world's up: a pivot above the
+	# head can itself be inside a gantry, and a sweep that starts inside does not see it.
+	_rig_height = eye
+	_arm.lift = CHASE_UP - eye
 	_arm.position = Vector3(0.0, _rig_height, 0.0)
 	player.add_child(_arm)
 
 	_arm.add_child(camera)
 	camera.position = Vector3.ZERO
 	camera.rotation = Vector3.ZERO
+	if _fade != null:
+		_fade.focus = _arm
 
 
-## Swaps the view. Presentation only: the simulation does not know which one is on.
+## Swaps the view, where the server's `mp_forceview` allows. Presentation only: the
+## simulation does not know which one is on.
 func toggle_view() -> void:
-	third_person = not third_person
+	var wanted := game.view_rules.toggled(third_person)
+	if wanted == third_person:
+		if hud != null and game.view_rules.refusal() != "":
+			hud.shout(game.view_rules.refusal(), 1.6)
+		return
+	third_person = wanted
 	_place_camera()
 
 	if audio != null:
@@ -996,6 +1029,32 @@ func toggle_view() -> void:
 
 	if hud != null:
 		hud.shout("third person" if third_person else "first person", 1.2)
+
+
+## Everybody but this player, for the camera fade.
+func _other_players() -> Array:
+	var out: Array = []
+	if game == null:
+		return out
+	for id in game.players:
+		var other: Node3D = game.players[id]
+		if other != player and is_instance_valid(other):
+			out.append(other)
+	return out
+
+
+## What the third-person and spectator cameras stop against: the course and the props.
+func _level_mask() -> int:
+	return game.physics.mask_of([&"world", &"prop"]) if game.physics != null else 1
+
+
+## The server changed `mp_forceview`: the view it allows now.
+func _on_view_rules_changed() -> void:
+	var allowed := game.view_rules.resolve(third_person)
+	if allowed != third_person:
+		third_person = allowed
+		if not is_spectating():
+			_place_camera()
 
 
 func _build_hud() -> void:
@@ -1473,6 +1532,12 @@ func _drive_spectator_camera() -> bool:
 	# A view model left on is somebody else's gun drawn in front of the camera.
 	if view_model != null and is_instance_valid(view_model):
 		view_model.visible = false
+
+	# Chase and death cameras pulled out of the course by dot-spectate, given the level.
+	var manager: DotSpectatorManager = game.spectate.manager
+	if manager != null and manager.camera_world == null and game.physics != null:
+		manager.camera_world = camera.get_world_3d()
+		manager.camera_mask = _level_mask()
 
 	var where := game.spectate.camera_for(player.player_id)
 

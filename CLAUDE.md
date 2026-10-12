@@ -39,6 +39,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 - `headless_net` proves both ends agree: obstacles at five ticks, the course digest, the final death.
 - **Every suite frees the previous world before building the next**: they share one physics space and every course is built at the origin.
 - `tools/shot.sh --view=course --wo-course-ids=wo_grand_tour`, `--view=finale`, `--view=tiles`, `--view=third --board`, `--view=third --ballot` (the course vote's ballot), `--view=third --console="net_stat 3"` (a line typed at the player's console first). Every view change wants a rendered frame.
+- After touching a camera, the view key or player collision: `tools/camera_check.sh` (cameras round every piece, armed; `mp_solidplayers` both ways; `--render` for frames). [design](docs/design.md#cameras-and-bodies)
 - **Arming**: `headless_net`'s obstacle agreement and every suite's total are armed; most other checks are not yet armed one by one. Arm a check before trusting it.
 
 ## Rules that bite

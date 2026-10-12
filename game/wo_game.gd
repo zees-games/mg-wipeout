@@ -170,6 +170,13 @@ var physics: DotPhysicsLayout = null
 ## link, because the client draws the bodies. The game's, not the map's.
 var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
 
+## dot-player-controller's `mp_forceview` (may a player switch to third person) and
+## `mp_solidplayers` (do players and stand-ins block each other). Bound by the module
+## (REPLICATED) and followed by a client through its link: the client places its camera
+## under the first and predicts its own player under the second.
+var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
+var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
+
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on first use.
 var _weapon_defs: Dictionary = {}
 var effects: DotFxManager = null
@@ -253,6 +260,8 @@ func _ready() -> void:
 	_round_seed = config.seed_value
 
 	_build_physics()
+	if not body_rules.changed.is_connected(_on_body_rules_changed):
+		body_rules.changed.connect(_on_body_rules_changed)
 	_apply_gravity()
 	_build_random()
 	_build_stage()
@@ -274,6 +283,25 @@ func _ready() -> void:
 		DotRegistry.register(SERVICE, self)
 
 	DotLog.info(CHANNEL, "world ready", config.describe())
+
+
+## The player's motor mask under `mp_solidplayers`. Through `set_collision_mask`, because a
+## plain write to the tunables is undone by the next style.
+func _apply_body_mask(player: WoPlayer) -> void:
+	if physics == null or player == null or player.controller == null:
+		return
+	player.controller.set_collision_mask(
+		body_rules.mask(physics.collision_mask(&"player"), physics.layer_mask(&"player"))
+	)
+	# The capsule the others stop at: a player's body has no shape of its own.
+	var tunables := player.controller.tunables
+	body_rules.apply_hull(player, tunables.stand_height, tunables.radius)
+
+
+## `mp_solidplayers` changed: every player's mask now.
+func _on_body_rules_changed() -> void:
+	for id in players:
+		_apply_body_mask(players[id] as WoPlayer)
 
 
 func _exit_tree() -> void:
@@ -575,8 +603,10 @@ func add_player(
 			})
 
 		# And the motor's own mask, which defaults to 1. A controller left on the default
-		# sweeps against layer one only, which is a player falling through the course.
-		player.controller.tunables.collision_mask = physics.collision_mask(&"player")
+		# sweeps against layer one only, which is a player falling through the course. With
+		# `mp_solidplayers` on, other players are in it too: a stand-in at the start line
+		# stops at your shoulder instead of walking through your face (the first play test).
+		_apply_body_mask(player)
 
 	var opened := entities.open(
 		DotEntity.KIND_PLAYER, player, &"", player_id, float(_tick) / float(maxi(tick_rate, 1))
