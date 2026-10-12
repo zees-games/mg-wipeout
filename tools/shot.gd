@@ -8,6 +8,7 @@ extends Node
 ##   tools/shot.sh --view=hazard                    # the first thing that throws you, close
 ##   tools/shot.sh --view=race --seconds=25         # the field mid-race, over the second runner's shoulder
 ##   tools/shot.sh --view=crowd --seconds=6         # the first grandstand and its crowd
+##   tools/shot.sh --view=duck --seconds=30 --wo-course-ids=wo_the_sweeper   # a stand-in ducking, close
 ##   tools/shot.sh --view=falls --seconds=3 --wo-course-ids=wo_punch_alley   # the first water/slime fall
 ##   tools/shot.sh --view=tiles --wo-course-ids=wo_trapdoor_run   # drop-tiles, warning in red
 ##   tools/shot.sh --view=third                     # third person, mid-course
@@ -125,6 +126,30 @@ func _run() -> void:
 				var at := leader.global_position
 				var facing := Basis(Vector3.UP, deg_to_rad(float(leader.controller.state.yaw)))
 				camera.look_at_from_position(at + facing * Vector3(7.0, 6.0, 11.0), at + facing * Vector3(0.0, 0.5, -10.0))
+		"duck":
+			# The first stand-in ducking under a high arm, close and from the side: proves the
+			# person is drawn crouched when the runner is (`WoPlayer.present_body`'s motion).
+			# `--seconds` is how long to wait for one.
+			await _seconds_of(game.config.countdown_seconds)
+			var waited := 0.0
+			var ducking: Node3D = null
+			while ducking == null and waited < _seconds:
+				await _frames(1)
+				waited += get_process_delta_time()
+				for id: StringName in game.players:
+					var runner = game.players[id]
+					if runner.controller != null and runner.controller.state.crouch_fraction > 0.9:
+						ducking = runner
+						break
+			var camera := _free_camera()
+			if ducking != null:
+				await _frames(2)
+				var at := ducking.global_position
+				var facing := Basis(Vector3.UP, deg_to_rad(float(ducking.controller.state.yaw)))
+				camera.look_at_from_position(at + facing * Vector3(3.2, 1.4, -0.6), at + Vector3(0.0, 0.7, 0.0))
+				print("duck: %s crouched after %.1f s" % [ducking.name, waited])
+			else:
+				print("duck: nobody ducked in %.1f s" % waited)
 		"crowd":
 			# A grandstand and its crowd, from the course: the first stands the course has.
 			await _seconds_of(game.config.countdown_seconds + _seconds)

@@ -8,6 +8,7 @@
 #   tools/shot.sh --view=third --seconds=8             # third person, on the course
 #   tools/shot.sh --view=race --seconds=25             # the field mid-race, from over a runner's shoulder
 #   tools/shot.sh --view=crowd --seconds=6             # a grandstand and its crowd, from the course
+#   tools/shot.sh --view=duck --seconds=30 --wo-course-ids=wo_the_sweeper   # a stand-in ducking an arm, close
 #   tools/shot.sh --view=falls --seconds=3             # the first water or slime fall, mid-pour
 #   tools/shot.sh --view=arena --arena=wo_arena_pit    # an arena, from above
 #   tools/shot.sh --view=finale                        # a real final death, a finisher's eyes

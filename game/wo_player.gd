@@ -502,7 +502,9 @@ func present_body(own_view: bool, at: Vector3, team_colour: Color) -> bool:
 		figure.set_motion({
 			"on_floor": controller.state.mode == DotFpsState.Mode.GROUND,
 			"vertical": velocity.y,
-			"crouched": controller.state.is_crouched(),
+			# Ducked past halfway, as the view model and every other game read it:
+			# `is_crouched()` is any crouch at all, which drew the first frame of a duck as one.
+			"crouched": controller.state.crouch_fraction > 0.5,
 			# The view's pitch: the upper body, the head and anything held follow it.
 			"aim": deg_to_rad(controller.state.pitch),
 		})
