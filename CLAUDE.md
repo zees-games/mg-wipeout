@@ -60,6 +60,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 - The warmup's course is round one's; do not draw a new one at `start()`. [design](docs/design.md#decision-2-the-course-travels-whole)
 - The game decides the round (`WoRules` CUSTOM); solo sides start at `SOLO_SIDE_BASE` and are varints. [design](docs/design.md#decision-3-a-round-is-decided-by-the-game-not-by-dot-match)
 - Knock damage is charged on the authority; a course elimination must count as off the course or the round runs its clock. [design](docs/design.md#damage-on-the-course)
+- **A READY before the player is seated is kept** (`_ready_unseated` in the bridge) and answered by `add_player`: over ENet with loss it overtakes the link's `loaded`, and a dropped READY left the client waiting for ever. `headless_net` sends it first (armed). [history](docs/history.md)
 - The grab key is in `WoNetCommand`, not `DotFpsCommand`'s spare buttons; the gravity gun runs on the server only. [design](docs/design.md#the-final-death)
 - `game.yml` names no courses pack; a server owner names mg-wipeout-maps in their map config. Re-add delivered courses after `wo_reload`. [design](docs/design.md#delivery-the-courses-are-a-second-pack)
 - Every `res://` string naming the game's own files goes through `WoPaths.rebase()` (the family's delivery rule; [dot-server-deploy](../dot-server-deploy/docs/delivery-constraint.md)).

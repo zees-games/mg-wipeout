@@ -25,7 +25,7 @@ const WoRequest := preload("../game/net/wo_request.gd")
 ## Sections and checks are both counted; mg-smash-copter's notes say why the second matters.
 
 const SECTIONS := 10
-const CHECKS := 49
+const CHECKS := 50
 
 const CLIENT_PEER := 7
 const SESSION := 42
@@ -243,9 +243,14 @@ func _build() -> bool:
 
 func _test_a_client_joins() -> void:
 	_section("a client joins")
+	# The READY first, as over ENet with loss: a client is PLAYING by its own reckoning once it has
+	# sent `loaded`, on another channel, so its READY can reach the server before its seat. Kept,
+	# and answered by the seat; a bridge that drops it never tells this client who it is.
+	_client_bridge.ask_ready()
+	_exchange()
+	_check(_client_bridge.local_player_id != SESSION, "a READY before the seat is told nothing yet")
 	var seated := _server_bridge.add_player(CLIENT_PEER, SESSION, "Ada")
 	_check(seated.ok, "the server seats them")
-	_client_bridge.ask_ready()
 	_exchange()
 	_exchange()
 	await _steps(6)
