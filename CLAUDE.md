@@ -48,6 +48,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 
 ## Rules that bite
 
+- **Everybody steps (padding underfoot) and the courses have an outdoor bed** (dot-audio's stock, `WoAudio`). Levels are measured with `addons/dot_audio/tools/loudness.sh` (−17 LUFS band, `loudness_trim_db`).
 - A dead body falls as dot-player-char's ragdoll: the server picks the fall (`WoGame.decide_death`, on `player.death`), it rides DEATH last and optional, and the client copies it from the figure it draws (`WoClient._fall`). The `sv_ragdoll*` cvars are bound in the module, REPLICATED, and followed by the client. A blow or a blast still knocks the body to pieces (`_break`, this game's own look); anything less leaves a ragdoll. See dot-player-char's [docs/ragdolls.md](../dot-player-char/docs/ragdolls.md).
 - **Offline, the client's buttons go onto the world's own sample** (`WoPlayer.command_stamp`, set in `WoClient._adopt`), never onto `controller.current_command`, which `WoPlayer.simulate` samples over: that way no trigger ever reached the world's gun offline. `headless_run`'s "offline, the client's trigger" is armed ([history](docs/history.md)).
 - **Every key is a `WoBindings` row read through its action**, never a keycode (Escape excepted); H is help (dot-menu's stock key; `WoSettings._fill_help` writes the rules), so no row may default to H. `headless_run` checks it and the Escape menu's Help and Leave.

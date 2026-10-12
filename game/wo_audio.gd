@@ -102,9 +102,15 @@ const COUNT := [VOICE_1, VOICE_2, VOICE_3]
 
 var manager: DotAudioManager = null
 
+## Everybody's footsteps by what they stand on, and the bed under the whole game: dot-audio's
+## stock (Kenney's footsteps, generated beds, all CC0; the addon's stock/CREDITS.md).
+## A course over water in the open air, padded underfoot: a breeze, birds, foam steps.
+var steps: DotAudioFootsteps = null
+var ambience: DotAudioAmbience = null
+
 
 static func ids() -> Array[StringName]:
-	return [
+	var out: Array[StringName] = [
 		SPLASH, KNOCK, BOUNCE, CHECKPOINT, FINISH, COUNTDOWN, GATE,
 		BARREL_BLAST, PLAYER_DOWN, YOU_ARE_OUT, ROUND_START, ROUND_END,
 		FINALE_TELEPORT, FINALE_GO, PICKUP, PROP_THROWN,
@@ -118,12 +124,18 @@ static func ids() -> Array[StringName]:
 		DotPlayerDeathReactions.SOUND_THUD, DotPlayerDeathReactions.SOUND_FACE_PLANT,
 		DotPlayerDeathReactions.SOUND_SLUMP, DotPlayerDeathReactions.SOUND_WHOOSH,
 	]
+	# A typed array plus a typed array is an untyped one: appended, not added.
+	out.append_array(DotAudioStock.ids())
+	return out
 
 
 ## Every decision about every noise. The distances are a course's: the longest is two
 ## hundred metres, and a splash further back than eighty is not about you.
 static func sound_catalogue() -> DotAudioCatalogue:
 	var c := DotAudioCatalogue.new()
+
+	# Footsteps and ambience beds, the family's stock.
+	DotAudioStock.add_to(c)
 
 	c.add(_placed(SPLASH, 80.0, 10.0, 4, 60, 0.85, 1.15))
 	var knock := _placed(KNOCK, 60.0, 8.0, 4, 65, 0.85, 1.1)
@@ -310,12 +322,27 @@ func setup() -> DotResult:
 	manager.register_as_service = false
 	# A barrage, a collapse and a firefight at once is the busiest this game gets.
 	manager.voices = 24
+	# Measured toward the family's -17 LUFS (dot-audio docs/loudness.md): a 40 s stand-in run
+	# read -21.0 LUFS with the bed, the steps and the limiter in.
+	manager.loudness_trim_db = 3.0
 	add_child(manager)
 
 	var ready_now := manager.setup()
 
 	if not ready_now.ok:
 		return ready_now.wrap("wipeout audio")
+
+	steps = DotAudioFootsteps.new()
+	steps.name = "Footsteps"
+	steps.manager = manager
+	steps.default_surface = &"foam"
+	add_child(steps)
+	ambience = DotAudioAmbience.new()
+	ambience.name = "Ambience"
+	ambience.manager = manager
+	ambience.fallback_bed = &"amb_outdoor"
+	add_child(ambience)
+	ambience.set_map_bed(&"amb_outdoor")
 
 	# Only on a real sink: the manager has already decided whether there is a device, and a
 	# headless process has nothing to bake for.
@@ -330,6 +357,20 @@ func setup() -> DotResult:
 		})
 
 	return DotResult.success(null)
+
+
+## Everybody this client knows steps, once a frame: players and bots alike.
+func keep_walkers(bodies: Array) -> void:
+	if steps != null:
+		steps.keep(bodies)
+
+
+## A map arrived: its bed and its ground. Empty keeps what is playing.
+func on_map(bed: StringName, surface: StringName = &"") -> void:
+	if ambience != null and bed != &"":
+		ambience.set_map_bed(bed)
+	if steps != null and surface != &"":
+		steps.default_surface = surface
 
 
 ## Where the ears are, once a frame. The camera, which is the spectator's camera too.

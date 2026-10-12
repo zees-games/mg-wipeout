@@ -1527,6 +1527,7 @@ func _present_effects(delta: float) -> void:
 	# camera — so a player watching a team-mate hears what that team-mate hears.
 	if audio != null:
 		audio.listen_from(camera.global_position)
+		audio.keep_walkers(game.players.values())
 
 		# The machinery, from the time the course was drawn at this frame.
 		if game.stage != null and not game.stage.doc.is_empty() and _stage_seconds >= 0.0:
