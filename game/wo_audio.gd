@@ -323,8 +323,9 @@ func setup() -> DotResult:
 	# A barrage, a collapse and a firefight at once is the busiest this game gets.
 	manager.voices = 24
 	# Measured toward the family's -17 LUFS (dot-audio docs/loudness.md): a 40 s stand-in run
-	# read -21.0 LUFS with the bed, the steps and the limiter in.
-	manager.loudness_trim_db = 3.0
+	# read -21.0 LUFS with the bed, the steps and the limiter in. Once the stand-in turned off
+	# walls (2026-10-12, camera near 190 m a run): -18.6 at +3, -17.4 and -17.1 at +4.5.
+	manager.loudness_trim_db = 4.5
 	add_child(manager)
 
 	var ready_now := manager.setup()
