@@ -5,9 +5,9 @@ extends Node
 ## - the third-person and spectator chase cameras flown round the start and every
 ##   checkpoint of the course (dot-core's DotCameraCheck): never inside, armed by the
 ##   unprotected camera being in or behind the course on some frames;
-## - a stand-in run into the back of a player who stands still: with `mp_solidplayers 1`
-##   their capsules never overlap; with 0 they do (the armed half: the play test's face
-##   filling the screen at the start line);
+## - the player walked (the forward action held) into another player held still: with
+##   `mp_solidplayers 1` their capsules never overlap; with 0 they do (the armed half: the
+##   play test's face filling the screen);
 ## - with `--render`, that moment from the player's eyes before (pass-through, no fade) and
 ##   after, and both views.
 ##
@@ -21,7 +21,6 @@ const WoPlayer := preload("../game/wo_player.gd")
 var _client: Node = null
 var _render := false
 var _failed := false
-var _closest_at := ""
 
 
 func _ready() -> void:
@@ -40,15 +39,11 @@ func _run() -> void:
 	await _seconds(2.5)
 
 	_fly(game)
-	# A stand-in steers and jumps along its route, so one run may never cross the player's
-	# line: solid must hold on every try, and pass-through must show on at least one.
-	var solid_closest := INF
-	var loose_closest := INF
-	for i in 4:
-		solid_closest = minf(solid_closest, await _bodies(game, true))
-		loose_closest = minf(loose_closest, await _bodies(game, false))
-	_check(solid_closest > 0.6, "mp_solidplayers 1: a stand-in running into a player's back stops at it, four tries (closest %.2f m apart)" % solid_closest)
-	_check(loose_closest < 0.3, "armed: mp_solidplayers 0, the same stand-in walks through them on some try (closest %.2f m)" % loose_closest)
+	var walks: Array = await _bodies(game)
+	var loose_closest: float = walks[0]
+	var solid_closest: float = walks[1]
+	_check(solid_closest > 0.6 and solid_closest < 1.0, "mp_solidplayers 1: walking into players stops at the first one met, never inside anybody (closest %.2f m apart)" % solid_closest)
+	_check(loose_closest < 0.3, "armed: mp_solidplayers 0, the same walk goes through them (closest %.2f m)" % loose_closest)
 	game.body_rules.solid = true
 
 	if _render:
@@ -86,44 +81,63 @@ func _fly(game: WoGame) -> void:
 		_check(DotCameraCheck.passed(total), "%s round %d points of the course: %s" % [name, pivots.size(), DotCameraCheck.summary(total)])
 
 
-## A stand-in run into the back of a player standing still. Returns the closest the two
-## capsules' axes came, in metres.
-func _bodies(game: WoGame, solid: bool) -> float:
-	game.body_rules.solid = solid
+## Walks the player (the real input path: the forward action held) into another player held
+## still, with players passing through each other and then solid. Returns
+## [code][pass_through_closest, solid_closest][/code], in metres between the capsules' axes.
+## Deterministic: the other player is put back on its spot every frame, so its own brain
+## cannot steer it away; and the walk is one the pass-through run proved clear (a spot whose
+## way in is blocked by a wall or a start gate proves nothing, and is skipped).
+func _bodies(game: WoGame) -> Array:
 	var me: WoPlayer = _client.get("player")
-	var bot: WoPlayer = null
+	var space := _client.get_viewport().world_3d.direct_space_state
+	var mask: int = _client.call("_level_mask")
 	for id in game.players:
 		var other: WoPlayer = game.players[id]
-		if other != me and other.is_bot:
-			bot = other
-			break
-	if bot == null or me == null:
-		_check(false, "a stand-in and a player to run into each other")
-		return INF
+		if other == me:
+			continue
+		var spot: Vector3 = other.controller.state.position
+		for i in 8:
+			var angle := TAU * float(i) / 8.0
+			var probe := spot + Vector3(sin(angle), 0.0, cos(angle)) * 2.6
+			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(probe + Vector3.UP, probe + Vector3.DOWN, mask))
+			if hit.is_empty() or absf((hit["position"] as Vector3).y - spot.y) > 0.3:
+				continue
+			if DotCameraProbe.is_inside(space, probe + Vector3.UP * 0.9, 0.36, mask):
+				continue
+			var from: Vector3 = hit["position"]
+			var loose: float = await _walk(game, me, other, spot, from, false)
+			if loose > 0.3:
+				continue
+			var solid: float = await _walk(game, me, other, spot, from, true)
+			game.body_rules.solid = true
+			return [loose, solid]
+	game.body_rules.solid = true
+	return [INF, INF]
 
-	# Into the course: the stand-ins are running.
-	var waited := 0.0
-	while game.phase != WoGame.Phase.COURSE and waited < 10.0 and bot.controller.state.velocity.length() < 2.0:
-		await _seconds(0.25)
-		waited += 0.25
-	await _seconds(1.5)
-	var heading := Vector3(bot.controller.state.velocity.x, 0.0, bot.controller.state.velocity.z)
-	if heading.length() < 0.5:
-		heading = Vector3.FORWARD
-	heading = heading.normalized()
-	me.controller.teleport(bot.controller.state.position + heading * 3.2)
+
+func _walk(game: WoGame, me: WoPlayer, other: WoPlayer, spot: Vector3, from: Vector3, solid: bool) -> float:
+	game.body_rules.solid = solid
+	var to_spot := spot - from
+	me.controller.teleport(from + Vector3.UP * 0.05, rad_to_deg(atan2(-to_spot.x, -to_spot.z)), 0.0)
+	await get_tree().physics_frame
+	Input.action_press(&"dot_fps_forward")
 	var closest := INF
-	for i in 150:
+	for i in 90:
+		other.controller.teleport(spot, NAN, NAN)
 		await get_tree().physics_frame
 		var a := me.controller.state.position
-		var b := bot.controller.state.position
-		# Overlapping is the capsules intersecting: closer than two radii across while less
-		# than a body height apart up and down. A stand-in standing on a head is not that.
-		var across := Vector2(a.x - b.x, a.z - b.z).length()
-		if absf(a.y - b.y) < 1.6 and across < closest:
-			closest = across
-			_closest_at = "%.2f across, %.2f up, tick %d of the try" % [across, b.y - a.y, i]
-	print("    %s: closest %s" % ["solid" if solid else "pass-through", _closest_at])
+		if solid:
+			# Solid, the walk may stop at somebody else first (a start pad is crowded):
+			# the closest to ANY other player is what must stay two radii apart.
+			for id in game.players:
+				var body: WoPlayer = game.players[id]
+				if body != me and absf(body.controller.state.position.y - a.y) < 1.6:
+					var b := body.controller.state.position
+					closest = minf(closest, Vector2(a.x - b.x, a.z - b.z).length())
+		else:
+			closest = minf(closest, Vector2(a.x - spot.x, a.z - spot.z).length())
+	Input.action_release(&"dot_fps_forward")
+	print("    %s: closest %.2f m" % ["solid" if solid else "pass-through", closest])
 	return closest
 
 
@@ -149,7 +163,7 @@ func _views(game: WoGame) -> void:
 	var bot: WoPlayer = null
 	for id in game.players:
 		var other: WoPlayer = game.players[id]
-		if other != me and other.is_bot:
+		if other != me and other.visible and other.figure != null and other.figure.visible:
 			bot = other
 			break
 	if bot == null:
