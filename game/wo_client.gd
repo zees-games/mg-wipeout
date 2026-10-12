@@ -399,6 +399,11 @@ func _adopt(candidate: WoPlayer) -> void:
 	player = candidate
 	_build_camera()
 
+	# Offline the world samples this player's movement itself, so the buttons go onto that
+	# sample (`command_stamp`); stamping `current_command` below only reaches the drawn gun.
+	if _offline:
+		player.command_stamp = _stamp
+
 	if settings != null:
 		settings.bind_camera(camera)
 		# Offline the player samples for themselves, from their controller's own tunables.

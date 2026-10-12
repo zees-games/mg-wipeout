@@ -277,9 +277,22 @@ static func jump_reach(config: WoConfig, rise: float = 0.0) -> float:
 
 
 ## Called once per simulated tick by the world, on the server and offline.
+## Offline only: puts the client's buttons (fire, reload...) on the command [member sampler] has
+## just made. Stamped here, after sampling: the client used to stamp
+## `controller.current_command` from its own physics frame, and this function then applied a
+## fresh sample over it, so offline no trigger ever reached the world's rig and no shot of the
+## player's landed (game-zombie-zone's play test found it; its docs/history.md has the story).
+var command_stamp: Callable = Callable()
+
+
 func simulate(tick: int, delta: float) -> void:
 	if sampler != null:
-		controller.apply_command(sampler.sample(delta))
+		var sampled := sampler.sample(delta)
+
+		if command_stamp.is_valid():
+			command_stamp.call(sampled)
+
+		controller.apply_command(sampled)
 
 	controller.simulate_tick(tick, delta)
 
