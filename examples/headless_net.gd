@@ -424,8 +424,8 @@ func _test_the_final_death_crosses() -> void:
 	_check(
 		copy.figure != null and copy.figure.holding == &"pistol" and copy.figure.held != null
 			and copy.figure.held.equipped() == &"pistol"
-			and hand != null and String(hand.get_parent().name) == "arm-right",
-		"a watcher draws the weapon in their right hand",
+			and hand != null and hand.get_parent() is BoneAttachment3D,
+		"a watcher draws the weapon in their hand (the person's gun-hand bone)",
 		"%s drawn, dealt %s" % [
 			String(copy.figure.holding) if copy.figure != null else "-", str(copy.dealt)
 		]

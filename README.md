@@ -130,7 +130,7 @@ A course is a JSON file: a start pad, a list of pieces, checkpoints and a finish
 - There is no settings menu.
 
 ## Credits
-Every surface is Kenney's Prototype Textures; the props are from Kenney's Survival and Car kits and the players are Kenney's Blocky Characters ([kenney.nl](https://kenney.nl), CC0). The weapons are from [zee-dot-weapons](https://github.com/zees-games/zee-dot-weapons). Each kit's licence is next to its files.
+Every surface is Kenney's Prototype Textures; the props are from Kenney's Survival and Car kits ([kenney.nl](https://kenney.nl), CC0), and the players are the family's animated people from Quaternius' [Zombie Apocalypse Kit](https://quaternius.com/packs/zombieapocalypsekit.html) (CC0 1.0, credited in dot-player-char), chosen by Kenney's Blocky Characters' skins. The weapons are from [zee-dot-weapons](https://github.com/zees-games/zee-dot-weapons). Each kit's licence is next to its files.
 
 ## License
 MIT. See [LICENSE](LICENSE). The Kenney art is CC0, which is public domain.

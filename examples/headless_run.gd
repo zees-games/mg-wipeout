@@ -913,8 +913,8 @@ func _test_the_client_settings() -> void:
 	_finished()
 
 
-## A watched player carrying a prop is drawn with both arms out under it, as the kit's
-## `holding-both` clip holds them; with the arms down the prop read as a crate following
+## A watched player carrying a prop is drawn with both arms out under it (the person's
+## held-gun arms); with the arms down the prop read as a crate following
 ## somebody about. A mirrored player (no gravity gun here) is told by the snapshot's bit.
 func _test_a_carrier_is_drawn_carrying() -> void:
 	_section("a carrier is drawn carrying")
@@ -922,17 +922,18 @@ func _test_a_carrier_is_drawn_carrying() -> void:
 	var carrier := game.add_player(&"u1", "Ada")
 	carrier.carrying = true
 	var _shown := carrier.present_body(false, carrier.global_position, Color.WHITE)
-	var left: Node3D = carrier.figure.find_child("arm-left", true, false) if carrier.figure != null else null
+	# The figure is one of the family's people: carrying is the held-gun arms, out in front.
+	var person: DotHumanoidFigure = carrier.figure.person if carrier.figure != null else null
 	_check(
-		carrier.figure != null and carrier.figure.carrying and left != null
-			and is_equal_approx(left.rotation.x, -PI * 0.5),
+		carrier.figure != null and carrier.figure.carrying and person != null
+			and person.hold == DotHumanoidFigure.Hold.GUN,
 		"both arms are out under the prop",
 		str(carrier.figure.describe()) if carrier.figure != null else "no figure"
 	)
 	carrier.carrying = false
 	_shown = carrier.present_body(false, carrier.global_position, Color.WHITE)
-	_check(carrier.figure != null and not carrier.figure.carrying and left != null
-			and not is_equal_approx(left.rotation.x, -PI * 0.5),
+	_check(carrier.figure != null and not carrier.figure.carrying and person != null
+			and person.hold == DotHumanoidFigure.Hold.NONE,
 		"and down again when it is let go")
 	_finished()
 
