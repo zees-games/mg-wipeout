@@ -914,6 +914,43 @@ func _lay_out_course() -> void:
 	_course_unplayed = true
 
 
+## Every course this server plays, as the map menu (M) lists them: `{id, name, detail,
+## current}`, the blurb under the name. Solo the client's list, online the
+## server's (the module hands it to dot-vote's map menu), so both say the same.
+func course_rows() -> Array:
+	var out: Array = []
+	if catalogue == null:
+		return out
+	var now := StringName(str(course_doc.get("id", "")))
+	for id in catalogue.playable_courses(config.course_ids):
+		var doc: Dictionary = catalogue.courses.get(id, {})
+		# The blurb under the name ("Everything once, and gently"): a course has no mode, and its
+		# `theme` is the sky's colours, not a word.
+		var row := {"id": String(id), "name": str(doc.get("name", id)), "current": id == now,
+			"detail": str(doc.get("blurb", ""))}
+		if doc.has("thumbnail"):
+			row["thumbnail"] = str(doc["thumbnail"])
+		out.append(row)
+	return out
+
+
+## The map menu's change: [param id] now, not after this round. The next course is set and a
+## fresh round begins on it (dot-match's `begin_round_now`: the round called off has no
+## winner); with no match running yet it is simply built. Authority only.
+func change_course_now(id: StringName) -> DotResult:
+	if not authoritative:
+		return DotResult.fail(DotError.CODE_STATE, "Only the server changes the course.")
+	if catalogue == null or not catalogue.playable_courses(config.course_ids).has(id):
+		return DotResult.fail(DotError.CODE_INVALID, "There is no course called '%s' here." % id)
+	next_course_id = id
+	# The warmup's course is not the one to keep: the next round is the chosen one.
+	_course_unplayed = false
+	if match_node == null or not match_node.begin_round_now(_tick):
+		_lay_out_course()
+	DotLog.info(CHANNEL, "course changed from the map menu", {"course": String(id)})
+	return DotResult.success(id)
+
+
 ## Gusts and lightning for one course, from the round's own stream. Ticks are game ticks
 ## from [param start]: the countdown and the whole course clock are covered.
 func draw_weather(doc: Dictionary, rng: DotRandomStream, start: int) -> Dictionary:

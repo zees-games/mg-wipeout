@@ -22,9 +22,9 @@ const WoSettings := preload("../game/wo_settings.gd")
 ## because the section announced itself on the way in. mg-smash-copter and dot-settings both
 ## have the story; every total here was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 24
+const SECTIONS := 25
 
-const CHECKS := 119
+const CHECKS := 124
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -71,6 +71,7 @@ func _run() -> void:
 	await _test_a_carrier_is_drawn_carrying()
 	await _test_the_hud()
 	await _test_help_and_menu()
+	await _test_the_map_menu()
 
 	for world in _worlds.duplicate():
 		await _dispose(world)
@@ -1017,6 +1018,55 @@ func _test_help_and_menu() -> void:
 	_check(help_button != null and leave_button != null and leave_button.visible,
 		"the Escape menu has Help & commands and Leave")
 	settings.close()
+	settings.queue_free()
+	await get_tree().process_frame
+	_finished()
+
+
+## The family's rule since the first play test: M opens the course list, and solo a choice
+## changes the course now. The server's half (the owner's flag, the vote) is dot-vote's suite.
+func _test_the_map_menu() -> void:
+	_section("M opens the course list, and solo a choice changes the course")
+	var game := await _world(func(c: WoConfig) -> void: c.course_ids = PackedStringArray())
+	var _a := game.add_player(&"u1", "Ada")
+	var _b := game.add_player(&"u2", "Bo")
+	game.start()
+	await _step(game, 2)
+	var round_before := game.match_node.round_number
+	var settings := WoSettings.new()
+	add_child(settings)
+	var _built: DotResult = settings.setup(DotSettingsStoreMemory.new())
+	var keys: DotMenuBindings = settings.bindings
+	_check(keys.key_for(DotMenuBindings.MAPS_ACTION) == "M" and keys.defaults_on("M").size() == 1,
+		"the map menu is on M, and nothing else in the table defaults to M",
+		str(keys.defaults_on("M").map(func(r: Dictionary) -> String: return str(r["label"]))))
+	var rows := game.course_rows()
+	_check(rows.size() > 1 and rows.filter(func(r: Dictionary) -> bool: return bool(r["current"])).size() == 1,
+		"there is more than one course to choose, the one playing marked", "%d courses" % rows.size())
+	var _maps := settings.use_maps(game.course_rows, game.change_course_now)
+	var m := InputEventKey.new()
+	m.physical_keycode = KEY_M
+	m.keycode = KEY_M
+	m.pressed = true
+	_check(settings.menu.handle_event(m) and settings.menu.picker.is_open(), "M opens the picker")
+	# The first row that is not the course being played, by its number on its page.
+	var wanted: StringName = &""
+	var key := KEY_NONE
+	for row in range(1, DotMenuPicker.PAGE_SIZE + 1):
+		var it: Variant = settings.menu.picker.at_row(row)
+		if it is Dictionary and not bool((it as Dictionary)["current"]):
+			wanted = StringName(str((it as Dictionary)["id"]))
+			key = KEY_0 + row
+			break
+	var digit := InputEventKey.new()
+	digit.physical_keycode = key
+	digit.keycode = key
+	digit.pressed = true
+	var _k := settings.menu.handle_event(digit)
+	await _step(game, 2)
+	_check(wanted != &"" and game.stage.id() == wanted and game.match_node.round_number == round_before + 1,
+		"choosing one builds it now and starts a round on it", "%s, playing %s, phase %s, match %s" % [wanted, game.stage.id(), WoGame.Phase.keys()[game.phase], DotMatch.State.keys()[game.match_node.state]])
+	_check(not settings.menu.picker.is_open(), "and the picker is closed")
 	settings.queue_free()
 	await get_tree().process_frame
 	_finished()

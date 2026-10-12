@@ -14,7 +14,7 @@ const WoPlayer := preload("../game/wo_player.gd")
 ## nothing but the stand-ins the module seats itself.
 
 const SECTIONS := 9
-const CHECKS := 52
+const CHECKS := 55
 
 const SERVER_DIR := "user://wo_dedicated"
 const PORT := 28931
@@ -360,6 +360,7 @@ func _test_the_course_vote() -> void:
 
 	_check(commands_there, "and registered dot-vote's vote, rtv and nominate")
 
+
 	# Hibernation: DotGameModule hands the director the server, the ballot's timer waits with
 	# it, and waking starts both again from the top.
 	var director: DotVoteDirector = vote.get("director")
@@ -386,6 +387,30 @@ func _test_the_course_vote() -> void:
 
 	_check(ids.has("wo_grand_tour") and ids.has("wo_log_roll") and not ids.has("wo_arena_pit"),
 		"it offers the courses, and no arena", str(ids))
+
+	# The map menu's server half (M): the owner's flag changes the course now, anybody else
+	# gets a nomination and a rock-the-vote. Contexts as dot-server makes them for a chat line.
+	var menu_half: Object = vote.get("commands").get("map_menu")
+	_check(menu_half != null and server.console.find_command("mapmenu") != null
+		and server.console.find_cvar("sv_map_menu_flag").get_string() == "generic"
+		and (menu_half.get("change_fn") as Callable).is_valid(),
+		"the map menu is there, staff-only by default, changing the course now")
+	var staff := DotCmdContext.new()
+	staff.source = DotCmdContext.Source.CHAT
+	staff.permissions = PackedStringArray(["generic"])
+	var player := DotCmdContext.new()
+	player.source = DotCmdContext.Source.CHAT
+	var offered: Dictionary = menu_half.call("offer", player)
+	_check((offered["maps"] as Array).size() > 1 and not bool(offered["allowed"]) and bool(offered["vote"]),
+		"a player is offered every course, as a vote")
+	var target: StringName = &""
+	for row: Dictionary in offered["maps"]:
+		if not bool(row["current"]):
+			target = StringName(str(row["id"]))
+			break
+	var changed: Dictionary = await menu_half.call("choose", staff, target)
+	_check(bool(changed["ok"]) and game.stage.id() == target, "staff choosing one changes the course on the spot",
+		"%s: %s" % [target, changed.get("text", "")])
 
 	# A course that is not the one being played, so it can be nominated.
 	var playing := String(game.stage.id()) if game.stage != null and not game.stage.is_arena() \
