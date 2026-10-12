@@ -7,6 +7,8 @@ const WoEvents := preload("../game/net/wo_events.gd")
 const WoGame := preload("../game/wo_game.gd")
 const WoNetBridge := preload("../game/net/wo_net_bridge.gd")
 const WoPlayer := preload("../game/wo_player.gd")
+const WoEvent := preload("../game/net/wo_event.gd")
+const WoRequest := preload("../game/net/wo_request.gd")
 
 ## The real path minus the socket: two worlds, two managers, two bridges, two links with the
 ## RPC replaced by a queue — so the codec, the seal, the snapshots, the prediction and the
@@ -23,7 +25,7 @@ const WoPlayer := preload("../game/wo_player.gd")
 ## Sections and checks are both counted; mg-smash-copter's notes say why the second matters.
 
 const SECTIONS := 10
-const CHECKS := 46
+const CHECKS := 49
 
 const CLIENT_PEER := 7
 const SESSION := 42
@@ -139,6 +141,16 @@ func _test_the_codec() -> void:
 	var clock := WoEvents.read_clock(DotNetReader.new(WoEvents.write_clock(2, 12.5, 40.25, WoGame.Phase.FINALE, 3, 2, true)))
 	_check(bool(clock["ok"]) and int(clock["phase"]) == WoGame.Phase.FINALE
 		and absf(float(clock["course_elapsed"]) - 40.25) < 0.1 and int(clock["finished"]) == 3, "CLOCK", str(clock))
+
+	# A kind goes out in a fixed field the writer masks without a word, so one past it aliases a
+	# smaller kind: game-zombie-zone sent HURT and AMMO as HELLO and MAP that way.
+	_check(WoEvent.fits(), "every event kind fits the event's kind field",
+		"%d kinds in %d bits" % [WoEvents.Kind.size(), WoEvent.KIND_BITS])
+	_check(WoRequest.fits(), "every request kind fits the request's kind field",
+		"%d kinds in %d bits" % [WoEvents.Ask.size(), WoRequest.KIND_BITS])
+	_check(WoEvents.chat_kinds_fit(), "every chat kind fits the chat line's kind field",
+		"%d kinds in %d bits" % [DotChatMessage.KIND_NAMES.size(), WoEvents.CHAT_KIND_BITS])
+
 	_finished()
 
 
