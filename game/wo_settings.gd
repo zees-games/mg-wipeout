@@ -1,5 +1,7 @@
 extends DotMenuSettings
 
+const WoBindings := preload("wo_bindings.gd")
+
 ## A player's own settings and the menu that changes them: how fast the view turns, how wide
 ## it is, how loud things are, the window, and the look of the menu itself.
 ##
@@ -48,9 +50,10 @@ func _init() -> void:
 	schema = schema_for()
 	config = DotMenuConfig.new()
 	config.brand_name = "Wipeout"
-	# Nothing to leave to and no keys table to help with; Escape and Resume close the menu.
-	config.show_help = false
-	config.show_leave = false
+	# Help and Leave are dot-menu's stock: H opens help, Leave leaves the server or quits a
+	# solo game. Every game in the family has both (the first play test found this one with
+	# neither). The keys are a table now ([WoBindings]), so the help screen lists them.
+	bindings = WoBindings.make()
 	var _layered := config.load_layered()
 
 
@@ -63,3 +66,11 @@ static func schema_for() -> DotSettingsSchema:
 		DotSettingsDef.Scope.SERVER_CLAMPED
 	))
 	return DotMenuStock.declare(s, DotMenuStock.DEFAULT_GROUPS, null, NOT_APPLIED)
+
+
+## The help screen's goal and rules; the keys come from [WoBindings].
+func _fill_help(help: DotMenuHelp) -> void:
+	help.about = "Get round the course over the water as fast as you can: arms, hammers, rams and rides are all trying to knock you off. A fall sends you back to your last checkpoint, and a knock costs health."
+	help.add_text("Points", "Finishing earns points by place, and the side that wins the round earns more. Tab shows everybody's.")
+	help.add_text("The final", "If two or more sides finish, the round ends in a fight in an arena: pick props up and throw them, and grab the weapons lying on the floor. The last side with anybody standing wins the round.")
+	help.add_section("Mouse", [["Left", "Throw what you hold, or fire; watch the next player while out"], ["Right", "Alternate fire; watch the one before while out"]], &"keys")

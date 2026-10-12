@@ -43,6 +43,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 
 ## Rules that bite
 
+- **Every key is a `WoBindings` row read through its action**, never a keycode (Escape excepted); H is help (dot-menu's stock key; `WoSettings._fill_help` writes the rules), so no row may default to H. `headless_run` checks it and the Escape menu's Help and Leave.
 - Where an obstacle is at tick N is a formula both ends evaluate; nothing about the course is replicated after `STAGE`. Anything new that moves, warns, sounds or blows must be a function of the tick too. [design](docs/design.md#decision-1-an-obstacle-is-a-pure-function-of-the-tick)
 - Pose the course at the tick being simulated in `_on_pre_simulate`, including prediction replays. [design](docs/design.md#decision-1-an-obstacle-is-a-pure-function-of-the-tick)
 - Hazards are measured analytically, never collided; carriers are solid and move riders by exact displacement. [design](docs/design.md#decision-1-an-obstacle-is-a-pure-function-of-the-tick)

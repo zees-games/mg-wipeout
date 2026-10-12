@@ -12,6 +12,7 @@ const WoHud := preload("../game/wo_hud.gd")
 const WoPaths := preload("../game/wo_paths.gd")
 const WoPlayer := preload("../game/wo_player.gd")
 const WoProgress := preload("../game/wo_progress.gd")
+const WoSettings := preload("../game/wo_settings.gd")
 
 ## The simulation, headless: documents, the course, what it does to a player, and the round.
 ##
@@ -20,9 +21,9 @@ const WoProgress := preload("../game/wo_progress.gd")
 ## because the section announced itself on the way in. mg-smash-copter and dot-settings both
 ## have the story; every total here was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 23
+const SECTIONS := 24
 
-const CHECKS := 111
+const CHECKS := 116
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -68,6 +69,7 @@ func _run() -> void:
 	await _test_the_client_settings()
 	await _test_a_carrier_is_drawn_carrying()
 	await _test_the_hud()
+	await _test_help_and_menu()
 
 	for world in _worlds.duplicate():
 		await _dispose(world)
@@ -964,6 +966,36 @@ func _test_the_hud() -> void:
 		str(asks.get("dot_ui"))
 	)
 	hud.queue_free()
+	_finished()
+
+
+## The family's rule since the first play test: H opens help in every game, nothing else in
+## the table is on H, and the Escape menu has Help & commands and Leave.
+func _test_help_and_menu() -> void:
+	_section("H opens help, and the Escape menu has Help and Leave")
+	var settings := WoSettings.new()
+	add_child(settings)
+	var built: DotResult = settings.setup(DotSettingsStoreMemory.new())
+	var keys: DotMenuBindings = settings.bindings
+	_check(built.ok and keys != null and keys.key_for(DotMenuBindings.HELP_ACTION) == "H", "help is on H")
+	_check(keys.defaults_on("H").size() == 1, "and nothing else in the table defaults to H",
+		str(keys.defaults_on("H").map(func(r: Dictionary) -> String: return str(r["label"]))))
+	var h := InputEventKey.new()
+	h.physical_keycode = KEY_H
+	h.keycode = KEY_H
+	h.pressed = true
+	_check(settings.menu.handle_event(h) and settings.menu.help.is_open(), "H opens the help screen")
+	_check(settings.menu.help.about != "" and settings.menu.help.heading() == "How to play Wipeout",
+		"which says what the game is before the keys")
+	settings.menu.help.close()
+	settings.open()
+	var help_button := settings.menu.screen.find_child("Action_help", true, false) as Button
+	var leave_button := settings.menu.screen.find_child("Action_leave", true, false) as Button
+	_check(help_button != null and leave_button != null and leave_button.visible,
+		"the Escape menu has Help & commands and Leave")
+	settings.close()
+	settings.queue_free()
+	await get_tree().process_frame
 	_finished()
 
 

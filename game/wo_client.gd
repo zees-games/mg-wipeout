@@ -1,6 +1,7 @@
 extends Node
 
 const WoAudio := preload("wo_audio.gd")
+const WoBindings := preload("wo_bindings.gd")
 const WoFigure := preload("wo_figure.gd")
 const WoSettings := preload("wo_settings.gd")
 const WoServices := preload("wo_services.gd")
@@ -42,9 +43,6 @@ const LINK_SERVICE := &"dot_client_link"
 ## Where the camera sits behind the player in third person, in metres.
 const CHASE_BACK := 4.6
 const CHASE_UP := 2.1
-
-## Which key swaps the camera over. Physical, because the letter differs across layouts.
-const VIEW_KEY := KEY_F5
 
 @export var config_file: String = "user://cfg/wipeout.json"
 
@@ -1527,7 +1525,7 @@ static func drawn_position(body: WoPlayer, remote: bool) -> Vector3:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# The Tab board, held: shown while the key is down, like every scoreboard in the genre.
-	if event is InputEventKey and (event as InputEventKey).physical_keycode == KEY_TAB and not event.is_echo():
+	if event.is_action(WoBindings.SCOREBOARD) and not event.is_echo():
 		_show_board(event.is_pressed())
 		return
 
@@ -1550,10 +1548,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			settings.open()
 		return
 
-	if event is InputEventKey and (event as InputEventKey).pressed:
-		var key := event as InputEventKey
-
-		if key.physical_keycode == VIEW_KEY:
+	# The game's keys, each a row of [WoBindings] read through its action, so a key moved on
+	# the Controls page moves what it does here.
+	if event is InputEventKey:
+		if event.is_action_pressed(WoBindings.VIEW):
 			# Out, the key swaps the SPECTATOR's camera, which the server decides.
 			if is_spectating():
 				spectate_step(0)
@@ -1562,28 +1560,21 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 
 		# The slots. One to five, which is what the pack uses.
-		if key.physical_keycode >= KEY_1 and key.physical_keycode <= KEY_5:
-			_slot = key.physical_keycode - KEY_1 + 1
+		for i in range(WoBindings.SLOTS.size()):
+			if event.is_action_pressed(WoBindings.SLOTS[i]):
+				_slot = i + 1
+				return
+
+		if event.is_action(WoBindings.RELOAD):
+			_reloading = event.is_pressed()
 			return
 
-		if key.physical_keycode == KEY_R:
-			_reloading = true
-			return
-
-
-		if key.physical_keycode == KEY_E:
+		if event.is_action(WoBindings.GRAB):
 			# Held, and sent every tick in this game's own input message; the server makes the
 			# edge. A request instead would be a pick-up resolved a round trip after the key,
 			# against a prop that has moved.
-			_grab = true
+			_grab = event.is_pressed()
 			return
-
-	if event is InputEventKey and not (event as InputEventKey).pressed:
-		if (event as InputEventKey).physical_keycode == KEY_R:
-			_reloading = false
-
-		if (event as InputEventKey).physical_keycode == KEY_E:
-			_grab = false
 
 	if event is InputEventMouseButton:
 		var button := event as InputEventMouseButton

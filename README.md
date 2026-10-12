@@ -35,6 +35,8 @@ The courses live in their own repository, [mg-wipeout-maps](https://github.com/z
 | **Mouse 2** / **R** / **1**-**5** | Alt-fire / reload / weapon slots |
 | **F5** | First or third person |
 | **Tab** | Scoreboard |
+| **H** | Help: the rules and every key as you have it bound |
+| **Esc** | Menu: settings (every key above can be rebound), help, and leave |
 
 ## Getting started
 You need [Godot 4.7](https://godotengine.org/download). The game is built from many Dot addons, each in its own repository, so the easiest way to get everything is [dot-bootstrap](https://github.com/modcommunity/dot-bootstrap). It clones every project and links the addons into each one:
