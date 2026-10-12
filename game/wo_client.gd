@@ -1276,11 +1276,18 @@ func _pose_stage() -> void:
 		return
 
 	var tick := float(game.current_tick())
+	var alpha := Engine.get_physics_interpolation_fraction()
 
 	if net != null and net.is_running():
 		tick = float(net.clock.tick)
+		# At the alpha your own player is drawn at (see `present_frame`), so a clock slip
+		# moves the course and the player on it together; at the engine's fraction a rider
+		# on a mover slid a tick against it for a moment after each. By name, for an older
+		# shell's dot-net.
+		if net.clock.has_method(&"render_alpha"):
+			alpha = float(net.clock.call(&"render_alpha"))
 
-	_stage_seconds = (tick + Engine.get_physics_interpolation_fraction()) / float(maxi(game.tick_rate, 1))
+	_stage_seconds = (tick + alpha) / float(maxi(game.tick_rate, 1))
 	game.stage.pose_at_time(_stage_seconds)
 
 
@@ -1465,6 +1472,15 @@ static func present_frame(
 
 	if networked:
 		p_net.interpolate_frame(alpha)
+
+	# Your own player is drawn at the clock's render alpha, not the engine's fraction: the
+	# clock stretches and shrinks its ticks while it settles on the server, so a physics frame
+	# now and then runs no tick or two, and drawn at the engine's fraction the eye stood still
+	# on one frame and moved double on the next. `DotFpsController.render_state` reads it from
+	# `render_clock` (dot-player-controller); by name both ways, so a shell older than either
+	# draws as before. Null offline, where every physics frame is one tick.
+	if own != null and own.controller != null:
+		own.controller.set(&"render_clock", p_net.clock if networked else null)
 
 	if p_game == null:
 		return 0
