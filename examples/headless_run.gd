@@ -7,6 +7,7 @@ const WoCourse := preload("../game/wo_course.gd")
 const WoCourseDoc := preload("../game/wo_course_doc.gd")
 const WoAudio := preload("../game/wo_audio.gd")
 const WoClient := preload("../game/wo_client.gd")
+const WoEvents := preload("../game/net/wo_events.gd")
 const WoGame := preload("../game/wo_game.gd")
 const WoHud := preload("../game/wo_hud.gd")
 const WoPaths := preload("../game/wo_paths.gd")
@@ -23,7 +24,7 @@ const WoSettings := preload("../game/wo_settings.gd")
 
 const SECTIONS := 24
 
-const CHECKS := 116
+const CHECKS := 119
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -580,13 +581,35 @@ func _test_the_final_death() -> void:
 		"%.0f -> %.0f" % [before, b.health.health])
 	var _unused := throw_from
 
-	# The last one standing.
+	# The last one standing. Drawn first, as a client draws everybody it can see: the body that
+	# falls is copied from this figure.
+	var _drawn := b.present_body(false, b.controller.state.position, Color.WHITE)
 	var damage := DotDamage.make(a.entity_id, b.entity_id, 500.0, null)
 	damage.tick = game.current_tick()
+	damage.direction = Vector3(1, 0, 0)
 	var _applied := game.combat.apply_damage(damage)
 	await _step(game, 3)
 	_check(ended.size() == 1 and int(ended[0][1]) == a.team, "the last side standing wins",
 		str(ended[0]) if not ended.is_empty() else "")
+
+	# How the body falls: the server picked it, DEATH carries it, a client builds it.
+	_check(b.death != null and b.death.direction.distance_to(Vector3(1, 0, 0)) < 0.01,
+		"the server picked how the body falls, along the blow", str(b.death.describe()) if b.death != null else "none")
+	var carried := WoEvents.read_death(DotNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT, b.death)))
+	_check(bool(carried["ok"]) and carried.has("death") and (carried["death"] as DotPlayerDeath).reaction == b.death.reaction
+		and not WoEvents.read_death(DotNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT))).has("death"),
+		"DEATH carries it, and one without it still reads",
+		str(WoEvents.read_death(DotNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT)))))
+	var client := WoClient.new()
+	client.game = game
+	client._build_ragdolls()
+	client.remove_child(client.ragdolls)
+	add_child(client.ragdolls)
+	client._fall(b)
+	_check(client.ragdolls.live().size() == 1 and client.ragdolls.rules == game.ragdoll_rules,
+		"a client builds the body from the figure it draws, under the game's rules")
+	client.ragdolls.queue_free()
+	client.free()
 	_finished()
 
 

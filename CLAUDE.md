@@ -43,6 +43,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 
 ## Rules that bite
 
+- A dead body falls as dot-player-char's ragdoll: the server picks the fall (`WoGame.decide_death`, on `player.death`), it rides DEATH last and optional, and the client copies it from the figure it draws (`WoClient._fall`). The `sv_ragdoll*` cvars are bound in the module, REPLICATED, and followed by the client. A blow or a blast still knocks the body to pieces (`_break`, this game's own look); anything less leaves a ragdoll. See dot-player-char's [docs/ragdolls.md](../dot-player-char/docs/ragdolls.md).
 - **Every key is a `WoBindings` row read through its action**, never a keycode (Escape excepted); H is help (dot-menu's stock key; `WoSettings._fill_help` writes the rules), so no row may default to H. `headless_run` checks it and the Escape menu's Help and Leave.
 - Where an obstacle is at tick N is a formula both ends evaluate; nothing about the course is replicated after `STAGE`. Anything new that moves, warns, sounds or blows must be a function of the tick too. [design](docs/design.md#decision-1-an-obstacle-is-a-pure-function-of-the-tick)
 - Pose the course at the tick being simulated in `_on_pre_simulate`, including prediction replays. [design](docs/design.md#decision-1-an-obstacle-is-a-pure-function-of-the-tick)

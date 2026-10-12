@@ -164,6 +164,14 @@ var combat: DotCombatManager = null
 var match_node: DotMatch = null
 var random: DotRandomManager = null
 var physics: DotPhysicsLayout = null
+
+## What a dead body does, and which death reactions the server allows: dot-player-char's
+## `sv_ragdoll*` cvars, bound by the module (REPLICATED) and followed by a client through its
+## link, because the client draws the bodies. The game's, not the map's.
+var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
+
+## The weapon definitions by id, for the death reaction a weapon asks for. Built on first use.
+var _weapon_defs: Dictionary = {}
 var effects: DotFxManager = null
 var spectate: WoSpectate = null
 var progress: WoProgress = null
@@ -2242,6 +2250,22 @@ func _aim_bot(player: WoPlayer, command: DotFpsCommand, target: WoPlayer) -> voi
 
 # --- Reacting ---------------------------------------------------------------
 
+## The fall a death gets: dot-player-char's reaction rule over the server's weights, seeded from
+## the player and the tick, with the killing weapon's def (zee's sniper and launcher always throw
+## the body). A death with no sideways direction (a fall, a trap) pushes nothing.
+func decide_death(player: WoPlayer, damage: DotDamage) -> DotPlayerDeath:
+	if _weapon_defs.is_empty():
+		_weapon_defs = ZeeWeaponPack.table()
+	var direction := damage.direction
+	var attacker: WoPlayer = players.get(entities.key_for_id(damage.attacker)) if damage.attacker != 0 else null
+	if direction.length_squared() < 0.0001 and attacker != null and attacker != player:
+		direction = player.controller.state.position - attacker.controller.state.position
+	return DotPlayerDeath.decide(
+		ragdoll_rules.reactions(), damage.is_headshot(), damage.amount, direction,
+		DotPlayerDeath.seed_of(player.entity_id, _tick), _weapon_defs.get(damage.weapon_id)
+	)
+
+
 func _on_player_died(player: WoPlayer, damage: DotDamage) -> void:
 	var by := entities.key_for_id(damage.attacker)
 	var why: StringName = damage.context.get("why", DIED_SHOT)
@@ -2263,6 +2287,10 @@ func _on_player_died(player: WoPlayer, damage: DotDamage) -> void:
 
 	if match_node != null and DotEntity.is_kind(player.entity_id, DotEntity.KIND_PLAYER):
 		match_node.report_kill(String(by), String(player.player_id), why, _tick)
+
+	# How the body falls, picked once, here, and carried on DEATH to every client.
+	if authoritative:
+		player.death = decide_death(player, damage)
 
 	player_died.emit(player.player_id, by, why)
 

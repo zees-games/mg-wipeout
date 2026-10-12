@@ -170,6 +170,7 @@ func _ready() -> void:
 	# The sky, the sun and the water: drawn here, never on a server.
 	game.draw_world = true
 	add_child(game)
+	_build_ragdolls()
 
 	# The sampler lives HERE and not on the player, because on a connected client the local
 	# player does not exist yet: they arrive in a JOIN, several frames after the keyboard
@@ -203,6 +204,39 @@ func _ready() -> void:
 	# [DotPlatform] can measure, and there is no capability to ask.
 	if not DotPlatform.is_web():
 		_capture()
+
+
+# --- Dead bodies -----------------------------------------------------------
+
+## Where the dead lie: dot-player-char's ragdolls under the game's (the server's) rules.
+var ragdolls: DotPlayerRagdolls = null
+
+
+func _build_ragdolls() -> void:
+	ragdolls = DotPlayerRagdolls.new()
+	ragdolls.name = "Ragdolls"
+	ragdolls.rules = game.ragdoll_rules
+	ragdolls.sound_fn = _ragdoll_sound
+	add_child(ragdolls)
+
+
+func _ragdoll_sound(id: StringName, at: Vector3, volume: float) -> void:
+	if audio != null:
+		var _played := audio.on_body(id, at, volume)
+
+
+## [param who]'s body falls the way the server picked ([member WoPlayer.death]), copied from the
+## figure this client draws; the figure itself stays hidden while they are dead
+## ([method WoPlayer.present_body]). Nobody's figure, nothing: a first-person player who never
+## had one drawn here.
+func _fall(who: WoPlayer) -> void:
+	if who == null or ragdolls == null or who.figure == null or not who.figure.is_inside_tree():
+		return
+	if game.physics != null:
+		# The level is on `world`; a body lands on it and on nothing else.
+		game.ragdoll_rules.collision_mask = game.physics.layer_mask(&"world")
+	var velocity := who.controller.state.velocity if who.controller != null else Vector3.ZERO
+	var _body := ragdolls.spawn(who.figure, who.death if who.death != null else DotPlayerDeath.new(), velocity)
 
 
 # --- Offline ---------------------------------------------------------------
@@ -252,6 +286,9 @@ func _build_netcode() -> DotResult:
 	# opposite. An older shell's link cannot say, and the manager keeps its default.
 	if game.combat != null and link != null:
 		var _following := game.combat.follow_cvars(link)
+	# The server's sv_ragdoll* set: this end draws the bodies.
+	if link != null:
+		var _bodies := game.ragdoll_rules.follow_cvars(link)
 
 	net = DotNetManager.new()
 	net.name = "Net"
@@ -402,6 +439,9 @@ const INTRODUCE_AGAIN_MSEC := 5000
 ## A new course or arena. The name, once, big; the camera re-placed, because the player was
 ## just moved somewhere that may be eighty metres away.
 func _on_stage(stage_id: StringName, is_arena: bool) -> void:
+	if ragdolls != null:
+		# A body from before would lie on a floor that has been rebuilt or reset.
+		ragdolls.clear()
 	_clear_pickups()
 
 	# A new course's clock is not the last one's, so its first frame is not a sweep of every arm.
@@ -662,7 +702,10 @@ func _hear_death(who: WoPlayer, why: StringName) -> void:
 	if who == null:
 		return
 
-	_break(who, why)
+	# Knocked to pieces by a blow or a blast is this game's own look; anything less, what is
+	# left of the body falls as a ragdoll, the way the server picked.
+	if not _break(who, why):
+		_fall(who)
 
 	if audio == null:
 		return
@@ -674,9 +717,10 @@ func _hear_death(who: WoPlayer, why: StringName) -> void:
 ## to pieces, anything else takes a limb or two, seeded from who died and how often they
 ## have, so every client breaks it the same way. Mended a moment later, because on the
 ## course a knocked-out player is alive again at once, watching from the lounge.
-func _break(who: WoPlayer, why: StringName) -> void:
+## Breaks [param who]'s body apart. True when it went to pieces entirely (nothing left to fall).
+func _break(who: WoPlayer, why: StringName) -> bool:
 	if who.figure == null or who == player:
-		return
+		return false
 
 	var rules := DotPlayerBreakRules.new()
 	rules.criticals_only = false
@@ -693,7 +737,7 @@ func _break(who: WoPlayer, why: StringName) -> void:
 		who.figure, game, rules, who.global_position, Vector3.UP, seed_value
 	)
 	if made == null:
-		return
+		return false
 
 	var mend := get_tree().create_timer(1.2)
 	mend.timeout.connect(func() -> void:
@@ -704,6 +748,7 @@ func _break(who: WoPlayer, why: StringName) -> void:
 			if is_instance_valid(mesh):
 				mesh.visible = true
 	)
+	return rules.mode == DotPlayerBreakRules.Mode.EXPLODE
 
 
 ## Somebody got a weapon. If it was us, the gun comes up in our hands, on its own slot.

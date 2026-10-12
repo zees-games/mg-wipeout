@@ -174,6 +174,12 @@ func _game_load() -> DotResult:
 	if world.combat != null:
 		var _passthrough := world.combat.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)
 
+	# Dead bodies: dot-player-char's sv_ragdoll* set. The server only picks each death's reaction
+	# from them; REPLICATED, because the clients draw the bodies (see the client's _build_netcode).
+	var _ragdolls := world.ragdoll_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
 	_build_vote(world)
 
 	_bots = add_cvar(
