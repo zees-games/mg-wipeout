@@ -41,7 +41,15 @@ var avatar: DotAvatar = null
 ## [b]Separate from [member samples_input], and conflating the two is a bug waiting for
 ## netcode.[/b] Every remote player also samples nothing; what makes a bot a bot is that
 ## something here decides for them.
-@export var is_bot: bool = false
+@export var is_bot: bool = false:
+	set(value):
+		if is_bot == value:
+			return
+		is_bot = value
+		bot_changed.emit()
+
+## Emitted when [member is_bot] changes: the world puts a stand-in on its own collision layer.
+signal bot_changed
 
 var config: WoConfig = null
 
@@ -403,6 +411,10 @@ func aim_direction() -> Vector3:
 func place_at(at: Vector3, yaw_degrees: float) -> void:
 	warps += 1
 	global_position = at
+	# Put somewhere new, the next knock is a new one: [WoGame] charges a knock at most once a
+	# second, which is about a ram pinning somebody, not about the next obstacle.
+	if has_meta(&"knock_hurt_tick"):
+		remove_meta(&"knock_hurt_tick")
 	controller.teleport(at, yaw_degrees, 0.0)
 
 	if sampler != null:
@@ -486,6 +498,12 @@ func present_body(own_view: bool, at: Vector3, team_colour: Color) -> bool:
 
 	if shown and controller != null:
 		var velocity := controller.state.velocity
+		# In the air, rising or falling, ducked: the people jump and duck as the runner does.
+		figure.set_motion({
+			"on_floor": controller.state.mode == DotFpsState.Mode.GROUND,
+			"vertical": velocity.y,
+			"crouched": controller.state.is_crouched(),
+		})
 		figure.pose(at, deg_to_rad(controller.state.yaw), Vector2(velocity.x, velocity.z).length())
 
 	return shown

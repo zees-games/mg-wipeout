@@ -5,6 +5,7 @@ const WoConfig := preload("../game/wo_config.gd")
 const WoContent := preload("../game/wo_content.gd")
 const WoCourse := preload("../game/wo_course.gd")
 const WoCourseDoc := preload("../game/wo_course_doc.gd")
+const WoAnnouncer := preload("../game/wo_announcer.gd")
 const WoAudio := preload("../game/wo_audio.gd")
 const WoClient := preload("../game/wo_client.gd")
 const WoEvents := preload("../game/net/wo_events.gd")
@@ -13,6 +14,7 @@ const WoHud := preload("../game/wo_hud.gd")
 const WoPaths := preload("../game/wo_paths.gd")
 const WoPlayer := preload("../game/wo_player.gd")
 const WoProgress := preload("../game/wo_progress.gd")
+const WoRacer := preload("../game/wo_racer.gd")
 const WoSettings := preload("../game/wo_settings.gd")
 
 ## The simulation, headless: documents, the course, what it does to a player, and the round.
@@ -22,9 +24,9 @@ const WoSettings := preload("../game/wo_settings.gd")
 ## because the section announced itself on the way in. mg-smash-copter and dot-settings both
 ## have the story; every total here was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 26
+const SECTIONS := 30
 
-const CHECKS := 128
+const CHECKS := 147
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -61,6 +63,10 @@ func _run() -> void:
 	await _test_ducking()
 	await _test_a_fall()
 	await _test_a_bot_runs_the_course()
+	await _test_the_racers()
+	await _test_stand_ins_pass_through_each_other()
+	await _test_the_falls()
+	await _test_the_show()
 	await _test_one_finisher_wins()
 	await _test_the_final_death()
 	await _test_nobody_finishes()
@@ -469,7 +475,7 @@ func _test_a_fall() -> void:
 func _test_a_bot_runs_the_course() -> void:
 	_section("a stand-in runs the practice course to the finish, on its route")
 	var game := await _world(func(c: WoConfig) -> void:
-		c.bot_fumble_chance = 0.0
+		c.bot_mistakes = 0.0
 		c.countdown_seconds = 0.5
 	)
 	var bot := game.add_player(&"u900000", "Bot")
@@ -491,6 +497,159 @@ func _test_a_bot_runs_the_course() -> void:
 	_check(bot.place == 1, "first", "#%d" % bot.place)
 	_check(finished_at > 0.0 and finished_at < 30.0, "inside thirty seconds", "%.1f s" % finished_at)
 	_finished()
+
+
+## How the stand-ins race: dot-bot's preset picks the column, an override outlives a preset,
+## `bot_mistakes` 0 is never wrong, every bot is its own runner, and the finale aims through
+## dot-bot's DotBotAim.
+func _test_the_racers() -> void:
+	_section("stand-ins race by bot_difficulty, each its own runner, and aim with dot-bot")
+	var game := await _world()
+	var settings := DotBotSettings.of(game)
+	var racer: WoRacer = game.racer
+	_check(racer != null and is_equal_approx(racer.value("fumble"), WoRacer.preset_value("medium", "fumble")),
+		"medium by default, its fumble chance the medium column", "%s" % (racer.value("fumble") if racer != null else -1.0))
+	var _hard := settings.set_difficulty("hard")
+	_check(is_equal_approx(racer.value("hop_miss"), WoRacer.preset_value("hard", "hop_miss"))
+			and racer.reaction() <= DotBotProfile.preset_value("hard", "reaction") + 0.001,
+		"bot_difficulty hard moves the racing columns and the reaction with it")
+	var _over := racer.set_value("fumble", "20")
+	var _easy := settings.set_difficulty("easy")
+	_check(is_equal_approx(racer.value("fumble"), 20.0) and is_equal_approx(racer.value("timing"), WoRacer.preset_value("easy", "timing")),
+		"an override (wo_bot_fumble 20) outlives a preset change; the rest follow it")
+	racer.mistakes = 0.0
+	_check(racer.value("fumble") == 0.0 and racer.value("timing") == 0.0 and is_equal_approx(racer.value("landing"), 1.0)
+			and racer.reaction() == 0.0,
+		"bot_mistakes 0 is a stand-in that is never wrong")
+	racer.overrides.clear()
+	racer.mistakes = 1.0
+
+	var a := game.add_player(&"u900010", "A")
+	a.is_bot = true
+	var b := game.add_player(&"u900011", "B")
+	b.is_bot = true
+	var fa := float(game._racer_of(a)["factor"])
+	var fb := float(game._racer_of(b)["factor"])
+	var spread := racer.value("variety")
+	_check(not is_equal_approx(fa, fb) and absf(fa - 1.0) <= spread + 0.001 and absf(fb - 1.0) <= spread + 0.001,
+		"two stand-ins are two runners: their own share of the mistakes", "%.2f and %.2f" % [fa, fb])
+
+	# The finale's aim: dot-bot's DotBotAim, so the view turns at bot_turn_rate and the trigger
+	# waits for bot_reaction after the target first comes into view.
+	var _medium := settings.set_difficulty("medium")
+	var profile := settings.profile
+	a.place_at(Vector3(0.0, 0.0, 0.0), 0.0)
+	b.place_at(Vector3(-8.0, 0.0, 6.0), 0.0)
+	var command := DotFpsCommand.new()
+	command.yaw = a.controller.state.yaw
+	var first := -1.0
+	var fastest := 0.0
+	var start := game._bot_now()
+	for _i in range(TICK_RATE * 2):
+		var before := command.yaw
+		(game._racer_of(a)["aim"] as DotBotAim).view_from(command.yaw, command.pitch)
+		game._aim_bot(a, command, b)
+		if command.is_pressed(DotFpsCommand.BUTTON_USER_0) and first < 0.0:
+			first = game._bot_now() - start
+		fastest = maxf(fastest, absf(wrapf(command.yaw - before, -180.0, 180.0)) * TICK_RATE)
+		game._tick += 1
+	_check(first >= profile.reaction * 0.85 and fastest <= profile.turn_rate * 1.02,
+		"a stand-in in a final death turns at bot_turn_rate and fires only after bot_reaction",
+		"first shot %.2f s, %.0f deg/s" % [first, fastest])
+	_finished()
+
+
+## Stand-ins are on a layer of their own: a person stops at one, two of them never meet.
+func _test_stand_ins_pass_through_each_other() -> void:
+	_section("stand-ins pass through each other, and a person still stops at one")
+	var game := await _world()
+	var person := game.add_player(&"u3", "Person")
+	var bot := game.add_player(&"u900020", "Bot")
+	bot.is_bot = true
+	var other := game.add_player(&"u900021", "Other")
+	other.is_bot = true
+	var player_layer := game.physics.layer_mask(&"player")
+	var bot_layer := game.physics.layer_mask(&"bot")
+	_check(bot.collision_layer & bot_layer != 0 and person.collision_layer & player_layer != 0,
+		"a stand-in is on the bot layer, a person on the player layer")
+	_check(person.controller.body.collision_mask & bot_layer != 0 and person.controller.body.collision_mask & player_layer != 0,
+		"a person's movement stops at stand-ins and at people")
+	_check(bot.controller.body.collision_mask & bot_layer == 0 and bot.controller.body.collision_mask & player_layer != 0,
+		"a stand-in's stops at people only")
+	bot.is_bot = false
+	_check(bot.collision_layer & player_layer != 0 and bot.controller.body.collision_mask & bot_layer != 0,
+		"and a stand-in that becomes a person changes over")
+	_finished()
+
+
+## The fall: a curtain of water that pushes whoever is under it off the side while it pours,
+## warns with drips first, and is a function of the tick like everything else.
+func _test_the_falls() -> void:
+	_section("a fall pours for its duty, warns first, and pushes off the side")
+	var spec := {"kind": "fall", "at": Vector3(0, 0, -20), "size": Vector3(6, 4.5, 1.2), "period": 3.0,
+		"duty": 0.4, "phase": 0.0, "push": 9.0, "yaw": 0.0}
+	_check(WoCourse.fall_on(spec, 0.5) and not WoCourse.fall_on(spec, 1.5) and WoCourse.fall_on(spec, 3.1),
+		"on for the first two fifths of each period, off for the rest")
+	_check(WoCourse.fall_warning(spec, 2.6) > 0.0 and WoCourse.fall_warning(spec, 1.5) == 0.0,
+		"its drips warn in the seconds before it comes down")
+	var doc := WoCatalogue.practice()
+	(doc["pieces"] as Array).append({"kind": "fall", "at": [0, 0, -14], "size": [6, 4.5, 1.2], "period": 3.0,
+		"duty": 0.4, "push": 9.0})
+	var game := await _world(func(c: WoConfig) -> void:
+		c.wind_chance = 0.0
+		c.storm_chance = 0.0, doc)
+	var checked := WoCourseDoc.validate(doc)
+	_check(checked.ok, "a course with a fall in it validates", checked.error.message if not checked.ok else "")
+	var limits := Vector3(game.config.knock_min_speed, game.config.knock_max_speed, game.config.knock_lift)
+	var pouring := game.stage.knock(Vector3(0, 0, -14), false, int(0.5 * TICK_RATE), limits)
+	var dry := game.stage.knock(Vector3(0, 0, -14), false, int(1.5 * TICK_RATE), limits)
+	_check(pouring.x > 5.0 and dry == Vector3.ZERO, "under it while it pours is a throw off the side; dry, nothing",
+		"%s / %s" % [pouring, dry])
+	_finished()
+
+
+## The show: a course's dressing survives validation (unknown kinds dropped), a client builds
+## stands with a crowd and big screens, a server builds none; the announcer speaks.
+func _test_the_show() -> void:
+	_section("stands, a crowd and screens on a client, none on a server, and an announcer")
+	var doc := WoCatalogue.practice()
+	doc["dressing"] = [
+		{"kind": "stands", "at": [9, 0.6, -20], "size": [20, 3.3, 5.4], "yaw": 90, "text": "SHOW"},
+		{"kind": "screen", "at": [-10, 0, -10], "size": [9, 4, 0.4], "yaw": 160},
+		{"kind": "a_kind_from_the_future", "at": [0, 0, 0]},
+	]
+	var checked := WoCourseDoc.validate(doc)
+	_check(checked.ok and (checked.value["dressing"] as Array).size() == 2,
+		"the dressing is kept and a kind this build does not know is dropped, never refused")
+	var server := await _world(Callable(), doc)
+	_check(server.stage.find_child("CrowdBodies", false, false) == null and server.stage.screen_count() == 0,
+		"a server builds none of it")
+	var client := await _world(func(c: WoConfig) -> void:
+		c.wind_chance = 0.0, {})
+	client.stage.draw_world = true
+	var _built := client.build_stage(doc)
+	var crowd := client.stage.find_child("CrowdBodies", false, false) as MultiMeshInstance3D
+	_check(crowd != null and crowd.multimesh.instance_count > 50 and client.stage.screen_count() == 1,
+		"a client builds the stands full of people and the screen",
+		"%d people" % (crowd.multimesh.instance_count if crowd != null else 0))
+	client.stage.cheer(1.0)
+	_check(client.stage.excitement >= 0.99, "and the crowd gets on its feet when it is cheered")
+
+	var listener := _Lines.new()
+	var announcer := WoAnnouncer.new(client, null, listener)
+	var runner := client.add_player(&"u7", "Runner")
+	announcer.me = &"u8"
+	announcer.on_finished(runner.player_id, 1, 71.5)
+	_check(listener.lines.size() == 1 and String(listener.lines[0]).contains("RUNNER WINS"),
+		"the first home is announced as the winner", str(listener.lines))
+	_finished()
+
+
+class _Lines:
+	extends RefCounted
+	var lines: Array = []
+	func announce(text: String, _seconds: float = 3.0) -> void:
+		lines.append(text)
 
 
 func _test_one_finisher_wins() -> void:

@@ -30,8 +30,9 @@ extends DotConfig
 ##
 ## A course document may ask for its own (`course_seconds` in the document) and this is the
 ## ceiling an operator puts on it, so a mapper cannot make a server run one course for an
-## hour.
-@export_range(10.0, 1200.0, 5.0) var course_seconds: float = 210.0
+## hour. Six minutes: the courses are a minute to a minute and a half for a clean run and ask
+## for four to six minutes of clock (the first play test finished the old ones in 22 s).
+@export_range(10.0, 1200.0, 5.0) var course_seconds: float = 360.0
 
 ## Seconds between the course closing and the final death starting.
 ##
@@ -221,21 +222,21 @@ extends DotConfig
 
 @export_group("Bots")
 
-## How many players the server keeps in the round by adding stand-ins.
+## How many players the server keeps in the round by adding stand-ins (`bot_quota`, fill).
 ##
-## [b]Two by default, so one person on an empty server has somebody to beat.[/b] The course
-## needs nobody else, but a final death needs two finishers.
-@export_range(0, 24, 1) var minimum_players: int = 3
+## [b]Nine, so one person races eight stand-ins[/b], solo and on an empty server alike: the
+## first play test had three, and a course run against three is a time trial with company.
+## The final death needs two finishers; a field of nine nearly always has them.
+@export_range(0, 24, 1) var minimum_players: int = 9
 
-## How far a stand-in's aim is off, in degrees, drawn once per bot per round.
-@export_range(0.0, 45.0, 0.5) var bot_aim_spread_degrees: float = 7.0
-
-## How likely a stand-in is to mistime a jump, in a hundred.
+## Scales every mistake a stand-in makes (`wo_bot_mistakes`): 1 is the difficulty preset's
+## (dot-bot's `bot_difficulty`, read through [WoRacer]), 0 a stand-in that is never wrong.
 ##
 ## [b]Not zero, and an empty server is why.[/b] A bot that never falls finishes every course
-## in the same time, every round; one that misses one jump in eight looks like a person and
-## gives a real person something to beat.
-@export_range(0.0, 100.0, 1.0) var bot_fumble_chance: float = 12.0
+## in the same time, every round; one that misses a jump now and then looks like a person and
+## gives a real person something to beat. 0 is for the course suite, which proves a course
+## can be finished. How a stand-in aims in a final death is dot-bot's `bot_*` settings.
+@export_range(0.0, 4.0, 0.05) var bot_mistakes: float = 1.0
 
 # --- Watching --------------------------------------------------------------
 

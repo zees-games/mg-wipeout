@@ -3,6 +3,7 @@ extends Node
 const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
 const WoPlayer := preload("../game/wo_player.gd")
+const WoRacer := preload("../game/wo_racer.gd")
 
 ## The game as a deployed server runs it: a real [DotServer], booted from a config file, with
 ## the module loaded BY PATH the way an operator names it — so the netcode, the services, the
@@ -14,7 +15,7 @@ const WoPlayer := preload("../game/wo_player.gd")
 ## nothing but the stand-ins the module seats itself.
 
 const SECTIONS := 9
-const CHECKS := 55
+const CHECKS := 58
 
 const SERVER_DIR := "user://wo_dedicated"
 const PORT := 28931
@@ -243,6 +244,18 @@ func _test_a_round_runs() -> void:
 	var quota_bridge: Object = quota_module.get("bridge") if quota_module != null else null
 	_check(server.console.find_cvar("bot_quota") != null and server.console.find_cvar("bot_quota_mode") != null,
 		"the shared bot_quota cvars are registered")
+	# How the stand-ins race and aim is one word, dot-bot's, plus this game's racing settings.
+	var bot_settings := DotBotSettings.of(game)
+	_check(server.console.get_string("bot_difficulty", "") == "medium" and bot_settings.difficulty() == "medium",
+		"bot_difficulty is the module's and medium is the default")
+	var _hard := _run_command("bot_difficulty hard")
+	_check(is_equal_approx(server.console.get_float("bot_reaction"), DotBotProfile.preset_value("hard", "reaction"))
+			and is_equal_approx(server.console.get_float("wo_bot_fumble"), WoRacer.preset_value("hard", "fumble")),
+		"bot_difficulty hard writes bot_reaction and the racing wo_bot_* settings",
+		"%s / %s" % [server.console.get_string("bot_reaction"), server.console.get_string("wo_bot_fumble")])
+	var _medium := _run_command("bot_difficulty medium")
+	_check(server.console.find_cvar("wo_bot_spread") == null and server.console.find_cvar("wo_bot_mistakes") != null,
+		"wo_bot_spread is gone (dot-bot's bot_aim_error took it over), wo_bot_mistakes scales the racing")
 	var _alias := _run_command("wo_min_players 3")
 	_check(server.console.find_cvar("bot_quota") != null and server.console.find_cvar("bot_quota").get_int() == 3,
 		"and the old wo_min_players sets bot_quota",

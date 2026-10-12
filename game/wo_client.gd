@@ -1,5 +1,6 @@
 extends Node
 
+const WoAnnouncer := preload("wo_announcer.gd")
 const WoAudio := preload("wo_audio.gd")
 const WoBindings := preload("wo_bindings.gd")
 const WoFigure := preload("wo_figure.gd")
@@ -50,8 +51,9 @@ const CHASE_UP := 2.1
 @export var force_offline: bool = false
 
 ## How many stand-ins an offline course gets, so there is somebody to beat and a final death
-## can happen at all.
-@export_range(0, 12, 1) var offline_bots: int = 3
+## can happen at all. Eight, a full field (the first play test had three); `-- --bots N` at
+## launch changes it, and a server's own count is `bot_quota`.
+@export_range(0, 16, 1) var offline_bots: int = 8
 
 ## Which view the camera starts in.
 @export var third_person: bool = false
@@ -73,6 +75,9 @@ var chat: DotGameChatClient = null
 
 ## What the game sounds like. See [WoAudio].
 var audio: WoAudio = null
+
+## The show's voice: lines, the announcer and the crowd. See [WoAnnouncer].
+var announcer: WoAnnouncer = null
 
 ## The player's own settings and the screen Escape opens. See [WoSettings].
 var settings: WoSettings = null
@@ -182,6 +187,7 @@ func _ready() -> void:
 	_build_hud()
 	_build_chat()
 	_build_audio()
+	announcer = WoAnnouncer.new(game, audio, hud)
 	_build_settings()
 
 	if _offline:
@@ -251,7 +257,12 @@ func _start_offline() -> void:
 	# Stand-ins to race, named as a server names them. Solo by default, so each is a side of
 	# their own; with teams they are dealt round the sides the local player is not on first.
 	var taken: Array = ["You"]
-	for i in range(offline_bots):
+	var count := offline_bots
+	var args := OS.get_cmdline_user_args()
+	var at := args.find("--bots")
+	if at >= 0 and at + 1 < args.size() and args[at + 1].is_valid_int():
+		count = clampi(args[at + 1].to_int(), 0, 16)
+	for i in range(count):
 		var side := 0
 
 		if game.config.teams():
@@ -276,6 +287,24 @@ func _start_offline() -> void:
 	# No bridge: the box still opens and still echoes, because a chat box that does nothing
 	# at all reads as broken rather than as absent.
 	DotLog.result(CHANNEL, "chat, offline", chat.attach(null))
+
+
+## Solo, `bot_difficulty`, every `bot_*` and `wo_bot_*` setting at the console, the names a
+## server has; `-- --bot_difficulty hard` at launch. Connected, the server's console holds them
+## and a local copy would shadow it.
+func _bind_bot_console() -> void:
+	if not _offline or console == null or game == null:
+		return
+	var sources: Array = console.sources()
+	if sources.is_empty() or not (sources[0] is DotConsoleLocal):
+		return
+	var _bound := DotBotSettings.of(game).bind_console(sources[0])
+	if game.racer != null:
+		var _racing := game.racer.bind_console(sources[0])
+	var args := OS.get_cmdline_user_args()
+	var index := args.find("--bot_difficulty")
+	if index >= 0 and index + 1 < args.size():
+		DotLog.result(CHANNEL, "bot difficulty from the command line", DotBotSettings.of(game).set_difficulty(args[index + 1]))
 
 
 # --- Connected -------------------------------------------------------------
@@ -418,6 +447,9 @@ func _adopt(candidate: WoPlayer) -> void:
 	if hud != null:
 		hud.bind(game, player)
 
+	if announcer != null:
+		announcer.me = player.player_id
+
 
 # --- What the server says --------------------------------------------------
 
@@ -430,6 +462,8 @@ func _on_phase(phase: int) -> void:
 			_disarm_locally()
 		WoGame.Phase.COURSE:
 			hud.shout("GO", 1.4)
+			if announcer != null:
+				announcer.on_go()
 
 			if game.effects != null:
 				var _flashed := game.effects.flash(&"go")
@@ -440,6 +474,8 @@ func _on_phase(phase: int) -> void:
 				hud.shout("THE FINAL DEATH — grab something", 3.0)
 		WoGame.Phase.FINALE:
 			hud.shout("LAST ONE STANDING", 1.8)
+			if announcer != null:
+				announcer.on_finale()
 
 
 ## How long the same stage is not introduced again. See [method _on_stage].
@@ -478,6 +514,9 @@ func _on_stage(stage_id: StringName, is_arena: bool) -> void:
 	if not is_arena:
 		hud.shout(name_of, 3.0)
 
+	if announcer != null:
+		announcer.on_stage(name_of, is_arena)
+
 	if chat != null and name_of != "":
 		var author := str(game.stage.doc.get("author", ""))
 		chat.say_locally("%s%s — %s" % [name_of, " by %s" % author if author != "" else "", blurb],
@@ -493,28 +532,37 @@ func _on_progress(session_id: int, kind: int, value: int, seconds: float) -> voi
 		WoEvents.Progress.FELL:
 			if audio != null and who != null:
 				var _heard := audio.on_splash(who.global_position)
+			if announcer != null and who != null and camera != null:
+				announcer.on_fell(who.player_id, who.global_position.distance_to(camera.global_position) < 30.0)
 		WoEvents.Progress.CHECKPOINT:
 			if mine and audio != null:
 				var _heard := audio.on_checkpoint()
 			if mine:
 				hud.shout("CHECKPOINT", 1.2)
+			if announcer != null and who != null:
+				announcer.on_checkpoint(who.player_id)
 		WoEvents.Progress.FINISHED:
 			if audio != null:
 				var _heard := audio.on_finish(mine)
 			if mine:
 				hud.shout("FINISHED #%d — %.1f s" % [value, seconds], 3.0)
+			if announcer != null and who != null:
+				announcer.on_finished(who.player_id, value, seconds)
 			if chat != null and who != null:
 				chat.say_locally("%s finished #%d in %.1f s" % [who.display_name, value, seconds],
 					Color(0.98, 0.86, 0.40))
 
 
-func _on_round(number: int, began: bool, _winner: int, why: String = "") -> void:
+func _on_round(number: int, began: bool, winner: int, why: String = "") -> void:
 	if audio != null:
 		var _heard := audio.on_round(began)
 
 	if began:
 		hud.shout("ROUND %d" % number, 2.4)
 		return
+
+	if announcer != null and player != null:
+		announcer.on_round_over(winner != 0 and winner == player.team, winner != 0)
 
 	hud.shout(why if why != "" else "round over", 4.0)
 
@@ -597,6 +645,7 @@ func _build_settings() -> void:
 		# the server's console when one runs in this process. One of the menu's overlays, so
 		# opening it stops the player and frees the pointer exactly as the menu does.
 		console = DotConsoleKit.build(self, settings.settings, settings.menu)
+		_bind_bot_console()
 		# The HUD in the menu's theme and at the player's HUD size, live.
 		if hud != null:
 			hud.follow_menu(settings.menu)
@@ -1335,6 +1384,9 @@ func _process(delta: float) -> void:
 
 	_present_course(delta)
 
+	if announcer != null:
+		announcer.tick()
+
 	if camera == null or player == null:
 		return
 
@@ -1440,6 +1492,9 @@ func _present_course(delta: float) -> void:
 			if audio != null:
 				var _heard := audio.on_countdown()
 
+			if announcer != null:
+				announcer.on_count(second)
+
 			if hud != null:
 				hud.shout("%d" % second, 0.9)
 	else:
@@ -1458,6 +1513,9 @@ func _present_course(delta: float) -> void:
 
 		if audio != null:
 			var _heard := audio.on_knock(player.global_position)
+
+		if announcer != null:
+			announcer.on_knock(true)
 
 		if game.effects != null and camera != null:
 			game.effects.viewer_position = camera.global_position

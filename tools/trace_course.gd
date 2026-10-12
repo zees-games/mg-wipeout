@@ -28,7 +28,7 @@ func _ready() -> void:
 	config.warmup_seconds = 0.0
 	config.countdown_seconds = 0.5
 	config.minimum_players = 0
-	config.bot_fumble_chance = 0.0
+	config.bot_mistakes = 0.0
 	config.keep_progress = false
 	config.course_seconds = seconds
 	config.course_ids = PackedStringArray([course])

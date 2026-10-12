@@ -10,7 +10,11 @@ This project, along with every asset it is built on, was built initially with **
 I intend on reviewing code, testing, and editing documentation regularly. If you're interested in helping out, please let me know!
 
 ## How it plays
-Everybody starts on the same pad behind a gate. When the gate drops, run, jump, time the arms and ride the moving platforms. Nothing on the course can hurt you: falling in just sends you back to your last checkpoint, and an arm that catches you throws you, usually into the water. Red tiles are about to drop, and a high arm is one to duck under rather than jump.
+Everybody starts on the same pad behind a gate. When the gate drops, run, jump, time the arms, wait out the waterfalls and ride the moving platforms. Falling in sends you back to your last checkpoint, and an arm that catches you throws you, usually into the water. Red tiles are about to drop, dripping water is about to pour, and a high arm is one to duck under rather than jump. A course is a minute to two for a good run.
+
+Some courses are a big night out: grandstands full of people down both sides, light towers, flags and big screens with the leaders on them. An announcer counts you down and calls the race (who takes the lead, who goes in, who wins), and the crowd gasps, cheers and jumps to its feet.
+
+Solo you race eight bots. They make the mistakes people make: a jump taken a moment late off an edge, a window gone through as it closes, an arm not jumped, a slide off a ball. `bot_difficulty easy`, `medium` (the default), `hard` or `nightmare` at the console, or `-- --bot_difficulty hard` at launch; `-- --bots 4` races four.
 
 The course closes when everybody is across or the clock runs out. Then:
 
@@ -20,7 +24,7 @@ The course closes when everybody is across or the clock runs out. Then:
 
 Every player is their own side by default. `wo_teams 2` (up to 6) plays in teams, and a team is through if anybody on it finishes.
 
-The courses live in their own repository, [mg-wipeout-maps](https://github.com/zees-games/mg-wipeout-maps): ten courses and five arenas, each a JSON file. Without it the game still runs, on one practice course built in.
+The courses live in their own repository, [mg-wipeout-maps](https://github.com/zees-games/mg-wipeout-maps): eleven courses and five arenas, each a JSON file. Without it the game still runs, on one practice course built in.
 
 ## Controls
 
@@ -71,21 +75,22 @@ The courses come from the mg-wipeout-maps checkout, which bootstrap links into `
 Settings are cvars. Set them in the server's config, on the command line, or live from the console. Most of them take effect straight away.
 
 ```
-wo_course_seconds 210       // the longest a course stays open (a course may ask for less)
+wo_course_seconds 360       // the longest a course stays open (a course may ask for less)
 wo_finale_seconds 100       // how long a final death lasts
 wo_teams 0                  // 0 = everybody for themselves, 2-6 = teams
 wo_props_per_side 6         // props to throw in a final death
 wo_weapons_per_side 2       // weapons on the arena floor
 wo_knock_min 8              // how hard the obstacles throw you
 wo_progress_decides 1       // 0 = a round nobody finishes is a draw
-wo_bot_fumble 12            // how clumsy the bots are
+bot_difficulty medium       // easy, medium, hard or nightmare: how the bots race and aim
+wo_bot_mistakes 1           // scales every racing mistake the bots make (0 = never wrong)
 mp_teammate_passthrough 1   // shots and team-mates: 0 a team-mate is hit and blocks, 1 through one at the muzzle, 2 through every team-mate
-bot_quota 3                 // players a round is kept at with bots; each person who joins replaces one
+bot_quota 9                 // players a round is kept at with bots; each person who joins replaces one
 bot_quota_mode fill         // fill (as above), fixed (that many bots), per_player (that many per person) or off
 wo_bots 1                   // 0 = no bots
 ```
 
-The bot cvars are the family's shared ones (dot-server's `DotBotQuota`). `wo_min_players` still works and sets `bot_quota`; it is deprecated.
+The bot cvars are the family's shared ones (dot-server's `DotBotQuota` and dot-bot's `bot_difficulty` with its `bot_*` settings). Each racing mistake is a cvar of its own (`wo_bot_fumble`, `wo_bot_timing`, `wo_bot_rash`, `wo_bot_hop_miss`, `wo_bot_landing`, `wo_bot_recover`, `wo_bot_variety`) that the difficulty sets and you can override; `bot_settings` lists dot-bot's. `wo_min_players` still works and sets `bot_quota`; it is deprecated.
 
 Dead players fall as ragdolls ([dot-player-char](https://github.com/modcommunity/dot-player-char)); the server picks how each one goes down and everybody sees the same fall. `sv_ragdoll 0` makes it a quick fall with no physics, `sv_ragdoll_style` picks ragdoll, stiff, topple or hide, `sv_ragdoll_time` and `sv_ragdoll_max` say how long and how many, and `sv_ragdoll_reactions` weights the falls (`limp`, `face_plant`, `crumple`, `headshot_launch`, `power_launch`; 0 turns one off).
 
@@ -118,19 +123,19 @@ A course is a JSON file: a start pad, a list of pieces, checkpoints and a finish
 | Suite | What it covers |
 | --- | --- |
 | `headless_run` | The game itself: rounds, checkpoints, falls, the final death |
-| `headless_courses` | A bot runs every course to the finish |
+| `headless_courses` | A bot runs every course to the finish, and a nightmare field beats an easy one |
 | `headless_net` | A server and a client in one process, over the network code |
 | `dedicated` | A real server: boots, loads the game, runs its commands |
 
-[`docs/design.md`](docs/design.md) has the design decisions and the reasoning behind them.
+`tools/race_times.tscn` races a field of bots round every course at every difficulty and prints the finish times. [`docs/design.md`](docs/design.md) has the design decisions and the reasoning behind them, and [`docs/stand-ins.md`](docs/stand-ins.md) the bots.
 
 ## Not done yet
-- Bots finish every course, but they aren't clever about a crowded beam, and they are weak in the final death.
-- The obstacles themselves make no sound yet (knocks, splashes, checkpoints and the gate do).
+- Bots finish every course, but on turning pads the hard ones are no faster than medium ones, and they are weak in the final death.
+- The crowd and the announcer have not been tried in a browser yet.
 - There is no settings menu.
 
 ## Credits
-Every surface is Kenney's Prototype Textures; the props are from Kenney's Survival and Car kits ([kenney.nl](https://kenney.nl), CC0), and the players are the family's animated people from Quaternius' [Zombie Apocalypse Kit](https://quaternius.com/packs/zombieapocalypsekit.html) (CC0 1.0, credited in dot-player-char), chosen by Kenney's Blocky Characters' skins. The weapons are from [zee-dot-weapons](https://github.com/zees-games/zee-dot-weapons). Each kit's licence is next to its files.
+Every surface is Kenney's Prototype Textures; the props are from Kenney's Survival and Car kits ([kenney.nl](https://kenney.nl), CC0), and the players are the family's animated people from Quaternius' [Zombie Apocalypse Kit](https://quaternius.com/packs/zombieapocalypsekit.html) (CC0 1.0, credited in dot-player-char), chosen by Kenney's Blocky Characters' skins. The weapons are from [zee-dot-weapons](https://github.com/zees-games/zee-dot-weapons). The announcer is Kenney's Voiceover Pack and Voiceover Pack Fighter ([kenney.nl](https://kenney.nl), CC0, licences in `audio/`); the crowd, the stadium horn and the waterfalls are synthesised by this repository's `tools/make_sounds.py` (MIT, like the code). Each kit's licence is next to its files.
 
 ## License
 MIT. See [LICENSE](LICENSE). The Kenney art is CC0, which is public domain.

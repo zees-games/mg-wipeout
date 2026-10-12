@@ -6,6 +6,9 @@
 #   tools/shot.sh --view=start                         # the start pad, from behind the runners
 #   tools/shot.sh --view=hazard --seconds=2            # the first thing that throws you, close
 #   tools/shot.sh --view=third --seconds=8             # third person, on the course
+#   tools/shot.sh --view=race --seconds=25             # the field mid-race, from over a runner's shoulder
+#   tools/shot.sh --view=crowd --seconds=6             # a grandstand and its crowd, from the course
+#   tools/shot.sh --view=falls --seconds=3             # the first water or slime fall, mid-pour
 #   tools/shot.sh --view=arena --arena=wo_arena_pit    # an arena, from above
 #   tools/shot.sh --view=finale                        # a real final death, a finisher's eyes
 #   tools/shot.sh --view=course --out=res://screenshots/x.png   # any --wo-* is the game's config

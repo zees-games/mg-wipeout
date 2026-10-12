@@ -6,6 +6,9 @@ extends Node
 ##   tools/shot.sh --view=course --wo-course-ids=wo_spin_cycle
 ##   tools/shot.sh --view=start                     # the start pad, from behind the runners
 ##   tools/shot.sh --view=hazard                    # the first thing that throws you, close
+##   tools/shot.sh --view=race --seconds=25         # the field mid-race, over the second runner's shoulder
+##   tools/shot.sh --view=crowd --seconds=6         # the first grandstand and its crowd
+##   tools/shot.sh --view=falls --seconds=3 --wo-course-ids=wo_punch_alley   # the first water/slime fall
 ##   tools/shot.sh --view=tiles --wo-course-ids=wo_trapdoor_run   # drop-tiles, warning in red
 ##   tools/shot.sh --view=third                     # third person, mid-course
 ##   tools/shot.sh --view=arena --arena=wo_arena_pit   # an arena, from above
@@ -107,6 +110,35 @@ func _run() -> void:
 				if str(piece["kind"]) == "tiles":
 					var at: Vector3 = piece["spec"]["at"]
 					camera.look_at_from_position(at + Vector3(6.0, 6.0, 7.0), at)
+					break
+		"race":
+			# The field mid-race, from over the shoulder of whoever is leading: the stand-ins
+			# spread out over the course, the stands and the show round them.
+			await _seconds_of(game.config.countdown_seconds + _seconds)
+			var order := game.race_order()
+			var leader: Node3D = game.players.get(order[mini(1, order.size() - 1)]) if not order.is_empty() else null
+			var camera := _free_camera()
+			if leader != null:
+				var at := leader.global_position
+				camera.look_at_from_position(at + Vector3(7.0, 6.0, 11.0), at + Vector3(0.0, 0.5, -10.0))
+		"crowd":
+			# A grandstand and its crowd, from the course: the first stands the course has.
+			await _seconds_of(game.config.countdown_seconds + _seconds)
+			var camera := _free_camera()
+			for item: Dictionary in game.course_doc.get("dressing", []):
+				if str(item["kind"]) == "stands":
+					var at: Vector3 = item["at"]
+					var facing := Basis(Vector3.UP, deg_to_rad(float(item["yaw"]))) * Vector3(0.0, 0.0, -1.0)
+					camera.look_at_from_position(at + facing * 9.0 + Vector3(0.0, 2.5, 6.0), at + Vector3(0.0, 2.0, 0.0))
+					break
+		"falls":
+			# The first curtain of water or slime, from the deck in front of it, mid-pour.
+			await _seconds_of(_seconds)
+			var camera := _free_camera()
+			for piece in game.stage.pieces:
+				if str(piece["kind"]) == "fall":
+					var at: Vector3 = piece["spec"]["at"]
+					camera.look_at_from_position(at + Vector3(3.5, 2.6, 7.5), at + Vector3(0.0, 1.6, 0.0))
 					break
 		"hazard":
 			await _seconds_of(_seconds)

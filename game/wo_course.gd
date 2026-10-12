@@ -120,6 +120,7 @@ func build(p_doc: Dictionary) -> DotResult:
 
 	if draw_world:
 		_build_world()
+		_build_dressing()
 
 	pose_at_time(0.0)
 	built.emit()
@@ -138,6 +139,9 @@ func clear() -> void:
 
 	pieces.clear()
 	_by_collider.clear()
+	_screens.clear()
+	_flags.clear()
+	_confetti.clear()
 	doc = {}
 	_gate = null
 	_posed_tick = -2147483648
@@ -214,6 +218,10 @@ func _make_piece(index: int, spec: Dictionary) -> void:
 			piece["hazard"] = true
 		"pusher":
 			piece["node"] = _pusher(spec, role)
+			piece["moving"] = true
+			piece["hazard"] = true
+		"fall":
+			piece["node"] = _fall(spec)
 			piece["moving"] = true
 			piece["hazard"] = true
 
@@ -621,6 +629,97 @@ func _pusher(spec: Dictionary, role: WoTextures.Role) -> Node3D:
 	return root
 
 
+## A curtain of water or slime across the way: a sluice on two posts, the sheet that falls
+## from it, the drips that warn it is coming, and the splash where it lands. Meshes only: what
+## counts is [method fall_on] and the volume [method _knock_fall] measures. The posts stand
+## outside the curtain's width, so they are never in a runner's way.
+func _fall(spec: Dictionary) -> Node3D:
+	var root := Node3D.new()
+	root.transform = Transform3D(_yaw_basis(float(spec.get("yaw", 0.0))), spec["at"])
+	var size: Vector3 = spec["size"]
+	var tint: Color = spec.get("tint", FALL_WATER)
+
+	for side in [-1.0, 1.0]:
+		_add_box(root, Vector3(0.35, size.y + 1.4, 0.35), WoTextures.Role.PILLAR, false, false,
+			Vector3(side * (size.x * 0.5 + 0.45), size.y * 0.5 - 0.5, 0.0))
+	var sluice := _add_box(root, Vector3(size.x + 1.2, 0.7, size.z + 0.9), WoTextures.Role.CANNON, false, false,
+		Vector3(0.0, size.y + 0.35, 0.0))
+	sluice.name = "Sluice"
+
+	var curtain := MeshInstance3D.new()
+	curtain.name = "Curtain"
+	var sheet := BoxMesh.new()
+	sheet.size = Vector3(size.x, size.y, maxf(size.z * 0.6, 0.2))
+	curtain.mesh = sheet
+	curtain.material_override = _liquid(tint, 0.82)
+	curtain.position = Vector3(0.0, size.y * 0.5, 0.0)
+	root.add_child(curtain)
+
+	var drips := MeshInstance3D.new()
+	drips.name = "Drips"
+	var thin := BoxMesh.new()
+	thin.size = Vector3(size.x * 0.9, size.y, 0.06)
+	drips.mesh = thin
+	drips.material_override = _liquid(tint, 0.35)
+	drips.position = Vector3(0.0, size.y * 0.5, 0.0)
+	drips.visible = false
+	root.add_child(drips)
+
+	var splash := MeshInstance3D.new()
+	splash.name = "Splash"
+	var pool := CylinderMesh.new()
+	pool.top_radius = size.x * 0.55
+	pool.bottom_radius = size.x * 0.55
+	pool.height = 0.06
+	splash.mesh = pool
+	splash.scale = Vector3(1.0, 1.0, maxf(size.z + 1.2, 1.0) / maxf(size.x * 1.1, 0.1))
+	splash.material_override = _liquid(tint.lightened(0.5), 0.5)
+	splash.position = Vector3(0.0, 0.05, 0.0)
+	root.add_child(splash)
+	return root
+
+
+## The default colour of a fall: water. A mapper's `tint` makes it slime, or paint.
+const FALL_WATER := Color(0.55, 0.80, 0.98)
+
+## Seconds a curtain takes to reach the deck once it starts, and to clear once it stops.
+## Drawing only: the knock is on for exactly `duty` of the period.
+const FALL_SHEET_SECONDS := 0.3
+
+## Seconds of drips before a curtain comes down: its tell, like a tile's red.
+const FALL_WARN_SECONDS := 0.7
+
+static var _streaks: ImageTexture = null
+
+
+## A translucent, streaked, flowing surface; the streaks are scrolled by [method _pose_piece].
+static func _liquid(tint: Color, alpha: float) -> StandardMaterial3D:
+	if _streaks == null:
+		var image := Image.create(16, 64, false, Image.FORMAT_RGBA8)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 41
+		# Streaks down it, some bright and some nearly clear, rippling: what reads as falling
+		# water rather than a sheet of tinted glass (the first render).
+		for x in range(16):
+			var streak := rng.randf_range(0.25, 1.0)
+			var bright := 1.0 if rng.randf() < 0.3 else 0.8
+			for y in range(64):
+				var ripple := 0.7 + 0.3 * sin(float(y) * 0.45 + float(x) * 1.7)
+				image.set_pixel(x, y, Color(bright, bright, bright, clampf(streak * ripple, 0.0, 1.0)))
+		_streaks = ImageTexture.create_from_image(image)
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(tint.r, tint.g, tint.b, alpha)
+	material.albedo_texture = _streaks
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.roughness = 0.2
+	material.emission_enabled = true
+	material.emission = tint * 0.25
+	material.uv1_scale = Vector3(2.0, 1.0, 1.0)
+	return material
+
+
 ## The start pad, and the gate across its front that the countdown holds closed.
 func _build_start() -> void:
 	var start: Dictionary = doc["start"]
@@ -773,7 +872,9 @@ func _build_world() -> void:
 	var water := MeshInstance3D.new()
 	water.name = "Water"
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(1600.0, 1600.0)
+	# Big, and under the middle of the course: a course is three hundred metres long now, and
+	# the overview camera above its far end saw the edge of a 1.6 km sheet as a grey band.
+	plane.size = Vector2(4000.0, 4000.0)
 	water.mesh = plane
 	# Darker than the theme's colour and barely glossy. The first render had it at 0.18
 	# roughness, and a glossy plane under a blue sky IS the sky: the horizon vanished and a
@@ -784,8 +885,404 @@ func _build_world() -> void:
 	water_material.roughness = 0.55
 	water_material.metallic = 0.0
 	water.material_override = water_material
-	water.position = Vector3(0.0, water_height() - 0.4, 0.0)
+	var middle := bounds().get_center()
+	water.position = Vector3(middle.x, water_height() - 0.4, middle.z)
 	add_child(water)
+
+
+# --- The show ----------------------------------------------------------------
+#
+# [b]A course is a televised event, and the first play test had nothing round it but sea.[/b]
+# A document's `dressing` (see [WoCourseDoc]) puts stands full of people beside it, banners,
+# light towers, big screens and flags; every finish arch gets confetti. Client side and
+# meshes only: nothing collides, nothing is simulated, a server never builds it. The crowd is
+# three MultiMeshes (bodies, heads, arms) and one shader that makes them bob, and jump with
+# their arms up when [method cheer] raises [member excitement]; thousands of people are three
+# draw calls.
+
+## How excited the crowd is, 0 (sitting) to 1 (on their feet). Decays to [constant CALM].
+var excitement: float = 0.0
+
+const CALM := 0.12
+
+## How fast excitement falls back, per second.
+const COOL_PER_SECOND := 0.32
+
+static var _crowd_shader: Shader = null
+var _crowd_materials: Array[ShaderMaterial] = []
+var _screens: Array[Label3D] = []
+var _flags: Array[Node3D] = []
+var _confetti: Array[CPUParticles3D] = []
+
+const SHIRTS := [
+	Color(0.90, 0.25, 0.22), Color(0.98, 0.70, 0.18), Color(0.25, 0.55, 0.92), Color(0.30, 0.75, 0.42),
+	Color(0.95, 0.95, 0.95), Color(0.62, 0.36, 0.82), Color(0.98, 0.45, 0.62), Color(0.18, 0.22, 0.32),
+	Color(0.20, 0.78, 0.82), Color(0.96, 0.52, 0.20),
+]
+const SKINS := [
+	Color(0.98, 0.84, 0.70), Color(0.92, 0.72, 0.56), Color(0.78, 0.56, 0.40), Color(0.58, 0.40, 0.28),
+	Color(0.40, 0.27, 0.19),
+]
+
+const CROWD_SHADER := """
+shader_type spatial;
+render_mode cull_back, specular_disabled;
+
+uniform float excite = 0.0;
+uniform float arms = 0.0;
+
+varying vec3 tint;
+
+void vertex() {
+	float phase = INSTANCE_CUSTOM.x * 6.2831;
+	float rate = 5.0 + INSTANCE_CUSTOM.y * 5.0;
+	float hop = max(0.0, sin(TIME * rate + phase));
+	float bob = hop * (0.015 + 0.26 * excite * (0.5 + INSTANCE_CUSTOM.y));
+	if (arms > 0.5) {
+		float raise = clamp(excite * 1.7 - INSTANCE_CUSTOM.z, 0.0, 1.0);
+		VERTEX.y = -0.25 + (VERTEX.y + 0.25) * raise;
+		VERTEX.x *= mix(0.55, 1.0, raise);
+	}
+	VERTEX.y += bob;
+	tint = COLOR.rgb;
+}
+
+void fragment() {
+	ALBEDO = tint;
+	ROUGHNESS = 0.9;
+}
+"""
+
+
+## Raises the crowd by [param amount] (0..1). The announcer calls it; it falls back by itself.
+func cheer(amount: float) -> void:
+	excitement = clampf(maxf(excitement, CALM) + amount, 0.0, 1.0)
+
+	if amount >= 0.6:
+		for burst in _confetti:
+			if is_instance_valid(burst):
+				burst.restart()
+
+
+## Writes [param text] on every big screen this course has.
+func show_on_screens(text: String) -> void:
+	for screen in _screens:
+		if is_instance_valid(screen):
+			screen.text = text
+
+
+func screen_count() -> int:
+	return _screens.size()
+
+
+func _process(delta: float) -> void:
+	if not draw_world:
+		return
+
+	excitement = maxf(excitement - COOL_PER_SECOND * delta, CALM)
+
+	for material in _crowd_materials:
+		material.set_shader_parameter(&"excite", excitement)
+
+	var t := float(Time.get_ticks_msec()) / 1000.0
+	for index in range(_flags.size()):
+		var flag := _flags[index]
+		if is_instance_valid(flag):
+			flag.rotation.y = 0.35 * sin(t * 2.3 + float(index) * 0.9)
+
+
+func _build_dressing() -> void:
+	set_process(true)
+	excitement = CALM
+	var dressing: Array = doc.get("dressing", [])
+	var crowd := {"bodies": [], "seed": 1}
+
+	for item: Dictionary in dressing:
+		match str(item["kind"]):
+			"stands":
+				_stands(item, crowd["bodies"])
+			"banner":
+				_banner(item)
+			"lights":
+				_light_tower(item)
+			"screen":
+				_screen(item)
+			"flags":
+				_flag_row(item)
+
+	if not (crowd["bodies"] as Array).is_empty():
+		_crowd(crowd["bodies"])
+
+	if is_course():
+		_finish_confetti()
+
+
+func _box_at(parent: Node3D, size: Vector3, at: Vector3, colour: Color, glow: float = 0.0) -> MeshInstance3D:
+	var mesh := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = size
+	mesh.mesh = box
+	mesh.position = at
+	var material := StandardMaterial3D.new()
+	material.albedo_color = colour
+	material.roughness = 0.8
+	if glow > 0.0:
+		material.emission_enabled = true
+		material.emission = colour
+		material.emission_energy_multiplier = glow
+	mesh.material_override = material
+	parent.add_child(mesh)
+	return mesh
+
+
+## A grandstand: steps rising away from the course from `at` (the middle of its front edge, at
+## the height of the first row), `size` = length, height, depth; a back wall with the show's
+## colour along it. The people on the steps go into [param bodies] as transforms.
+func _stands(item: Dictionary, bodies: Array) -> void:
+	var root := Node3D.new()
+	root.name = "Stands"
+	root.transform = Transform3D(_yaw_basis(float(item["yaw"])), item["at"])
+	add_child(root)
+
+	var size: Vector3 = item["size"]
+	var rows := clampi(int(size.z / 0.9), 3, 12)
+	var depth := size.z / float(rows)
+	var rise := size.y / float(rows)
+	var bottom := water_height() - 1.0 - (item["at"] as Vector3).y
+	var tint: Color = item["tint"]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(item["seed"]) * 7919 + 17
+
+	for row in range(rows):
+		var top := float(row) * rise
+		var height := top - bottom
+		var step := _box_at(root, Vector3(size.x, height, depth), Vector3(0.0, bottom + height * 0.5, (float(row) + 0.5) * depth),
+			Color(0.80, 0.82, 0.88) if row % 2 == 0 else Color(0.70, 0.72, 0.80))
+		step.name = "Row%d" % row
+
+		var seat := -size.x * 0.5 + 0.4
+		while seat < size.x * 0.5 - 0.3:
+			if rng.randf() > 0.12:
+				var at := Vector3(seat + rng.randf_range(-0.08, 0.08), top, (float(row) + 0.45) * depth)
+				bodies.append({"at": root.transform * at, "basis": root.transform.basis, "rng": rng.randi()})
+			seat += 0.62
+
+	var wall_height := size.y + 3.0
+	_box_at(root, Vector3(size.x + 0.4, wall_height - bottom, 0.4), Vector3(0.0, (wall_height + bottom) * 0.5, size.z + 0.2), Color(0.30, 0.32, 0.42))
+	_box_at(root, Vector3(size.x + 0.5, 1.1, 0.5), Vector3(0.0, wall_height - 0.4, size.z + 0.1), tint, 0.6)
+	# A rail along the front, so the first row does not read as standing on the water's edge.
+	_box_at(root, Vector3(size.x, 0.9, 0.12), Vector3(0.0, 0.45 - rise * 0.5, 0.05), Color(0.95, 0.95, 0.98))
+
+	if str(item["text"]) != "":
+		var words := Label3D.new()
+		words.text = str(item["text"])
+		words.font_size = 160
+		words.pixel_size = 0.006
+		words.outline_size = 24
+		words.modulate = Color(1.0, 1.0, 1.0)
+		words.position = Vector3(0.0, wall_height - 0.4, size.z - 0.2)
+		# A Label3D reads from its +Z side, and the crowd (and the course) is on the -Z side.
+		words.rotation = Vector3(0.0, PI, 0.0)
+		root.add_child(words)
+
+
+## The people, as three MultiMeshes over every stand on the course.
+func _crowd(bodies: Array) -> void:
+	if _crowd_shader == null:
+		_crowd_shader = Shader.new()
+		_crowd_shader.code = CROWD_SHADER
+
+	_crowd_materials.clear()
+	var parts := [
+		{"name": "Bodies", "mesh": _crowd_box(Vector3(0.44, 0.62, 0.3)), "lift": 0.31, "arms": 0.0, "palette": SHIRTS},
+		{"name": "Heads", "mesh": _crowd_head(), "lift": 0.78, "arms": 0.0, "palette": SKINS},
+		{"name": "Arms", "mesh": _crowd_box(Vector3(0.62, 0.5, 0.1)), "lift": 0.86, "arms": 1.0, "palette": SKINS},
+	]
+
+	for part: Dictionary in parts:
+		var multi := MultiMesh.new()
+		multi.transform_format = MultiMesh.TRANSFORM_3D
+		multi.use_colors = true
+		multi.use_custom_data = true
+		multi.mesh = part["mesh"]
+		multi.instance_count = bodies.size()
+		var palette: Array = part["palette"]
+
+		for index in range(bodies.size()):
+			var body: Dictionary = bodies[index]
+			var seed := int(body["rng"])
+			var basis: Basis = body["basis"]
+			var at: Vector3 = (body["at"] as Vector3) + basis * Vector3(0.0, float(part["lift"]), 0.0)
+			multi.set_instance_transform(index, Transform3D(basis, at))
+			var shade: Color = palette[(seed >> (3 if palette == SKINS else 0)) % palette.size()]
+			multi.set_instance_color(index, shade)
+			multi.set_instance_custom_data(index, Color(float(seed % 997) / 997.0, float((seed >> 4) % 89) / 89.0,
+				float((seed >> 9) % 71) / 71.0 * 0.9, 0.0))
+
+		var material := ShaderMaterial.new()
+		material.shader = _crowd_shader
+		material.set_shader_parameter(&"arms", float(part["arms"]))
+		material.set_shader_parameter(&"excite", excitement)
+		_crowd_materials.append(material)
+
+		var node := MultiMeshInstance3D.new()
+		node.name = "Crowd" + str(part["name"])
+		node.multimesh = multi
+		node.material_override = material
+		add_child(node)
+
+
+static func _crowd_box(size: Vector3) -> BoxMesh:
+	var box := BoxMesh.new()
+	box.size = size
+	return box
+
+
+static func _crowd_head() -> SphereMesh:
+	var head := SphereMesh.new()
+	head.radius = 0.15
+	head.height = 0.3
+	head.radial_segments = 8
+	head.rings = 4
+	return head
+
+
+## A banner on two poles: the show's colour and a word on both faces.
+func _banner(item: Dictionary) -> void:
+	var root := Node3D.new()
+	root.name = "Banner"
+	root.transform = Transform3D(_yaw_basis(float(item["yaw"])), item["at"])
+	add_child(root)
+	var size: Vector3 = item["size"]
+	var bottom := water_height() - 1.0 - (item["at"] as Vector3).y
+
+	for side in [-1.0, 1.0]:
+		_box_at(root, Vector3(0.3, size.y + 2.0 - bottom, 0.3), Vector3(side * size.x * 0.5, (size.y + 2.0 + bottom) * 0.5, 0.0), Color(0.85, 0.86, 0.9))
+	_box_at(root, Vector3(size.x, size.y, 0.2), Vector3(0.0, 2.0 + size.y * 0.5 - 0.5, 0.0), item["tint"], 0.35)
+
+	var text := str(item["text"]) if str(item["text"]) != "" else str(doc.get("name", ""))
+	for face in [1.0, -1.0]:
+		var words := Label3D.new()
+		words.text = text
+		words.font_size = 200
+		words.pixel_size = clampf(size.y * 0.55 / 200.0, 0.002, 0.05)
+		words.outline_size = 28
+		words.position = Vector3(0.0, 2.0 + size.y * 0.5 - 0.5, 0.12 * face)
+		words.rotation = Vector3(0.0, 0.0 if face > 0.0 else PI, 0.0)
+		words.double_sided = false
+		root.add_child(words)
+
+
+## A light tower: a mast and a bank of lamps facing the course (the tower's -Z).
+func _light_tower(item: Dictionary) -> void:
+	var root := Node3D.new()
+	root.name = "Lights"
+	root.transform = Transform3D(_yaw_basis(float(item["yaw"])), item["at"])
+	add_child(root)
+	var height := maxf((item["size"] as Vector3).y, 6.0)
+	var bottom := water_height() - 1.0 - (item["at"] as Vector3).y
+	_box_at(root, Vector3(0.5, height - bottom, 0.5), Vector3(0.0, (height + bottom) * 0.5, 0.0), Color(0.55, 0.57, 0.62))
+	_box_at(root, Vector3(3.4, 2.0, 0.5), Vector3(0.0, height + 0.6, 0.0), Color(0.22, 0.24, 0.30))
+
+	for col in range(4):
+		for row in range(2):
+			_box_at(root, Vector3(0.62, 0.62, 0.1), Vector3(-1.2 + float(col) * 0.8, height + 0.2 + float(row) * 0.8, -0.3),
+				Color(1.0, 0.97, 0.86), 3.0)
+
+
+## A big screen on legs, facing the course: the course's name, and whatever the client puts
+## up ([method show_on_screens]: the leaders).
+func _screen(item: Dictionary) -> void:
+	var root := Node3D.new()
+	root.name = "Screen"
+	root.transform = Transform3D(_yaw_basis(float(item["yaw"])), item["at"])
+	add_child(root)
+	var size: Vector3 = item["size"]
+	var bottom := water_height() - 1.0 - (item["at"] as Vector3).y
+	var lift := 3.0
+
+	for side in [-1.0, 1.0]:
+		_box_at(root, Vector3(0.4, lift - bottom, 0.4), Vector3(side * size.x * 0.35, (lift + bottom) * 0.5, 0.3), Color(0.40, 0.42, 0.48))
+	_box_at(root, Vector3(size.x + 0.6, size.y + 0.6, 0.5), Vector3(0.0, lift + size.y * 0.5, 0.0), Color(0.12, 0.13, 0.16))
+	_box_at(root, Vector3(size.x, size.y, 0.1), Vector3(0.0, lift + size.y * 0.5, -0.27), Color(0.05, 0.10, 0.22), 0.6)
+	_box_at(root, Vector3(size.x + 0.6, 0.5, 0.55), Vector3(0.0, lift + size.y + 0.45, 0.0), item["tint"], 0.8)
+
+	var words := Label3D.new()
+	words.name = "ScreenText"
+	words.text = str(item["text"]) if str(item["text"]) != "" else str(doc.get("name", "")).to_upper()
+	words.font_size = 160
+	words.pixel_size = clampf(size.y * 0.16 / 160.0, 0.002, 0.05)
+	words.outline_size = 12
+	words.modulate = Color(1.0, 0.95, 0.70)
+	words.position = Vector3(0.0, lift + size.y * 0.5, -0.34)
+	words.rotation = Vector3(0.0, PI, 0.0)
+	words.width = size.x / words.pixel_size * 0.95
+	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	root.add_child(words)
+	_screens.append(words)
+
+
+## A row of flags on poles along `size.x`, colours drawn from the seed.
+func _flag_row(item: Dictionary) -> void:
+	var root := Node3D.new()
+	root.name = "Flags"
+	root.transform = Transform3D(_yaw_basis(float(item["yaw"])), item["at"])
+	add_child(root)
+	var length := (item["size"] as Vector3).x
+	var count := maxi(int(length / 3.0), 1)
+	var bottom := water_height() - 1.0 - (item["at"] as Vector3).y
+
+	for index in range(count + 1):
+		var x := -length * 0.5 + float(index) * length / float(count)
+		_box_at(root, Vector3(0.14, 5.0 - bottom, 0.14), Vector3(x, (5.0 + bottom) * 0.5, 0.0), Color(0.92, 0.92, 0.95))
+		var flag := Node3D.new()
+		flag.position = Vector3(x, 4.4, 0.0)
+		root.add_child(flag)
+		_box_at(flag, Vector3(0.04, 0.9, 1.4), Vector3(0.0, 0.0, 0.72),
+			SHIRTS[(int(item["seed"]) + index) % SHIRTS.size()])
+		_flags.append(flag)
+
+
+## Confetti over the finish arch: one-shot bursts, restarted by a big [method cheer].
+func _finish_confetti() -> void:
+	var finish: Dictionary = doc["finish"]
+	var basis := _yaw_basis(float(finish["yaw"]))
+	var size: Vector3 = finish["size"]
+
+	for side in [-1.0, 1.0]:
+		var burst := CPUParticles3D.new()
+		burst.name = "Confetti"
+		burst.emitting = false
+		burst.one_shot = true
+		burst.amount = 140
+		burst.lifetime = 3.2
+		burst.explosiveness = 0.85
+		burst.direction = Vector3(-side * 0.4, 1.0, 0.0)
+		burst.spread = 35.0
+		burst.initial_velocity_min = 7.0
+		burst.initial_velocity_max = 12.0
+		burst.gravity = Vector3(0.0, -4.0, 0.0)
+		burst.damping_min = 1.0
+		burst.damping_max = 2.5
+		burst.angular_velocity_min = -360.0
+		burst.angular_velocity_max = 360.0
+		burst.scale_amount_min = 0.6
+		burst.scale_amount_max = 1.2
+		var quad := QuadMesh.new()
+		quad.size = Vector2(0.14, 0.09)
+		var material := StandardMaterial3D.new()
+		material.vertex_color_use_as_albedo = true
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		quad.material = material
+		burst.mesh = quad
+		var colours := Gradient.new()
+		colours.offsets = PackedFloat32Array([0.0, 0.25, 0.5, 0.75, 1.0])
+		colours.colors = PackedColorArray([SHIRTS[0], SHIRTS[1], SHIRTS[2], SHIRTS[3], SHIRTS[6]])
+		burst.color_initial_ramp = colours
+		burst.transform = Transform3D(basis, (finish["at"] as Vector3) + basis * Vector3(side * size.x * 0.5, maxf(size.y, 2.5), 0.0))
+		add_child(burst)
+		_confetti.append(burst)
 
 
 ## The dot-lighting document a course's theme describes.
@@ -919,6 +1416,70 @@ func _pose_piece(piece: Dictionary, t: float) -> void:
 
 			if ram != null:
 				ram.transform = pusher_transform(spec, t)
+		"fall":
+			_pose_fall(node, spec, t)
+
+
+## Whether a fall is coming down at [param t]: for `duty` of every `period`, from `phase`.
+static func fall_on(spec: Dictionary, t: float) -> bool:
+	return fall_cycle(spec, t) < clampf(float(spec.get("duty", 0.4)), 0.05, 0.95)
+
+
+static func fall_cycle(spec: Dictionary, t: float) -> float:
+	return fposmod(t / float(spec["period"]) + float(spec.get("phase", 0.0)), 1.0)
+
+
+## How close a fall is to coming down, 0 (not soon) to 1 (now). See [constant FALL_WARN_SECONDS].
+static func fall_warning(spec: Dictionary, t: float) -> float:
+	if fall_on(spec, t):
+		return 0.0
+	var period := float(spec["period"])
+	var left := (1.0 - fall_cycle(spec, t)) * period
+	return clampf(1.0 - left / FALL_WARN_SECONDS, 0.0, 1.0) if left < FALL_WARN_SECONDS else 0.0
+
+
+## The part of the curtain drawn at [param t], as [code][bottom, top][/code] fractions of its
+## height: falling from the sluice as it starts, the top clearing first as it stops.
+static func fall_sheet(spec: Dictionary, t: float) -> Vector2:
+	var period := float(spec["period"])
+	var duty := clampf(float(spec.get("duty", 0.4)), 0.05, 0.95)
+	var u := fall_cycle(spec, t)
+
+	if u < duty:
+		return Vector2(1.0 - clampf(u * period / FALL_SHEET_SECONDS, 0.0, 1.0), 1.0)
+
+	var gone := clampf((u - duty) * period / FALL_SHEET_SECONDS, 0.0, 1.0)
+	return Vector2(0.0, 1.0 - gone) if gone < 1.0 else Vector2(0.0, 0.0)
+
+
+func _pose_fall(node: Node3D, spec: Dictionary, t: float) -> void:
+	var size: Vector3 = spec["size"]
+	var sheet := fall_sheet(spec, t)
+	var curtain := node.get_node_or_null(^"Curtain") as MeshInstance3D
+	var drips := node.get_node_or_null(^"Drips") as MeshInstance3D
+	var splash := node.get_node_or_null(^"Splash") as MeshInstance3D
+	var shown := sheet.y - sheet.x
+
+	if curtain != null:
+		curtain.visible = shown > 0.01
+		if curtain.visible:
+			curtain.scale = Vector3(1.0, shown, 1.0)
+			curtain.position = Vector3(0.0, size.y * (sheet.x + sheet.y) * 0.5, 0.0)
+			var material := curtain.material_override as StandardMaterial3D
+			if material != null:
+				material.uv1_offset = Vector3(0.0, fposmod(-t * 2.4, 1.0), 0.0)
+
+	if drips != null:
+		var warning := fall_warning(spec, t)
+		drips.visible = warning > 0.0
+		if drips.visible:
+			var material := drips.material_override as StandardMaterial3D
+			if material != null:
+				material.uv1_offset = Vector3(0.0, fposmod(-t * 1.6, 1.0), 0.0)
+				material.albedo_color.a = 0.15 + 0.35 * warning
+
+	if splash != null:
+		splash.visible = sheet.x < 0.05 and shown > 0.01
 
 
 ## Where a carrier is at [param t], as a world transform. The one formula per kind.
@@ -1145,6 +1706,8 @@ func knock(feet: Vector3, crouched: bool, tick: int, limits: Vector3) -> Vector3
 				thrown = _knock_pendulum(piece, bottom, top, t)
 			"pusher":
 				thrown = _knock_pusher(piece, bottom, top, t)
+			"fall":
+				thrown = _knock_fall(piece, bottom, top, t)
 
 		if thrown != Vector3.ZERO:
 			var flat := Vector3(thrown.x, 0.0, thrown.z)
@@ -1255,6 +1818,30 @@ func _knock_pusher(piece: Dictionary, bottom: Vector3, top: Vector3, t: float) -
 
 	# Out and holding, or going home: it still will not let anybody stand inside it.
 	return forward * 4.0
+
+
+## A falling curtain pushes whoever is in it off the side it pours toward (`push` m/s along
+## the piece's +X), whatever way they were going: a person cannot run through falling water
+## and stay on a six-metre deck. Only while it is on; its drips are a warning, never a push.
+func _knock_fall(piece: Dictionary, bottom: Vector3, top: Vector3, t: float) -> Vector3:
+	var spec: Dictionary = piece["spec"]
+
+	if not fall_on(spec, t):
+		return Vector3.ZERO
+
+	var root: Node3D = piece["node"]
+	var inverse := root.transform.affine_inverse()
+	var half := (spec["size"] as Vector3) * 0.5
+	var height := (spec["size"] as Vector3).y
+
+	for step in range(3):
+		var local := inverse * bottom.lerp(top, float(step) / 2.0)
+
+		if absf(local.x) <= half.x + PLAYER_RADIUS * 0.5 and absf(local.z) <= half.z + PLAYER_RADIUS \
+				and local.y > -1.0 and local.y < height:
+			return root.transform.basis * Vector3(float(spec.get("push", 9.0)), -1.0, 0.0)
+
+	return Vector3.ZERO
 
 
 ## The closest points between two segments, and the distance between them.
@@ -1403,6 +1990,55 @@ func supported(point: Vector3, tick: int) -> bool:
 						return true
 
 	return false
+
+
+## The offsets, across the course, from [param point] to the middle of every column of the
+## tiles under it (nearest first), or empty when no tiles are under it. What a stand-in asks
+## to step to a column whose tile is up, rather than only ever running down the middle.
+func tile_columns(point: Vector3) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+
+	for piece in pieces:
+		if str(piece["kind"]) != "tiles":
+			continue
+
+		var spec: Dictionary = piece["spec"]
+		var root: Node3D = piece["node"]
+		var local := root.transform.affine_inverse() * point
+		var cols := int(spec["cols"])
+		var rows := int(spec["rows"])
+		var pitch := float(spec["tile"]) + float(spec.get("gap", 0.25))
+		var row := int(roundf(local.z / pitch + float(rows - 1) * 0.5))
+
+		if row < 0 or row >= rows or absf(local.y) > 3.0 \
+				or absf(local.x) > float(cols) * pitch * 0.5 + 0.5:
+			continue
+
+		for col in range(cols):
+			var x := (float(col) - float(cols - 1) * 0.5) * pitch
+			out.append(root.transform.basis * Vector3(x - local.x, 0.0, 0.0))
+
+		out.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.length() < b.length())
+		return out
+
+	return out
+
+
+## Whether the tile [param ground_id] is, if it is one, is about to drop (its warning is on).
+func tile_dropping(ground_id: int, at: Vector3, tick: int) -> bool:
+	var found: Variant = _by_collider.get(ground_id)
+
+	if found == null:
+		return false
+
+	var piece: Dictionary = pieces[int((found as Array)[0])]
+
+	if str(piece["kind"]) != "tiles":
+		return false
+
+	var t := float(tick) / float(maxi(tick_rate, 1))
+	return tile_warning(piece["spec"], int((found as Array)[1]), t) > 0.0 \
+		or tile_down(piece, int((found as Array)[1]), t + 0.3)
 
 
 # --- Weather -------------------------------------------------------------------

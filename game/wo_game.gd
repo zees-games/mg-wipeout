@@ -7,6 +7,7 @@ const WoCourse := preload("wo_course.gd")
 const WoCourseDoc := preload("wo_course_doc.gd")
 const WoPlayer := preload("wo_player.gd")
 const WoProgress := preload("wo_progress.gd")
+const WoRacer := preload("wo_racer.gd")
 const WoRules := preload("wo_rules.gd")
 const WoSpectate := preload("wo_spectate.gd")
 
@@ -55,7 +56,10 @@ const TEAM_COLOURS: Array[Color] = [
 ## What the stand-ins are called, solo and on a server, through dot-bot's [DotBotNames]
 ## (never doubled up, and numbered only past the end of the list). Not "Stand-in 2": a board of
 ## numbered stand-ins tells a player they are alone.
-const BOT_NAMES := ["Splash", "Tumble", "Wobble", "Dunk", "Belly Flop", "Soggy", "Bounce", "Skid"]
+const BOT_NAMES := [
+	"Splash", "Tumble", "Wobble", "Dunk", "Belly Flop", "Soggy", "Bounce", "Skid",
+	"Cannonball", "Flipper", "Squelch", "Ripple", "Puddle", "Noodle", "Slick", "Drip",
+]
 
 const TEAM_NAMES: Array[String] = [
 	"Red", "Blue", "Green", "Yellow", "Violet", "Orange",
@@ -233,10 +237,17 @@ var _thrown: Dictionary = {}
 ## player id -> the last tick a thrown prop hurt them, so one prop is one hit.
 var _thrown_hit: Dictionary = {}
 
-## Bots: player id -> the route point they are heading for, and their aim error.
+## Bots: player id -> the route point they are heading for.
 var _bot_route: Dictionary = {}
-var _bot_hands: Dictionary = {}
 var _bot_wait: Dictionary = {}
+
+## Bots: player id -> how this stand-in is racing this round: the plan for the route point it
+## is heading for (fumble, early or late, rash), when a window was seen, a pause after a fall,
+## its own skill factor, and its dot-bot [DotBotAim] for a final death. See [method _racer_of].
+var _bot_racer: Dictionary = {}
+
+## How the stand-ins race: mistake rates by dot-bot's `bot_difficulty`. See [WoRacer].
+var racer: WoRacer = null
 
 ## Bots: player id -> ticks spent getting up to speed on a top before jumping off it.
 var _bot_runup: Dictionary = {}
@@ -258,6 +269,8 @@ func _ready() -> void:
 		return
 
 	_round_seed = config.seed_value
+	racer = WoRacer.new(DotBotSettings.of(self))
+	racer.mistakes = config.bot_mistakes
 
 	_build_physics()
 	if not body_rules.changed.is_connected(_on_body_rules_changed):
@@ -287,13 +300,28 @@ func _ready() -> void:
 
 ## The player's motor mask under `mp_solidplayers`, and the players' layer as one they may
 ## walk out of (`apply_to`; through `set_collision_mask`, which a style does not undo).
+##
+## [b]Stand-ins are on a layer of their own, and pass through each other.[/b] A person stops at
+## a stand-in's shoulder and a stand-in at a person's (the camera rule `mp_solidplayers` is
+## for); two stand-ins never meet. Eight of them racing as one solid crowd shoved each other
+## off every edge and queued at every run of tops, and a field of eight took four times as
+## long over five balls as two did, which is a crowd of bots, not a race.
 func _apply_body_mask(player: WoPlayer) -> void:
 	if physics == null or player == null or player.controller == null:
 		return
-	body_rules.apply_to(player.controller, physics.collision_mask(&"player"), physics.layer_mask(&"player"))
+	var others := physics.layer_mask(&"player") | (0 if player.is_bot else physics.layer_mask(&"bot"))
+	body_rules.apply_to(player.controller, physics.collision_mask(&"player"), others)
 	# The capsule the others stop at: a player's body has no shape of its own.
 	var tunables := player.controller.tunables
 	body_rules.apply_hull(player, tunables.stand_height, tunables.radius)
+
+
+## A player became (or stopped being) a stand-in: its layer and mask follow.
+func _on_bot_changed(player: WoPlayer) -> void:
+	if physics == null or not is_instance_valid(player):
+		return
+	var _applied := physics.apply_to(player, &"bot" if player.is_bot else &"player")
+	_apply_body_mask(player)
 
 
 ## `mp_solidplayers` changed: every player's mask now.
@@ -311,11 +339,11 @@ func _exit_tree() -> void:
 
 ## The named collision layers. Three kinds of thing here: the world, players and props.
 func _build_physics() -> void:
-	physics = DotPhysicsLayout.custom(&"wipeout", [&"world", &"player", &"prop"])
+	physics = DotPhysicsLayout.custom(&"wipeout", [&"world", &"player", &"bot", &"prop"])
 
 	for layer in physics.layers:
 		match layer.id:
-			&"player":
+			&"player", &"bot":
 				# Not other players in the layout. `mp_solidplayers` (1 since the first play
 				# test, where stand-ins walked into the camera at the start line) adds them to
 				# each player's motor mask and gives each a hull; a server that would rather
@@ -323,9 +351,9 @@ func _build_physics() -> void:
 				# walked into whom, and the other player is drawn in the past on every client.
 				layer.collides_with = [&"world", &"prop"]
 			&"prop":
-				layer.collides_with = [&"world", &"player", &"prop"]
+				layer.collides_with = [&"world", &"player", &"bot", &"prop"]
 			_:
-				layer.collides_with = [&"player", &"prop"]
+				layer.collides_with = [&"player", &"bot", &"prop"]
 
 	var built := physics.build()
 
@@ -595,7 +623,8 @@ func add_player(
 	add_child(player)
 
 	if physics != null:
-		var applied := physics.apply_to(player, &"player")
+		var applied := physics.apply_to(player, &"bot" if player.is_bot else &"player")
+		player.bot_changed.connect(_on_bot_changed.bind(player))
 
 		if not applied.ok:
 			DotLog.warn(CHANNEL, "a player could not be put on its collision layer", {
@@ -764,7 +793,7 @@ func remove_player(player_id: StringName) -> void:
 	players.erase(player_id)
 	sides.erase(player_id)
 	_bot_route.erase(player_id)
-	_bot_hands.erase(player_id)
+	_bot_racer.erase(player_id)
 	_bot_wait.erase(player_id)
 	_bot_runup.erase(player_id)
 	_bot_stuck.erase(player_id)
@@ -1077,6 +1106,7 @@ func _place_on_start() -> void:
 		var spot := stage.start_spot(seat, ids.size())
 		player.place_at(spot[0], spot[1])
 		_bot_route[player.player_id] = 0
+		_bot_racer.erase(player.player_id)
 
 		if spectate != null:
 			spectate.on_spawned(player.player_id)
@@ -1822,8 +1852,13 @@ func _watch_progress() -> void:
 
 			# What the knock costs. On the course only, on the authority only: the throw was
 			# predicted, the health is decided.
+			# Once a second at the most: a ram holding somebody against its stop re-throws them
+			# every few ticks, and charged each time it killed a stand-in pinned there in a
+			# second — half of a field of eight was knocked out of Punch Alley that way.
+			var hurt_since := _tick - int(player.get_meta(&"knock_hurt_tick", -100000))
 			if authoritative and stage.is_course() and phase == Phase.COURSE and combat != null \
-					and player.is_alive() and not player.finished:
+					and player.is_alive() and not player.finished and hurt_since >= tick_rate:
+				player.set_meta(&"knock_hurt_tick", _tick)
 				var amount := player.last_knock_speed * config.knock_damage_per_speed
 				if player.last_knock_struck:
 					amount = maxf(amount, config.strike_damage)
@@ -1880,8 +1915,23 @@ func _fell(player: WoPlayer) -> void:
 		var spot := stage.respawn_point(player.checkpoint, player.falls % 5)
 		player.place_at(spot[0], spot[1])
 
+		# [b]Back at the checkpoint healed, as crossing it heals.[/b] A knock that throws you in
+		# has already cost the time back to the checkpoint; on the longer courses the health it
+		# also cost added up over a dozen restarts, and a field of eight stand-ins was knocked
+		# OUT of the round, not just off the course, on every hammer and ram course (two of
+		# eight finished Hammer Gauntlet). Knocks along a deck that do not end in the water
+		# still add up, so `course_deaths_eliminate` still means something.
+		if config.checkpoint_heals and authoritative and player.health != null and player.is_alive():
+			var _healed := player.health.heal(player.health.max_health)
+
 	if player.is_bot:
 		_bot_route[player.player_id] = _route_after(player.controller.state.position)
+		# Shaking it off: a person back on the deck looks round before running again.
+		var racing := _racer_of(player)
+		racing["pause_until"] = _tick + int(racer.value("recover") * float(racing["factor"]) * float(tick_rate))
+		racing["plan_index"] = -1
+		racing["backed_up"] = -1
+		racing["backup_until"] = 0
 
 	if progress != null:
 		progress.on_fell(player.player_id)
@@ -1912,6 +1962,8 @@ func _finish(player: WoPlayer) -> void:
 ## What a stand-in does. On a course: follow the document's route, jump where it says, and
 ## sometimes get it wrong. In a final death: get something in its hands and use it.
 func _drive_bots() -> void:
+	racer.mistakes = config.bot_mistakes
+
 	for id: StringName in players:
 		var player: WoPlayer = players[id]
 
@@ -1921,6 +1973,7 @@ func _drive_bots() -> void:
 		var command := DotFpsCommand.new()
 		command.yaw = player.controller.state.yaw
 		command.pitch = player.controller.state.pitch
+		(_racer_of(player)["aim"] as DotBotAim).view_from(command.yaw, command.pitch)
 
 		if player.watching or phase == Phase.IDLE or phase == Phase.COUNTDOWN:
 			pass
@@ -1932,26 +1985,117 @@ func _drive_bots() -> void:
 		player.controller.apply_command(command)
 
 
+## How [param player], a stand-in, is racing this round; made on first use.
+##
+## `factor` is this bot's own share of the preset's mistakes, drawn once per bot and round
+## (so eight medium bots are eight different runners, and a different eight next round);
+## `plan_*` is what it will get wrong at the route point it is heading for, drawn once per
+## point and ATTEMPT (`falls`), never once per point and round: a jump fumbled on every
+## attempt was a bot that never got past it.
+func _racer_of(player: WoPlayer) -> Dictionary:
+	var held: Variant = _bot_racer.get(player.player_id)
+
+	if held != null:
+		return held
+
+	var draw := random.stream_for(&"bot_skill", round_number * 8192 + int(player.entity_id % 8192))
+	var racing := {
+		"factor": WoRacer.factor(racer.value("variety"), draw.next_range_f(-1.0, 1.0)),
+		"plan_index": -1,
+		"plan_falls": -1,
+		"fumble": false,
+		"late": 0,
+		"early": 0.0,
+		"rash": false,
+		"window": -1,
+		"pause_until": 0,
+		"aim": DotBotAim.new(int(player.entity_id), DotBotSettings.of(self)),
+	}
+	_bot_racer[player.player_id] = racing
+	return racing
+
+
+## A draw in [0, 1) for one decision of one stand-in: seeded from the round, the bot and
+## [param salt], so a replayed round makes the same mistakes and two bots make different ones.
+func _bot_roll(name: StringName, player: WoPlayer, salt: int) -> float:
+	var subject := (round_number * 4099 + int(player.entity_id % 4096)) * 65536 + (salt & 0xffff)
+	return random.stream_for(name, subject).next_range_f(0.0, 1.0)
+
+
+## What this stand-in will get wrong at route point [param index]: decided once per point and
+## attempt. A jump not taken, a take-off early or late, a window not waited for.
+func _bot_plan(player: WoPlayer, racing: Dictionary, index: int) -> void:
+	if int(racing["plan_index"]) == index and int(racing["plan_falls"]) == player.falls:
+		return
+
+	var factor := float(racing["factor"])
+	var salt := index * 64 + player.falls
+	racing["plan_index"] = index
+	racing["plan_falls"] = player.falls
+	racing["fumble"] = _bot_roll(&"bot_fumble", player, salt) * 100.0 < racer.value("fumble") * factor
+	racing["rash"] = _bot_roll(&"bot_rash", player, salt) * 100.0 < racer.value("rash") * factor
+	# Early or late by up to `timing` seconds, evenly: early is a jump taken that much further
+	# back (shorter, still made over most gaps), late is that much more run before it — and
+	# past an edge point half a metre from the edge, a late take-off is a step into the water.
+	var off := (_bot_roll(&"bot_timing", player, salt) * 2.0 - 1.0) * racer.value("timing") * factor
+	# A third of it off a TOP (a ball, a log, a pad: a point with a wide reach), where the
+	# take-off is wherever the landing put you and a person jumps the moment they are on it.
+	# At the full error eight medium stand-ins fell off First Splash's three balls on six
+	# attempts in ten: a ball is under a metre of top, and a quarter-metre early is short.
+	var route := stage.route()
+	if index < route.size() and float((route[index] as Dictionary)["reach"]) > 0.6:
+		off *= 0.35
+	racing["late"] = int(maxf(off, 0.0) * float(tick_rate))
+	racing["late_going"] = false
+	racing["queued"] = 0
+	racing["early"] = maxf(-off, 0.0) * config.run_speed
+	racing["window"] = -1
+
+
 func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 	var route := stage.route()
 
 	if route.is_empty():
 		return
 
+	var racing := _racer_of(player)
+
+	# Back on the deck after a fall, and not running yet.
+	if _tick < int(racing["pause_until"]):
+		command.move = Vector2.ZERO
+		return
+
 	var index := mini(int(_bot_route.get(player.player_id, 0)), route.size() - 1)
 	var point: Dictionary = route[index]
 	var next: Dictionary = route[index + 1] if index + 1 < route.size() else {}
+
+	# A column of tiles chosen for this point (see the board wait below), not the middle one.
+	if int(racing.get("shift_index", -1)) == index:
+		point = point.duplicate()
+		point["at"] = (point["at"] as Vector3) + (racing["shift"] as Vector3)
+
 	var at := player.controller.state.position
 	var toward: Vector3 = (point["at"] as Vector3) - at
 	toward.y = 0.0
 	var grounded := player.controller.state.mode == DotFpsState.Mode.GROUND
+	_bot_plan(player, racing, index)
 
 	command.yaw = rad_to_deg(atan2(-toward.x, -toward.z))
 	command.move = Vector2(0.0, 1.0)
 
 	# In the air, aimed at a top to land on: brake if the jump is going to carry past it.
-	if not grounded and bool(point["jump"]):
+	# Something to board too: a run at a row of tiles jumped at the deck's edge carried a
+	# runner two rows past the first one, onto a tile on its way down (Trapdoor Run).
+	if not grounded and (bool(point["jump"]) or bool(point.get("bounce", false)) or bool(point["board"])):
 		_bot_land_on(player, command, point["at"])
+
+	# A bouncer is ground for one tick: its point is reached by coming down over it, and the
+	# bounce itself carries the runner on toward the next. Measured on First Splash's pads:
+	# held to "on the ground within reach", a stand-in braked onto the first pad for ever.
+	if bool(point.get("bounce", false)) and toward.length() < float(point["reach"]) \
+			and player.controller.state.velocity.y > 0.0 and not grounded:
+		_bot_route[player.player_id] = index + 1
+		return
 
 	# A point ON something that moves is reached by standing on it, wherever it has got to:
 	# chasing the coordinates the mover started from walked the bot backwards off its tail.
@@ -1969,9 +2113,27 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 		# Six seconds at the most: a window that never comes is a course to fix, and a bot
 		# standing still for ever would hide that rather than show it.
 		if waited < tick_rate * 6 and not _bot_may_board(player, point):
-			_bot_wait[player.player_id] = waited + 1
-			command.move = Vector2.ZERO
-			return
+			# [b]Another column, as a person would.[/b] Run straight down the middle of a
+			# grid of trapdoors and you wait on a tile for the one in front, and yours drops:
+			# half a field of eight went through the first grid of Trapdoor Run that way.
+			# Any column whose tile in the next row will be up is as good as the middle.
+			for offset: Vector3 in stage.tile_columns(point["at"]):
+				if offset.length() < 0.1:
+					continue
+				var moved := point.duplicate()
+				moved["at"] = (point["at"] as Vector3) + offset
+				if _bot_may_board(player, moved):
+					var before := (racing.get("shift", Vector3.ZERO) as Vector3) \
+						if int(racing.get("shift_index", -1)) == index else Vector3.ZERO
+					racing["shift_index"] = index
+					racing["shift"] = before + offset
+					return
+
+			# And not standing on a tile that is going: anywhere is better than down with it.
+			if not stage.tile_dropping(player.controller.state.ground_id, at, _tick):
+				_bot_wait[player.player_id] = waited + 1
+				command.move = Vector2.ZERO
+				return
 
 	# Walked into, for its last metre and a half, a point the bot may have to stop at: one that
 	# arrived at a run and then stopped slid a metre past it, which beside a mover is off the
@@ -1983,6 +2145,19 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 	# that walked through it arrived late and was hit — every pusher on Punch Alley, every time.
 	if bool(point["walk"]) or (stops and toward.length() < 1.6 and toward.length() > float(point["reach"])):
 		command.set_button(DotFpsCommand.BUTTON_WALK, true)
+
+	# Onto a tile, at a walk: a running jump is nearly five metres and a row of tiles is two,
+	# and a stand-in that ran at the first row landed on the third (Trapdoor Run).
+	if bool(point["board"]) and not bool(point["ride"]) and not stage.tile_columns(point["at"]).is_empty():
+		command.set_button(DotFpsCommand.BUTTON_WALK, true)
+
+	# Two seconds at the most behind anybody: whoever is in front may be stuck themselves, and a
+	# queue behind a runner who never goes is a stand-in that never finishes (a lab run of logs
+	# had one standing at the edge for the whole clock).
+	if bool(point["jump"]) and toward.length() < 4.0 and int(racing.get("queued", 0)) < tick_rate * 2 \
+			and _bot_queue(player, command, point["at"]):
+		racing["queued"] = int(racing.get("queued", 0)) + 1
+		return
 
 	_bot_hop(player, command)
 	_bot_unstick(player, command)
@@ -1998,25 +2173,111 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 				and not stage.supported(at + heading * 1.6 + Vector3(0.0, 0.1, 0.0), _tick):
 			command.set_button(DotFpsCommand.BUTTON_JUMP, true)
 
-	if toward.length() > float(point["reach"]):
+	# Backing up for a run-up (see the jump below), wherever that takes it, straight back along
+	# the line the jump will take.
+	if _tick < int(racing.get("backup_until", 0)) and grounded:
+		if not next.is_empty():
+			var line: Vector3 = (next["at"] as Vector3) - (point["at"] as Vector3)
+			line.y = 0.0
+			if line.length() > 0.01:
+				command.yaw = rad_to_deg(atan2(-line.x, -line.z))
+		command.move = Vector2(0.0, -1.0)
 		return
 
-	if bool(point["wait"]) and not next.is_empty():
+	# A late take-off under way: running on the way it was going (past the point, which would
+	# otherwise turn it round), then the jump, whether or not there is still ground under it.
+	if bool(racing.get("late_going", false)):
+		command.yaw = float(racing["late_yaw"])
+		command.move = Vector2(0.0, 1.0)
+		if int(racing["late"]) > 0:
+			racing["late"] = int(racing["late"]) - 1
+			racing["late_going"] = true
+			racing["late_yaw"] = command.yaw
+			return
+		racing["late_going"] = false
+		if grounded and not bool(racing["fumble"]):
+			command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+		_bot_route[player.player_id] = index + 1
+		return
+
+	# An early take-off is a jump point reached further back than it is.
+	var reach := float(point["reach"]) + (float(racing["early"]) if bool(point["jump"]) else 0.0)
+
+	# [b]A top landed on past its point is reached.[/b] Landing a little past is the aim (see
+	# [method _bot_land_on]); a runner seven tenths of a metre past a pad's point, outside its
+	# reach, turned round, ran back at it, and jumped for the next pad from a run the wrong
+	# way, into the pond.
+	if bool(point["jump"]) and float(point["reach"]) > 0.6 and grounded and not next.is_empty():
+		var line: Vector3 = (next["at"] as Vector3) - (point["at"] as Vector3)
+		line.y = 0.0
+		if line.length() > 0.01 and -toward.dot(line.normalized()) > 0.0 and toward.length() < 2.2:
+			reach = maxf(reach, toward.length() + 0.01)
+
+	# [b]Somebody is on the top the jump from here lands on: wait for them to go on[/b], two
+	# seconds at the most, a couple of metres back from the edge so there is a run at it when
+	# it comes free. Eight stand-ins jumped onto one lily pad together and knocked each other
+	# into the pond; a runner who waited AT the edge had no run left and jumped short (Trapdoor
+	# Run's pads, a field going round and round for the whole clock). Only from an edge:
+	# standing still on a top is losing the speed the next jump needs.
+	if bool(point["jump"]) and float(point["reach"]) <= 0.6 and grounded and toward.length() < 3.0 \
+			and not next.is_empty() and _top_taken(player, next):
+		var held := int(racing.get("held", 0))
+		if held < tick_rate * 2:
+			racing["held"] = held + 1
+			command.move = Vector2(0.0, -0.7) if toward.length() < 2.0 else Vector2.ZERO
+			return
+	elif bool(point["jump"]):
+		racing["held"] = 0
+
+	if toward.length() > reach:
+		return
+
+	if bool(point["wait"]) and not next.is_empty() and not bool(racing["rash"]):
 		var waited := int(_bot_wait.get(player.player_id, 0))
 
-		if waited < tick_rate * 6 and not stage.path_clear(at, next["at"], _tick, config.run_speed):
+		# [b]The window is SEEN, and then gone for, a reaction later[/b] (dot-bot's
+		# `bot_reaction`): a person does not set off on the tick a ram starts home, and one
+		# who reacts slowly goes into a window as it closes. Committed once seen, so a slow
+		# reaction is a late start, never a second wait.
+		if int(racing["window"]) < 0 and waited < tick_rate * 6 \
+				and not stage.path_clear(at, next["at"], _tick, config.run_speed):
 			_bot_wait[player.player_id] = waited + 1
+			command.move = Vector2.ZERO
+			command.set_button(DotFpsCommand.BUTTON_JUMP, false)
+			return
+
+		if int(racing["window"]) < 0:
+			racing["window"] = _tick
+
+		var react := int(racer.reaction() * float(racing["factor"]) * float(tick_rate))
+
+		if _tick - int(racing["window"]) < react:
 			command.move = Vector2.ZERO
 			command.set_button(DotFpsCommand.BUTTON_JUMP, false)
 			return
 
 	_bot_wait.erase(player.player_id)
 
+	# Nor is something to board passed in the air: passing over the first row of tiles in the
+	# jump onto it made the second row the target, and the landing was braked onto that one
+	# instead, as it dropped.
+	if bool(point["board"]) and not grounded:
+		return
+
 	# A jump point passed in the air is not passed: it is where the NEXT jump starts, and
 	# advancing on it mid-flight meant the bot came down on a ball, never jumped off it and
 	# slid into the water. Held until the bot is on its feet.
 	if bool(point["jump"]):
 		if not grounded:
+			racing["grounded_for"] = 0
+			return
+
+		# [b]Not on the tick of landing.[/b] Until the world has stepped once with the feet
+		# down, the velocity is still the jump's: seven metres a second, so the run-up below
+		# let the next jump go at once, and the landing on the ball's curve had already taken
+		# it to four. Every second ball, short.
+		racing["grounded_for"] = int(racing.get("grounded_for", 0)) + 1
+		if int(racing["grounded_for"]) < 2 and float(point["reach"]) > 0.6:
 			return
 
 		# [b]Toward where the jump is GOING, on a point marked `onward`.[/b] A bot that
@@ -2037,22 +2298,182 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 		var flat_speed := Vector2(player.controller.state.velocity.x, player.controller.state.velocity.z).length()
 		var spent := int(_bot_runup.get(player.player_id, 0))
 
-		if flat_speed < config.run_speed * 0.85 and spent < 3:
+		# Longer on a top that fights back: a log rolling toward the runner took the landing
+		# down to one and a half metres a second, and three ticks of running on it was still
+		# under two when the jump went, a metre short (Log Roll, every other log). Never once
+		# past the point, though, where the top is going away under the feet.
+		var onward_line := (next["at"] as Vector3) - (point["at"] as Vector3) if not next.is_empty() else Vector3.ZERO
+		onward_line.y = 0.0
+		var past := -toward.dot(onward_line.normalized()) if onward_line.length() > 0.01 else 0.0
+		var top := float(point["reach"]) > 0.6
+
+		if top and not next.is_empty():
+			# [b]On a top, run until the jump will make the next one, or the top runs out.[/b]
+			# What the next jump needs is arithmetic (the distance over the time a jump is in
+			# the air, to the next top's height); what the top allows is its reach past the
+			# point. A fixed three ticks of run-up jumped at whatever the landing left, and a
+			# pad landing at four metres a second went into the pond every time.
+			var needed := _jump_speed_needed(at, next["at"])
+			# The speed TOWARD the next top: a runner going sideways at six metres a second
+			# is not going to make it.
+			var to_next: Vector3 = (next["at"] as Vector3) - at
+			to_next.y = 0.0
+			var closing := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z).dot(to_next.normalized()) \
+				if to_next.length() > 0.01 else flat_speed
+			# And not much sideways: a pad landed on a metre and a half off its middle had the
+			# runner going across it, and the jump went across too (Spin Cycle's second pad).
+			var across := 0.0
+			if to_next.length() > 0.01:
+				var flat_velocity := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z)
+				across = (flat_velocity - to_next.normalized() * closing).length()
+			if (closing < needed * 1.05 or across > 1.5) and past < float(point["reach"]) + 0.6 and spent < RUNUP_TICKS * 3:
+				_bot_runup[player.player_id] = spent + 1
+				var ahead: Vector3 = (next["at"] as Vector3) - at
+				ahead.y = 0.0
+				if ahead.length() > 0.1:
+					command.yaw = rad_to_deg(atan2(-ahead.x, -ahead.z))
+				return
+		elif flat_speed < config.run_speed * 0.85 and spent < 3:
 			_bot_runup[player.player_id] = spent + 1
 			return
 
 		_bot_runup.erase(player.player_id)
 
-		# A fumble is a jump not taken, decided once per bot, waypoint and round, so it is
-		# reproducible and a different bot fumbles a different jump.
-		var draw := random.stream_for(&"bot_fumble",
-			round_number * 65536 + int(player.entity_id % 256) * 256 + index)
+		# [b]Too slow at an edge, back up for a run at it.[/b] A runner put back at a
+		# checkpoint a metre from a gap took off at under three metres a second and fell short
+		# every time; a person takes three steps back. Only at an edge (a narrow reach), never
+		# on a top, where stepping back is stepping off.
+		# Or going the wrong way: a runner who hopped an arm and came down beside an edge ran
+		# back along it to the jump point and jumped sideways off it.
+		var squint := 0.0
+		if not next.is_empty() and flat_speed > 0.5:
+			var jump_line: Vector3 = (next["at"] as Vector3) - (point["at"] as Vector3)
+			jump_line.y = 0.0
+			if jump_line.length() > 0.01:
+				squint = rad_to_deg(Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z).angle_to(jump_line))
+		if (flat_speed < config.run_speed * 0.6 or squint > 30.0) and float(point["reach"]) <= 0.6 \
+				and int(racing.get("backed_up", -1)) != index:
+			racing["backed_up"] = index
+			racing["backup_until"] = _tick + int(0.4 * float(tick_rate))
 
-		if draw.next_range_f(0.0, 100.0) >= config.bot_fumble_chance:
+		if _tick < int(racing.get("backup_until", 0)):
+			command.move = Vector2(0.0, -1.0)
+			return
+
+		# Late: still running, for as many ticks as this take-off is late by. Off an edge
+		# point that is a step past the edge, and the water.
+		if int(racing["late"]) > 0:
+			racing["late"] = int(racing["late"]) - 1
+			return
+
+		# A fumble is a jump not taken, decided once per bot, point and attempt.
+		if not bool(racing["fumble"]):
 			command.set_button(DotFpsCommand.BUTTON_JUMP, true)
 
 
 	_bot_route[player.player_id] = index + 1
+
+
+## Whether somebody else is on, or coming down on, the top at route point [param point]: a
+## point a jump lands on (`jump` or `bounce` with a reach of a top), with a body within 1.5 m of
+## it across and not far above or below.
+func _top_taken(player: WoPlayer, point: Dictionary) -> bool:
+	if not (bool(point["jump"]) or bool(point.get("bounce", false))) or float(point["reach"]) <= 0.6:
+		return false
+
+	if not body_rules.solid:
+		return false
+
+	var at: Vector3 = point["at"]
+
+	for id: StringName in players:
+		var other: WoPlayer = players[id]
+
+		# Stand-ins pass through each other (see [method _apply_body_mask]): only a person in
+		# the way is in the way.
+		if other == player or other.is_bot or not other.is_alive() or other.watching or other.finished:
+			continue
+
+		var there := other.controller.state.position
+		var across := Vector2(there.x - at.x, there.z - at.z).length()
+
+		if across < 1.5 and absf(there.y - at.y) < 2.5:
+			return true
+
+		# Coming down on it: in the air within a jump of it and moving toward it.
+		var velocity := other.controller.state.velocity
+		var toward_top := Vector2(at.x - there.x, at.z - there.z)
+		if other.controller.state.mode != DotFpsState.Mode.GROUND and across < 5.0 \
+				and Vector2(velocity.x, velocity.z).dot(toward_top) > 0.0:
+			return true
+
+	return false
+
+
+## The flat speed a jump from [param from] needs to come down on [param to] (a little short of
+## it is enough: a top has a reach). From the configuration's jump height and gravity.
+func _jump_speed_needed(from: Vector3, to: Vector3) -> float:
+	var g := config.gravity
+	var up := sqrt(2.0 * g * config.jump_height)
+	var rise := to.y - from.y
+	var root := up * up - 2.0 * g * rise
+	if root <= 0.0:
+		return INF
+	var airtime := (up + sqrt(root)) / g
+	var distance := maxf(Vector2(to.x - from.x, to.z - from.z).length() - 0.2, 0.0)
+	return distance / maxf(airtime, 0.05)
+
+
+## How far past a top's point a stand-in aims to land, metres. See [method _bot_land_on].
+const LAND_PAST := 0.3
+
+## Ticks a stand-in may spend getting up to speed on a top before it jumps off it anyway.
+const RUNUP_TICKS := 9
+
+
+## Stops behind somebody standing (or nearly) right in front: a queue, the way people wait at
+## the edge before a run of tops. True when it stopped.
+##
+## [b]Eight stand-ins at one edge pushed each other into the water.[/b] With `mp_solidplayers`
+## a runner arriving behind one who waits for a top slid round them and ran off the edge
+## beside them: on a lab run of five balls a field of eight fell at the deck's edge eighteen
+## times. Slowing to a walk behind them instead was worse (a walk is no run-up for a jump),
+## so this stops, and only behind somebody who is not running away (under 3 m/s).
+##
+## Only near a jump point, and only behind somebody nearer it, so a queue is an order and never
+## a ring: the first version stopped every runner on the start pad behind every other, and
+## nobody ever left it.
+func _bot_queue(player: WoPlayer, command: DotFpsCommand, jump_at: Vector3) -> bool:
+	if player.controller.state.mode != DotFpsState.Mode.GROUND or command.move == Vector2.ZERO \
+			or not body_rules.solid:
+		return false
+
+	var at := player.controller.state.position
+	var heading := Vector3(-sin(deg_to_rad(command.yaw)), 0.0, -cos(deg_to_rad(command.yaw)))
+	var mine := Vector2(jump_at.x - at.x, jump_at.z - at.z).length()
+
+	for id: StringName in players:
+		var other: WoPlayer = players[id]
+
+		if other == player or other.is_bot or not other.is_alive() or other.watching or other.finished:
+			continue
+
+		var gap := other.controller.state.position - at
+
+		if absf(gap.y) > 0.8:
+			continue
+
+		gap.y = 0.0
+		var ahead := gap.dot(heading)
+		var going := other.controller.state.velocity.dot(heading)
+
+		var theirs := Vector2(jump_at.x - other.controller.state.position.x, jump_at.z - other.controller.state.position.z).length()
+
+		if ahead > 0.0 and ahead < 1.5 and (gap - heading * ahead).length() < 0.9 and going < 3.0 and going > -0.5 and theirs < mine:
+			command.move = Vector2.ZERO
+			return true
+
+	return false
 
 
 ## Steers a bot in the air so it comes down on [param target] rather than past it.
@@ -2078,17 +2499,27 @@ func _bot_land_on(player: WoPlayer, command: DotFpsCommand, target: Vector3) -> 
 		return
 
 	var falls_in := (state.velocity.y + sqrt(root)) / g
-	var drift := Vector3(state.velocity.x, 0.0, state.velocity.z) * falls_in
-	var along := drift.dot(flat.normalized())
-
 	command.yaw = rad_to_deg(atan2(-flat.x, -flat.z))
-	var over := along - flat.length()
+	var current := Vector3(state.velocity.x, 0.0, state.velocity.z)
+	var over := current.dot(flat.normalized()) * falls_in - flat.length() if flat.length() > 0.01 else 0.0
 
-	if over <= 0.25 or falls_in <= 0.02:
+	# Aiming a little PAST the top, never at it: a runner who comes down on a ball's top at a
+	# stroll cannot jump on to the next one. Braking all the way to the point left stand-ins a
+	# metre short of every third ball.
+	over -= LAND_PAST
+
+	if over <= 0.25 or falls_in <= 0.02 or current.length() < 0.5:
 		# Nothing in: no wish adds nothing to a jump already at speed, and the jump lands
 		# where it was always going to.
 		command.move = Vector2.ZERO
 		return
+
+	# [b]Braked straight against the velocity, never back along the line to the target.[/b]
+	# That line is not the velocity when the runner is off it, and a backward wish along it
+	# pushes AWAY from the line: a runner half a metre to one side drifted four metres sideways
+	# and past the ball (Big Balls, found by stand-ins coming off a sweeper at an angle). A wish
+	# against the velocity only slows; it never turns.
+	command.yaw = rad_to_deg(atan2(-current.x, -current.z))
 
 	# Proportional, and full back is far too much: the motor takes over three metres a second
 	# off a jump in ONE tick when the wish is fully against it, and the first version stopped
@@ -2096,7 +2527,10 @@ func _bot_land_on(player: WoPlayer, command: DotFpsCommand, target: Vector3) -> 
 	var ticks_left := maxf(falls_in * float(tick_rate), 1.0)
 	var per_tick := over / falls_in / ticks_left
 	var full := config.run_speed * 30.0 / float(tick_rate)
-	command.move = Vector2(0.0, -clampf(per_tick / full, 0.02, 1.0))
+	# A stand-in steers a landing as well as `wo_bot_landing` says: below 1 it brakes too
+	# little and comes down past a small top, which is how a person slides off a ball.
+	var skill := racer.value("landing") if racer != null else 1.0
+	command.move = Vector2(0.0, -clampf(per_tick / full * skill, 0.02, 1.0))
 
 
 ## Jumps when the bot has been running for a second and got nowhere.
@@ -2170,6 +2604,38 @@ func _bot_hop(player: WoPlayer, command: DotFpsCommand) -> void:
 		elif ahead >= 0.2 and ahead <= 0.4:
 			jump = true
 
+	# Missed now and then (`wo_bot_hop_miss`), decided per half second so one arm is one
+	# decision: a stand-in that never misses an arm is the one thing on a sweeper nobody believes.
+	if (duck or jump) and racer != null and player.is_bot:
+		var racing := _racer_of(player)
+		var bucket := _tick / maxi(tick_rate / 2, 1)
+		if _bot_roll(&"bot_hop", player, bucket) * 100.0 < racer.value("hop_miss") * float(racing["factor"]):
+			return
+
+	# [b]A hop that lands in the arm is worse than no hop.[/b] An arm sweeping the same way
+	# the runner is going stays over the deck ahead of them for most of a second: hopping it
+	# lands on it again. Measured on First Splash, a stand-in whose arrival on the sweeper was
+	# shifted by a few hundredths of a second fell off it on most attempts. So the landing (a
+	# jump is about 0.7 s) is asked too, and if it is in the arm's way and standing still for
+	# half a second is not, the runner stops and lets it go by, as a person does.
+	if jump and not duck:
+		var lands := false
+		for ahead in [0.72, 0.85]:
+			var where: Vector3 = at + heading * config.run_speed * ahead
+			if stage.knock(where, false, _tick + int(ahead * tick_rate), limits) != Vector3.ZERO:
+				lands = true
+				break
+		if lands:
+			var still_safe := true
+			for ahead in [0.0, 0.15, 0.3, 0.45]:
+				if stage.knock(at, false, _tick + int(ahead * tick_rate), limits) != Vector3.ZERO:
+					still_safe = false
+					break
+			if still_safe:
+				command.move = Vector2.ZERO
+				command.set_button(DotFpsCommand.BUTTON_WALK, false)
+				return
+
 	if duck:
 		command.set_button(DotFpsCommand.BUTTON_CROUCH, true)
 	elif jump:
@@ -2191,6 +2657,48 @@ func _bot_may_board(player: WoPlayer, point: Dictionary) -> bool:
 	return stage.supported(to, lands) and stage.supported(to, lands + tick_rate / 4)
 
 
+## Everybody still racing or home, in race order: the finished by place, then by checkpoint,
+## then by how far along the route they are. What the HUD's place and the announcer's leader
+## read; on a client from the positions it draws. Watchers and an arena give an empty list.
+func race_order() -> Array[StringName]:
+	var order: Array[StringName] = []
+
+	if stage == null or not stage.is_course():
+		return order
+
+	var route := stage.route()
+	var keys := {}
+
+	for id: StringName in players:
+		var player: WoPlayer = players[id]
+
+		if player.watching:
+			continue
+
+		var key := 0.0
+
+		if player.finished:
+			key = 1.0e9 - float(player.place)
+		else:
+			var at := player.controller.state.position
+			var index := _route_after(at) if not route.is_empty() else 0
+			# Between the nearest point and the next, so two runners at one point are told apart.
+			var toward := 0.0
+			if index + 1 < route.size():
+				var here: Vector3 = (route[index] as Dictionary)["at"]
+				var next: Vector3 = (route[index + 1] as Dictionary)["at"]
+				var leg := here.distance_to(next)
+				toward = clampf(1.0 - at.distance_to(next) / maxf(leg, 0.01), -1.0, 1.0)
+			key = float(player.checkpoint + 1) * 1.0e5 + float(index) * 10.0 + toward
+
+		keys[id] = key
+		order.append(id)
+
+	order.sort_custom(func(a: StringName, b: StringName) -> bool:
+		return float(keys[a]) > float(keys[b]) or (float(keys[a]) == float(keys[b]) and String(a) < String(b)))
+	return order
+
+
 ## The route point a bot should head for from [param at]: the nearest one, then onward.
 func _route_after(at: Vector3) -> int:
 	var route := stage.route()
@@ -2203,6 +2711,16 @@ func _route_after(at: Vector3) -> int:
 		if distance < best_distance:
 			best_distance = distance
 			best = index
+
+	# [b]Past the nearest point, the next one.[/b] A checkpoint just across a gap is nearer the
+	# jump point behind it than the point ahead, and a stand-in put back there turned round and
+	# jumped back across the gap, every time (Spin Cycle's second checkpoint).
+	if best + 1 < route.size():
+		var here: Vector3 = (route[best] as Dictionary)["at"]
+		var next: Vector3 = (route[best + 1] as Dictionary)["at"]
+		var ahead := Vector3(next.x - here.x, 0.0, next.z - here.z)
+		if ahead.dot(Vector3(at.x - here.x, 0.0, at.z - here.z)) > 0.0:
+			best += 1
 
 	return best
 
@@ -2234,8 +2752,9 @@ func _bot_fight(player: WoPlayer, command: DotFpsCommand) -> void:
 
 	if player.grab != null and player.grab.is_carrying() and enemy != null:
 		_aim_bot(player, command, enemy)
-		command.set_button(DotFpsCommand.BUTTON_USER_0,
-			enemy.controller.state.position.distance_to(at) < 9.0)
+		# Thrown once the aim is on (dot-bot's trigger) and they are near enough to hit.
+		command.set_button(DotFpsCommand.BUTTON_USER_0, command.is_pressed(DotFpsCommand.BUTTON_USER_0)
+			and enemy.controller.state.position.distance_to(at) < 9.0)
 		command.move = Vector2(0.0, 1.0)
 		player.wants_grab = false
 		return
@@ -2292,27 +2811,34 @@ func _nearest_enemy(player: WoPlayer) -> WoPlayer:
 	return best
 
 
+## Aims a stand-in at [param target] and fires when dot-bot's [DotBotAim] says: the view turns
+## at `bot_turn_rate`, the first shots miss by `bot_aim_error` and settle, the trigger waits
+## `bot_reaction` after the target is first in view. One `bot_difficulty` for the race and the
+## fight; the old `wo_bot_spread` (a fixed offset per round) is gone.
 func _aim_bot(player: WoPlayer, command: DotFpsCommand, target: WoPlayer) -> void:
-	var toward := target.eye_position() - player.eye_position()
+	var aim: DotBotAim = _racer_of(player)["aim"]
+	var eye := player.eye_position()
+	var point := target.eye_position() - Vector3(0.0, 0.35, 0.0)
 
-	if toward.length() < 0.01:
+	if eye.distance_to(point) < 0.01:
 		return
 
-	# A hand of its own per bot per round, with the round mixed into the subject: without it
-	# mg-smash-copter's empty server played the same fight twelve times out of twelve.
-	var hand: Variant = _bot_hands.get(player.player_id)
+	var now := _bot_now()
+	var _new := aim.engage(int(target.entity_id), eye, point, now)
+	var view := aim.track(eye, point, target.controller.state.velocity, now, delta_for_tick())
+	command.yaw = view.x
+	command.pitch = clampf(view.y, -89.0, 89.0)
+	var fire := aim.trigger(now, eye.distance_to(point))
 
-	if hand == null:
-		var draw := random.stream_for(&"bot_aim", round_number * 8192 + int(player.entity_id % 8192))
-		var spread := config.bot_aim_spread_degrees
-		hand = Vector2(draw.next_range_f(-spread, spread), draw.next_range_f(-spread * 0.4, spread * 0.4))
-		_bot_hands[player.player_id] = hand
+	if fire:
+		aim.note_shot(eye, point, now)
 
-	command.yaw = rad_to_deg(atan2(-toward.x, -toward.z)) + (hand as Vector2).x
-	command.pitch = clampf(
-		rad_to_deg(asin(clampf(toward.normalized().y, -1.0, 1.0))) + (hand as Vector2).y, -89.0, 89.0
-	)
-	command.set_button(DotFpsCommand.BUTTON_USER_0, true)
+	command.set_button(DotFpsCommand.BUTTON_USER_0, fire)
+
+
+## The game clock in seconds, for the stand-ins' aim.
+func _bot_now() -> float:
+	return float(_tick) / float(maxi(tick_rate, 1))
 
 
 # --- Reacting ---------------------------------------------------------------

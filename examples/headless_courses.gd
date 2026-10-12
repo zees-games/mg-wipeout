@@ -61,12 +61,15 @@ func _run() -> void:
 	for id: StringName in arenas:
 		await _stand_in_arena(catalogue.arenas[id])
 
+	var field_course: Dictionary = catalogue.courses.get(&"wo_first_splash", catalogue.courses[&"wo_practice"])
+	await _race_by_difficulty(field_course)
+
 	if _world != null:
 		remove_child(_world)
 		_world.free()
 
-	var sections := 1 + courses.size() + arenas.size()
-	var checks := 1 + courses.size() * 3 + arenas.size() * 4
+	var sections := 2 + courses.size() + arenas.size()
+	var checks := 3 + courses.size() * 3 + arenas.size() * 4
 
 	print("")
 	print("%d sections entered, %d finished" % [_sections_entered, _sections_finished])
@@ -134,6 +137,50 @@ func _run_course(doc: Dictionary) -> void:
 	_finished()
 
 
+## A field of six at easy and six at nightmare round the same course, every mistake on: the
+## presets have to MEAN something. Nightmare's median finish is not slower than easy's, and
+## every nightmare stand-in gets home. Deterministic (seeded mistakes, ticks driven here), so
+## a change to a preset or the racing that turns this round is a change to look at; the full
+## spread is tools/race_times.
+func _race_by_difficulty(doc: Dictionary) -> void:
+	_section("%s — a field at easy against one at nightmare" % doc["id"])
+	var medians := {}
+	var home := {}
+
+	for difficulty in ["easy", "nightmare"]:
+		var game := await _fresh_world(doc)
+		game.config.bot_mistakes = 1.0
+		game.config.knock_damage_per_speed = 1.0
+		var _set := DotBotSettings.of(game).set_difficulty(difficulty)
+		var field: Array[WoPlayer] = []
+		for i in range(6):
+			var bot := game.add_player(StringName("u%d" % (900200 + i)), "R%d" % i)
+			bot.is_bot = true
+			field.append(bot)
+		game.start()
+		var started := false
+		for i in range(int((game.course_limit() + 2.0) * TICK_RATE)):
+			game.simulate(TICK)
+			if i % 512 == 0:
+				await get_tree().process_frame
+			if game.phase == WoGame.Phase.COURSE:
+				started = true
+			elif started:
+				break
+		var times: Array[float] = []
+		for bot in field:
+			if bot.finished:
+				times.append(bot.finish_seconds)
+		times.sort()
+		medians[difficulty] = times[times.size() / 2] if not times.is_empty() else INF
+		home[difficulty] = times.size()
+
+	_check(int(home["nightmare"]) == 6, "every nightmare stand-in gets home", "%d of 6" % int(home["nightmare"]))
+	_check(float(medians["nightmare"]) <= float(medians["easy"]), "and the nightmare field's median is not slower than easy's",
+		"nightmare %.1f s, easy %.1f s (%d home)" % [float(medians["nightmare"]), float(medians["easy"]), int(home["easy"])])
+	_finished()
+
+
 func _stand_in_arena(doc: Dictionary) -> void:
 	_section("%s — %s" % [doc["id"], doc["name"]])
 	var game := await _fresh_world(doc)
@@ -194,7 +241,7 @@ func _fresh_world(doc: Dictionary) -> WoGame:
 	config.intermission_seconds = 0.0
 	config.countdown_seconds = 0.5
 	config.minimum_players = 0
-	config.bot_fumble_chance = 0.0
+	config.bot_mistakes = 0.0
 	config.keep_progress = false
 	config.course_ids = PackedStringArray([str(doc["id"])]) if str(doc["kind"]) == "course" \
 		else PackedStringArray(["wo_practice"])

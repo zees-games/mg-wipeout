@@ -31,6 +31,12 @@ var _field: Label = null
 var _special: Label = null
 var _shout: Label = null
 
+## The announcer's line under the course name ([method announce]), and the runner's place in
+## the race over the progress bar ("3rd of 9").
+var _ticker: Label = null
+var _place: Label = null
+var _ticker_for: float = 0.0
+
 ## What a player who is out is looking at, and the keys that change it. Empty while playing.
 var watching_label: Label = null
 var _tilt_back: ColorRect = null
@@ -154,6 +160,16 @@ func _build() -> void:
 	_special.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_special.add_theme_color_override("font_color", AMBER)
 
+	# The announcer, an accent line like the course name over it: amber, so it reads as the
+	# show talking and not as the rules.
+	_ticker = _label(size - 2)
+	_ticker.name = "Announcer"
+	_ticker.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	_ticker.offset_top = 128.0
+	_ticker.offset_bottom = 160.0
+	_ticker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_ticker.add_theme_color_override("font_color", AMBER)
+
 	_shout = _label(size + 20)
 	_shout.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	_shout.offset_top = 190.0
@@ -204,6 +220,16 @@ func _build() -> void:
 	watching_label.add_theme_color_override("font_color", Color(0.80, 0.90, 1.0))
 
 	_build_tilt()
+
+	# Over the progress bar: where you are in the race, the number a runner glances for.
+	_place = _label(size)
+	_place.name = "Place"
+	_place.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_place.offset_left = -150.0
+	_place.offset_right = 150.0
+	_place.offset_top = -82.0
+	_place.offset_bottom = -50.0
+	_place.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	# A dot rather than a cross. For the whole first half there is nothing to aim at, and in
 	# the second half every weapon in the pack has its own spread — so what a player needs is
@@ -275,8 +301,36 @@ func shout(text: String, seconds: float = 3.5) -> void:
 	_shout_for = seconds
 
 
+## The announcer's line, for a few seconds, under the course name. Newer replaces older.
+func announce(text: String, seconds: float = 3.0) -> void:
+	if _ticker == null:
+		return
+
+	_ticker.text = text
+	_ticker_for = seconds
+
+
+## "1st", "2nd", "3rd", "4th"...
+static func ordinal(n: int) -> String:
+	var tail := "th"
+	if n % 100 < 11 or n % 100 > 13:
+		match n % 10:
+			1:
+				tail = "st"
+			2:
+				tail = "nd"
+			3:
+				tail = "rd"
+	return "%d%s" % [n, tail]
+
+
 func _process(delta: float) -> void:
 	present_blind(delta)
+
+	if _ticker_for > 0.0:
+		_ticker_for -= delta
+		if _ticker_for <= 0.0 and _ticker != null:
+			_ticker.text = ""
 
 	if game == null or game.config == null or _root == null:
 		return
@@ -364,10 +418,18 @@ func _draw_progress() -> void:
 	if player == null or not on_course or is_blind():
 		_tilt_back.visible = false
 		_tilt_fill.visible = false
+		if _place != null:
+			_place.text = ""
 		return
 
 	_tilt_back.visible = true
 	_tilt_fill.visible = true
+
+	if _place != null:
+		var order := game.race_order()
+		var at := order.find(player.player_id)
+		_place.text = "%s of %d" % [ordinal(at + 1), order.size()] \
+			if at >= 0 and order.size() > 1 and game.phase == WoGame.Phase.COURSE else ""
 
 	# The finish counts as the last step, so the bar is full only across the line.
 	var steps := game.stage.checkpoint_count() + 1

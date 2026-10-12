@@ -72,6 +72,34 @@ const MACHINE_WHOOSH := &"machine_whoosh"
 const MACHINE_RAM := &"machine_ram"
 const MACHINE_TILE := &"machine_tile"
 
+## A curtain of water starting to fall, heard from where it lands.
+const MACHINE_FALL := &"machine_fall"
+
+## The crowd in the stands: a cheer (somebody home, a checkpoint by the leader), a gasp (a
+## splash near the camera), a roar (the winner home, the final death starting). Flat, because
+## a crowd is all round the course; synthesised by tools/make_sounds.py into audio/.
+const CROWD_CHEER := &"crowd_cheer"
+const CROWD_GASP := &"crowd_gasp"
+const CROWD_ROAR := &"crowd_roar"
+## The stadium horn as the gate drops.
+const AIR_HORN := &"air_horn"
+
+## The announcer: Kenney's Voiceover Pack (CC0), copied into audio/ by tools/make_sounds.py.
+const VOICE_3 := &"voice_3"
+const VOICE_2 := &"voice_2"
+const VOICE_1 := &"voice_1"
+const VOICE_GO := &"voice_go"
+const VOICE_HURRY := &"voice_hurry"
+const VOICE_TIME_OVER := &"voice_time_over"
+const VOICE_FINAL := &"voice_final"
+const VOICE_CONGRATULATIONS := &"voice_congratulations"
+const VOICE_YOU_WIN := &"voice_you_win"
+const VOICE_YOU_LOSE := &"voice_you_lose"
+const VOICE_WINNER := &"voice_winner"
+
+## The announcer's lines in countdown order, for [method on_count].
+const COUNT := [VOICE_1, VOICE_2, VOICE_3]
+
 var manager: DotAudioManager = null
 
 
@@ -82,7 +110,10 @@ static func ids() -> Array[StringName]:
 		FINALE_TELEPORT, FINALE_GO, PICKUP, PROP_THROWN,
 		WEAPON_SHOT, WEAPON_SWING, WEAPON_LAUNCH, WEAPON_BEAM, WEAPON_THROW,
 		UI_CLICK, UI_DENY,
-		MACHINE_WHOOSH, MACHINE_RAM, MACHINE_TILE,
+		MACHINE_WHOOSH, MACHINE_RAM, MACHINE_TILE, MACHINE_FALL,
+		CROWD_CHEER, CROWD_GASP, CROWD_ROAR, AIR_HORN,
+		VOICE_3, VOICE_2, VOICE_1, VOICE_GO, VOICE_HURRY, VOICE_TIME_OVER, VOICE_FINAL,
+		VOICE_CONGRATULATIONS, VOICE_YOU_WIN, VOICE_YOU_LOSE, VOICE_WINNER,
 		# dot-player-char's dead bodies.
 		DotPlayerDeathReactions.SOUND_THUD, DotPlayerDeathReactions.SOUND_FACE_PLANT,
 		DotPlayerDeathReactions.SOUND_SLUMP, DotPlayerDeathReactions.SOUND_WHOOSH,
@@ -139,6 +170,31 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	c.add(_placed(MACHINE_WHOOSH, 22.0, 5.0, 4, 45, 0.9, 1.12))
 	c.add(_placed(MACHINE_RAM, 35.0, 7.0, 3, 50, 0.92, 1.08))
 	c.add(_placed(MACHINE_TILE, 18.0, 4.0, 3, 48, 0.95, 1.05))
+	c.add(_placed(MACHINE_FALL, 30.0, 6.0, 3, 50, 0.92, 1.08))
+
+	# The crowd: one voice each, so a run of splashes is one gasp and not a choir of them, and
+	# a cooldown so the stands do not gasp at every fall of a field of eight.
+	var cheer := _flat(CROWD_CHEER, &"SFX", 1, 55)
+	cheer.cooldown_ms = 1500
+	cheer.gain_db = -6.0
+	c.add(cheer)
+	var gasp := _flat(CROWD_GASP, &"SFX", 1, 52)
+	gasp.cooldown_ms = 2500
+	gasp.gain_db = -7.0
+	c.add(gasp)
+	var crowd_roar := _flat(CROWD_ROAR, &"SFX", 1, 60)
+	crowd_roar.cooldown_ms = 3000
+	crowd_roar.gain_db = -5.0
+	c.add(crowd_roar)
+	c.add(_flat(AIR_HORN, &"UI", 1, 86))
+
+	# The announcer outranks everything flat but a countdown beep, and speaks one line at a
+	# time: a new line cuts the last one rather than talking over it.
+	for line: StringName in [VOICE_3, VOICE_2, VOICE_1, VOICE_GO, VOICE_HURRY, VOICE_TIME_OVER,
+			VOICE_FINAL, VOICE_CONGRATULATIONS, VOICE_YOU_WIN, VOICE_YOU_LOSE, VOICE_WINNER]:
+		var said := _flat(line, &"UI", 1, 90)
+		said.gain_db = -2.0
+		c.add(said)
 
 	var click := _flat(UI_CLICK, &"UI", 2, 60)
 	click.cooldown_ms = 60
@@ -342,6 +398,36 @@ func on_weapon(at: Vector3, kind: int) -> bool:
 	return _at(id, at) if id != &"" else false
 
 
+## The announcer counting the gate down, at [param second] (3, 2, 1).
+func on_count(second: int) -> bool:
+	return _flat_play(COUNT[second - 1]) if second >= 1 and second <= COUNT.size() else false
+
+
+## The gate: the horn, the announcer's "go", and the crowd.
+func on_go() -> bool:
+	var horn := _flat_play(AIR_HORN)
+	var _said := _flat_play(VOICE_GO)
+	var _crowd := _flat_play(CROWD_CHEER)
+	return horn
+
+
+## A line from the announcer, by id (one of the VOICE_ constants).
+func say(line: StringName) -> bool:
+	return _flat_play(line)
+
+
+## The stands: [code]&"cheer"[/code], [code]&"gasp"[/code] or [code]&"roar"[/code].
+func crowd(reaction: StringName) -> bool:
+	match reaction:
+		&"cheer":
+			return _flat_play(CROWD_CHEER)
+		&"gasp":
+			return _flat_play(CROWD_GASP)
+		&"roar":
+			return _flat_play(CROWD_ROAR)
+	return false
+
+
 func click() -> bool:
 	return _flat_play(UI_CLICK)
 
@@ -409,6 +495,8 @@ func present_machinery(course: Node, seconds: float, listener: Vector3) -> int:
 				started += _hear_pusher(spec, before, seconds, listener)
 			"tiles":
 				started += _hear_tiles(piece, spec, before, seconds, listener)
+			"fall":
+				started += _hear_fall(piece, spec, before, seconds, listener)
 
 	return started
 
@@ -509,6 +597,20 @@ func _hear_tiles(piece: Dictionary, spec: Dictionary, before: float, now: float,
 		index += 1
 
 	return started
+
+
+## A curtain starting to fall: the rush of the sluice opening, from where it lands.
+func _hear_fall(piece: Dictionary, spec: Dictionary, before: float, now: float, listener: Vector3) -> int:
+	if WoCourse.fall_on(spec, before) or not WoCourse.fall_on(spec, now):
+		return 0
+
+	var root: Node3D = piece.get("node")
+	var at: Vector3 = root.transform.origin if root != null else spec["at"]
+
+	if at.distance_to(listener) > MACHINE_EARSHOT:
+		return 0
+
+	return 1 if _at(MACHINE_FALL, at) else 0
 
 
 # --- The machinery, synthesised -----------------------------------------------

@@ -31,11 +31,11 @@ module: game/wo_module.gd
 # only its built-in wo_practice and its practice arena.
 
 cvars:
-  wo_course_seconds: "210"
+  wo_course_seconds: "360"
   wo_finale_seconds: "100"
   wo_teams: "0"
   wo_bots: "1"
-  bot_quota: "3"
+  bot_quota: "9"
 
 # This game's maps are small documents the server sends each client, so a host fetches the
 # map packs its server owner names BEFORE the game loads (into the server-only packs)

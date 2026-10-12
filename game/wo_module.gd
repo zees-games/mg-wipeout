@@ -348,12 +348,18 @@ func _add_tunables(world: WoGame) -> void:
 	_tunable("wo_progress_decides", 1.0 if config.progress_decides else 0.0,
 		"Whether whoever got furthest wins a round nobody finished",
 		func(value: float) -> void: config.progress_decides = value > 0.5)
-	_tunable("wo_bot_spread", config.bot_aim_spread_degrees,
-		"How far a stand-in's aim is off, in degrees, per bot per round",
-		func(value: float) -> void: config.bot_aim_spread_degrees = clampf(value, 0.0, 45.0))
-	_tunable("wo_bot_fumble", config.bot_fumble_chance,
-		"Chance in a hundred a stand-in misses a jump",
-		func(value: float) -> void: config.bot_fumble_chance = clampf(value, 0.0, 100.0))
+	# [b]How the stand-ins race and fight is one word[/b]: dot-bot's `bot_difficulty` (easy,
+	# medium, hard, nightmare; medium by default) and every `bot_*` setting it bundles, the
+	# names every game in the family uses, for the aim in a final death and the reaction to a
+	# window; this game's racing mistakes are `wo_bot_*` on top ([WoRacer]). On the world as
+	# metadata, never the registry. `wo_bot_spread` (a fixed aim offset per round) is gone:
+	# `bot_aim_error` and its settling replaced it. `wo_bot_fumble` is now the racing preset's.
+	var _bot_cvars := DotBotSettings.of(world).bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY, add_command)
+	if world.racer != null:
+		var _racer_cvars := world.racer.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
+	_tunable("wo_bot_mistakes", config.bot_mistakes,
+		"Scales every racing mistake a stand-in makes: 1 the preset's, 0 never wrong",
+		func(value: float) -> void: config.bot_mistakes = clampf(value, 0.0, 4.0))
 	_tunable("wo_gravity", config.gravity, "Metres per second squared, for everything",
 		func(value: float) -> void: config.gravity = value)
 	_tunable("wo_spectate_camera", float(config.spectate_camera),

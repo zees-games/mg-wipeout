@@ -67,6 +67,9 @@ const PIECES := {
 	"spinner": ["at", "arm_length", "speed"],
 	"pendulum": ["pivot", "length", "radius", "swing", "period"],
 	"pusher": ["at", "size", "reach", "period"],
+	# A curtain of water (or slime, by `tint`) across the way, falling for `duty` of every
+	# `period` and pushing whoever is in it off the side (`push`, along the piece's own +X).
+	"fall": ["at", "size", "period"],
 }
 
 ## The roles a surface can be drawn as. See [WoTextures.Role].
@@ -230,10 +233,53 @@ static func _course(doc: Dictionary) -> DotResult:
 			# A jump point a stand-in may land PAST (a small pad that is not on the line): the
 			# jump from it is aimed at the next point, not back at this one. See [WoGame].
 			"onward": bool((entry as Dictionary).get("onward", false)),
+			# A point on a bouncer: reached by passing over it in the air, because a runner on a
+			# bouncer is on the ground for one tick and thrown up again before anything asks.
+			"bounce": bool((entry as Dictionary).get("bounce", false)),
 		})
 
 	doc["route"] = route
+
+	if doc.has("dressing"):
+		doc["dressing"] = _dressing(doc["dressing"])
+
 	return DotResult.success(doc)
+
+
+## What a course is dressed in for the show: stands with a crowd, banners, light towers, a big
+## screen, flags. Drawn on a client only ([WoCourse] `_build_dressing`); nothing collides and
+## nothing about it is simulated, so a kind this build does not know is dropped, never refused:
+## a course with a newer client's flag on it is still the same course.
+const DRESSING := ["stands", "banner", "lights", "screen", "flags"]
+
+
+static func _dressing(source: Variant) -> Array:
+	var out: Array = []
+
+	if typeof(source) != TYPE_ARRAY:
+		return out
+
+	for entry: Variant in source:
+		if typeof(entry) != TYPE_DICTIONARY or not (entry as Dictionary).has("at"):
+			continue
+
+		var item := entry as Dictionary
+		var kind := str(item.get("kind", ""))
+
+		if not DRESSING.has(kind) or out.size() >= 64:
+			continue
+
+		out.append({
+			"kind": kind,
+			"at": _v3(item["at"]),
+			"size": _v3(item.get("size", [12.0, 4.0, 6.0])),
+			"yaw": float(item.get("yaw", 0.0)),
+			"seed": int(item.get("seed", 1)),
+			"text": str(item.get("text", "")).substr(0, 40),
+			"tint": _colour(item.get("tint"), Color(0.95, 0.35, 0.25)),
+		})
+
+	return out
 
 
 static func _arena(doc: Dictionary) -> DotResult:
@@ -335,7 +381,7 @@ static func _piece(source: Variant, index: int) -> DotResult:
 				out[key] = _colour(piece[key], Color.WHITE)
 			"phase", "radius", "height", "length", "arm_length", "arm_height", "arm_thickness", \
 					"hub_radius", "hub_height", "speed", "pitch", "amplitude", "period", \
-					"swing", "reach", "duty", "tile", "gap", "thickness", "down", "power":
+					"swing", "reach", "duty", "tile", "gap", "thickness", "down", "power", "push":
 				out[key] = float(piece[key])
 			_:
 				pass
@@ -359,7 +405,7 @@ static func _piece(source: Variant, index: int) -> DotResult:
 
 static func _default_role(kind: String) -> String:
 	match kind:
-		"spinner", "pendulum", "pusher":
+		"spinner", "pendulum", "pusher", "fall":
 			return "hazard"
 		"bouncer":
 			return "safe"

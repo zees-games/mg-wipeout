@@ -9,7 +9,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 | Read | Before |
 | --- | --- |
 | [docs/design.md](docs/design.md) | the course, obstacles, the wire, rounds, the course vote, damage, weather, the final death, points, delivery |
-| [docs/stand-ins.md](docs/stand-ins.md) | the bots, route flags, or a course a bot cannot finish |
+| [docs/stand-ins.md](docs/stand-ins.md) | the bots: difficulty, racing mistakes, route flags, a field of them, measured times, or a course a bot cannot finish |
 | [docs/history.md](docs/history.md) | where this came from, and what running it found |
 
 ## Layout
@@ -19,7 +19,9 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 | `game/wo_course.gd` | THE FILE. A document built into pieces; every piece a function of the tick |
 | `game/wo_course_doc.gd` | what a course and an arena are: JSON, validated, normalised, sent on the wire |
 | `game/wo_catalogue.gd` | every document the server has, one built-in course and arena, which is next |
-| `game/wo_game.gd` | the simulation: phases, falls, checkpoints, the finish, weather, the final death, bots |
+| `game/wo_game.gd` | the simulation: phases, falls, checkpoints, the finish, weather, the final death, bots, `race_order()` |
+| `game/wo_racer.gd` | how a stand-in races: mistake rates per dot-bot preset, `wo_bot_*` cvars |
+| `game/wo_announcer.gd` | the show's voice: lines, the announcer, the crowd (client) |
 | `game/wo_config.gd` | every rule a course is played under |
 | `game/wo_controller.gd`, `wo_player.gd` | `DotFpsController` with the pre/post-simulate hooks; one person: movement, carry/knock, progress, hands |
 | `game/wo_rules.gd` | a `DotMatchRules` whose outcome is whatever `WoGame` decided |
@@ -29,7 +31,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 | `game/net/` | the codec (`STAGE`, `PROGRESS`, `PICKUP`…), the link, two behaviours, the bridge |
 | `courses` | a dot-bootstrap link to `../mg-wipeout-maps/courses` (gitignored) |
 | `examples/` | `headless_run`, `headless_courses`, `headless_net`, `dedicated` |
-| `tools/` | `shot.sh`/`shot.gd` (render a view), `trace_course` (where a stand-in falls and why) |
+| `tools/` | `shot.sh`/`shot.gd` (render a view), `trace_course` (where one stand-in falls and why), `race_times` (a field per preset, finish times), `make_sounds.py` (writes `audio/`) |
+| `audio/` | the crowd, the horn and the water (synthesised by `tools/make_sounds.py`), the announcer (Kenney, CC0) |
 
 ## Running and testing
 
@@ -38,7 +41,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 - `headless_courses` runs every course with a stand-in and stands in every arena. It drives ticks **without** waiting on physics frames, legitimate only because every moving piece is a static body written straight into the physics server. It runs with damage and weather off, because it proves a course can be finished.
 - `headless_net` proves both ends agree: obstacles at five ticks, the course digest, the final death.
 - **Every suite frees the previous world before building the next**: they share one physics space and every course is built at the origin.
-- `tools/shot.sh --view=course --wo-course-ids=wo_grand_tour`, `--view=finale`, `--view=tiles`, `--view=third --board`, `--view=third --ballot` (the course vote's ballot), `--view=third --console="net_stat 3"` (a line typed at the player's console first). Every view change wants a rendered frame.
+- `tools/race_times.tscn` (`godot --headless --path . res://tools/race_times.tscn -- --course=wo_first_splash --rounds=2`) is the measure of a course's length and a preset's mistakes; `--verbose` prints every fall, `--follow=NAME` one runner's every tick. [stand-ins](docs/stand-ins.md#measured)
+- `tools/shot.sh --view=race --seconds=22`, `--view=crowd`, `--view=falls`, `--view=course --wo-course-ids=wo_grand_tour`, `--view=finale`, `--view=tiles`, `--view=third --board`, `--view=third --ballot` (the course vote's ballot), `--view=third --console="net_stat 3"` (a line typed at the player's console first). Every view change wants a rendered frame.
 - After touching a camera, the view key or player collision: `tools/camera_check.sh` (cameras round every piece, armed; the player walked into another with `mp_solidplayers` both ways; `--render` for frames). [design](docs/design.md#cameras-and-bodies)
 - **Arming**: `headless_net`'s obstacle agreement and every suite's total are armed; most other checks are not yet armed one by one. Arm a check before trusting it.
 
@@ -60,6 +64,10 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 - `game.yml` names no courses pack; a server owner names mg-wipeout-maps in their map config. Re-add delivered courses after `wo_reload`. [design](docs/design.md#delivery-the-courses-are-a-second-pack)
 - Every `res://` string naming the game's own files goes through `WoPaths.rebase()` (the family's delivery rule; [dot-server-deploy](../dot-server-deploy/docs/delivery-constraint.md)).
 - A route flag is earned by a traced failure; `onward` is opt-in per point. [stand-ins](docs/stand-ins.md)
+- Stand-ins are on the `bot` collision layer and pass through each other; a person is solid to them. Never put a stand-in on `player` or a stand-in's mask on `bot`. [stand-ins](docs/stand-ins.md#a-field-of-them)
+- A stand-in's difficulty is dot-bot's `bot_difficulty`; racing mistakes are `WoRacer` columns (`wo_bot_*`), every draw per bot, point and attempt (never per round: a fumble drawn per round was fumbled for ever). `bot_mistakes 0` only in the course suite. [stand-ins](docs/stand-ins.md#how-a-stand-in-races)
+- A knock is charged at most once a second and a fall heals; a checkpoint is never in a hazard's reach (mg-wipeout-maps' builder refuses it). [design](docs/design.md#damage-on-the-course)
+- The dressing (stands, crowd, screens, flags, confetti) and the announcer are client side; a server builds none of it, and an unknown dressing kind is dropped, never refused. [design](docs/design.md#the-show)
 - The course vote opens `wo_vote_after` into a course and applies at the round's end (MANUAL, `END_OF_ROUND`), rocked votes too; under MANUAL `WoVote` opens a passed rock-the-vote itself, or `!rtv` does nothing. The match answers dot-vote's `round_in_progress_fn` (`world.match_node.is_live()`, set by name because an older shell's dot-vote lacks it), so a `time_up: finish_round` limit that runs out in warmup or between rounds changes at once instead of holding for `finish_round_max_sec`; `dedicated` checks both halves. [design](docs/design.md#the-course-vote)
 - The HUD follows the menu's theme and HUD size (`WoHud.follow_menu`, dot-menu's `follow_hud` by name); `WoHud.piece_theme()` is the accent only (amber highlight and edge), never plate, text or ink, and the HUD's Labels set no colour of their own except the accent lines. `headless_run` checks a theme change reaches the pieces and the lines.
 - Set the audio listener before the machinery plays, or the manager culls everything by distance from the origin. [design](docs/design.md#decision-1-an-obstacle-is-a-pure-function-of-the-tick)
@@ -69,5 +77,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 ## Open items
 
 - **Course levels for the nightly quota**: see mg-wipeout-maps' CLAUDE.md for what a level is here.
+- Stand-ins are weakest on turning pads after a turntable (Spin Cycle): hard and nightmare are no faster than medium there. [stand-ins](docs/stand-ins.md#measured)
+- The crowd and announcer have not been heard in a browser build.
 - Most checks are not armed one by one yet.
 - The carrying pose is checked by `headless_run` but not rendered: staging a stand-in mid-carry in the shot tool is its own job.
