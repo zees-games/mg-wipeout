@@ -316,9 +316,11 @@ func _build_physics() -> void:
 	for layer in physics.layers:
 		match layer.id:
 			&"player":
-				# Not other players. A shove between two capsules on a narrow beam is a race
-				# decided by who walked into whom, and it is not predictable: the other player
-				# is drawn in the past on every client.
+				# Not other players in the layout. `mp_solidplayers` (1 since the first play
+				# test, where stand-ins walked into the camera at the start line) adds them to
+				# each player's motor mask and gives each a hull; a server that would rather
+				# have the race fair sets 0, because a shove on a narrow beam is decided by who
+				# walked into whom, and the other player is drawn in the past on every client.
 				layer.collides_with = [&"world", &"prop"]
 			&"prop":
 				layer.collides_with = [&"world", &"player", &"prop"]
