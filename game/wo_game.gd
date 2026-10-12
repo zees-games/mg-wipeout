@@ -2305,6 +2305,32 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 		if int(racing["grounded_for"]) < 2 and float(point["reach"]) > 0.6:
 			return
 
+		# [b]On a top, face the next one, never the point.[/b] A landing is aimed a little past
+		# a top's point (see [method _bot_land_on]), so the point is behind the runner and
+		# turning to it is running backwards: on a log that took the take-off from five metres
+		# a second to two, and the jump went into the water between two logs (Log Roll, a
+		# mistake-free field falling three times a run). Past the point and too slow for the
+		# jump, the yaw is left to the run-up below, which turns to the next top itself.
+		if float(point["reach"]) > 0.6 and not next.is_empty():
+			var facing: Vector3 = (next["at"] as Vector3) - at
+			facing.y = 0.0
+			var beyond := -toward.dot(facing.normalized()) if facing.length() > 0.1 else 0.0
+			var flat_now := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z)
+			var going := flat_now.dot(facing.normalized()) if facing.length() > 0.1 else 0.0
+			var need := _jump_speed_needed(at, next["at"])
+			if facing.length() > 0.1 and (beyond < 0.2 or going >= need):
+				command.yaw = rad_to_deg(atan2(-facing.x, -facing.z))
+			# Faster than the jump needs: the excess braked off on the take-off, never a wish
+			# on to full speed. A jump off a log at seven metres a second was braked in the air
+			# to a standstill just past the next log's top, and the run-up from there went down
+			# its far side, where the motor refuses a jump (First Splash's second log, easy
+			# stand-ins wedged there twenty times in four rounds). Never on a log turning toward
+			# the runner, which takes the speed a jump needs: braked there too, a mistake-free
+			# field fell on Log Roll.
+			if going >= need * TAKEOFF_SPARE and facing.length() > 0.1 \
+					and stage.carry(player.controller.state.ground_id, at, _tick).dot(facing) >= 0.0:
+				command.move = Vector2(0.0, -clampf((going - need * TAKEOFF_SPARE) / GROUND_BRAKE, 0.0, 1.0))
+
 		# [b]Toward where the jump is GOING, on a point marked `onward`.[/b] A bot that
 		# landed half a metre past a lily pad's centre was still facing that centre, behind
 		# it, and hopped backwards and wide into the water every time. Opt-in per point,
@@ -2459,6 +2485,14 @@ const LAND_PAST := 0.3
 
 ## Ticks a stand-in may spend getting up to speed on a top before it jumps off it anyway.
 const RUNUP_TICKS := 9
+
+## A stand-in on a top going faster than this many times the next jump's need brakes the
+## excess on the take-off tick (see [method _bot_run]). At 1.15 a mistake-free field fell on
+## Log Roll's logs.
+const TAKEOFF_SPARE := 1.3
+
+## Metres a second a full backward wish takes off a runner on the ground in one tick.
+const GROUND_BRAKE := 3.3
 
 
 ## Stops behind somebody standing (or nearly) right in front: a queue, the way people wait at
