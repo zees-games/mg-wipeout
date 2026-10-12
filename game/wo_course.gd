@@ -1312,27 +1312,24 @@ static func light_document(theme: Dictionary) -> Dictionary:
 			"colour": [horizon.r, horizon.g, horizon.b],
 			"start": 6300.0,
 			"end": 40000.0,
-			"max_density": 0.4,
+			"max_density": 0.25,
 		},
 	}
 
 
-## What this machine draws of a course's light.
+## What this machine draws of a course's light: dot-lighting's `painted()`.
 ##
 ## [b]Shadows stay on in the browser[/b], unlike dot-lighting's `web()`: a course is a few
 ## hundred boxes, and a mover's shadow on the deck is how a player sees where it is.
-## [b]The Compatibility renderer, which this game and the client shell use, has no headroom
-## above white[/b]: at Forward+'s numbers every deck clipped to white and the grid, which is
-## how far a jump is, was gone (mg-smash-copter found it first). So under `gl_compatibility`
-## the sun is divided by 700 instead of 200 and the fill is 0.62, game-arena's numbers,
-## checked here against a rendered frame in both renderers.
+## `painted()` is the family's profile for flat-painted worlds (dot-lighting API 3), matched
+## to the renderer: the Compatibility renderer, which this game and the client shell use,
+## has no headroom above white, and at Forward+'s numbers every deck clipped to white and the
+## grid, which is how far a jump is, was gone (mg-smash-copter found it first). Over the
+## hand-set numbers it replaced (the sun divided by 700, a fill of 0.62) it lowers the
+## exposure, grades, and adds a shadowless fill so an obstacle's shaded faces keep edges.
 static func light_profile() -> DotLightProfile:
-	var p := DotLightProfile.web() if OS.has_feature("web") else DotLightProfile.high()
+	var p := DotLightProfile.painted()
 	p.sun_shadows = true
-	p.ambient_energy = 1.0
-	if RenderingServer.get_current_rendering_method() == "gl_compatibility":
-		p.brightness_reference = 700.0
-		p.ambient_energy = 0.62
 	return p
 
 
