@@ -52,6 +52,11 @@ const TEAM_COLOURS: Array[Color] = [
 	Color(0.91, 0.55, 0.20),
 ]
 
+## What the stand-ins are called, solo and on a server, through dot-bot's [DotBotNames]
+## (never doubled up, and numbered only past the end of the list). Not "Stand-in 2": a board of
+## numbered stand-ins tells a player they are alone.
+const BOT_NAMES := ["Splash", "Tumble", "Wobble", "Dunk", "Belly Flop", "Soggy", "Bounce", "Skid"]
+
 const TEAM_NAMES: Array[String] = [
 	"Red", "Blue", "Green", "Yellow", "Violet", "Orange",
 ]

@@ -213,16 +213,18 @@ func _exit_tree() -> void:
 
 
 func _start_offline() -> void:
-	# Stand-ins to race. Solo by default, so each is a side of their own; with teams they are
-	# dealt round the sides the local player is not on first.
+	# Stand-ins to race, named as a server names them. Solo by default, so each is a side of
+	# their own; with teams they are dealt round the sides the local player is not on first.
+	var taken: Array = ["You"]
 	for i in range(offline_bots):
 		var side := 0
 
 		if game.config.teams():
 			side = (i % maxi(game.config.team_count - 1, 1)) + 2
 
-		var bot := game.add_player(StringName("u%d" % (WoNetBridge.FIRST_BOT_SESSION + i)),
-			"Stand-in %d" % (i + 1), side)
+		var bot_name := DotBotNames.pick(taken, i, WoGame.BOT_NAMES)
+		taken.append(bot_name)
+		var bot := game.add_player(StringName("u%d" % (WoNetBridge.FIRST_BOT_SESSION + i)), bot_name, side)
 		bot.is_bot = true
 
 	_adopt(game.add_player(&"local", "You", 1 if game.config.teams() else 0, true))
