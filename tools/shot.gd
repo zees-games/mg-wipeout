@@ -97,7 +97,9 @@ func _run() -> void:
 			await _seconds_of(game.config.handover_seconds + 1.5)
 		"course":
 			await _frames(6)
-			_overview(game, 1.0)
+			# Further out than the straight courses needed: a course that turns is as wide as it
+			# is long, and at 1.0 the overview of a switchback or a spiral was half of it.
+			_overview(game, 1.3)
 		"start":
 			await _seconds_of(0.6)
 			var camera := _free_camera()
@@ -119,8 +121,10 @@ func _run() -> void:
 			var leader: Node3D = game.players.get(order[mini(1, order.size() - 1)]) if not order.is_empty() else null
 			var camera := _free_camera()
 			if leader != null:
+				# Behind and to the right of the way the runner faces, not of -Z: a course turns.
 				var at := leader.global_position
-				camera.look_at_from_position(at + Vector3(7.0, 6.0, 11.0), at + Vector3(0.0, 0.5, -10.0))
+				var facing := Basis(Vector3.UP, deg_to_rad(float(leader.controller.state.yaw)))
+				camera.look_at_from_position(at + facing * Vector3(7.0, 6.0, 11.0), at + facing * Vector3(0.0, 0.5, -10.0))
 		"crowd":
 			# A grandstand and its crowd, from the course: the first stands the course has.
 			await _seconds_of(game.config.countdown_seconds + _seconds)

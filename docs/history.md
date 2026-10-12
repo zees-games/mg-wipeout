@@ -25,3 +25,14 @@ Christian's first play test finished First Splash in 22 s on a first try against
 - **The jump off a ball went on the landing tick**, while the velocity was still the jump's seven metres a second; the curve had already taken it to four, and every second ball was short. A top is never jumped from on the tick of landing, and the run on it is to the speed the next jump needs.
 - **Tiles were taken at a run and only down the middle.** A running jump onto a row of trapdoors lands two rows on, and waiting on the middle tile for the one ahead is waiting for yours to drop. Tiles are walked onto, and a stand-in steps to whichever column will be up.
 - **Knocks killed pinned runners.** A ram holding somebody against its stop re-throws them every few ticks; charged each time, half a field was knocked out of Punch Alley in a second each. A knock is charged at most once a second, and a fall heals.
+
+## Courses that turn, and the stand-ins that ran them (2026-10-12)
+
+Every course ran down one straight line. mg-wipeout-maps' builder learned frames (turns, curves, kinks, switchbacks, a spiral climb, ramps up and down) and forks, and nine of the eleven courses were rebuilt round them. Running fields of eight round the new shapes, and round Spin Cycle where hard and nightmare had been no faster than medium, found:
+
+- **A landing's overshoot was measured toward the target.** A jump that came level with a pad beside it counted nothing as past and stopped braking: hard and nightmare stand-ins came down on Spin Cycle's second pad at its rim and jumped short of the third. Measured along the velocity instead, sideways drift counted as past and braked short of balls. It is measured along the jump's own line now, and a top is braked to within 5 cm.
+- **Better hoppers fell more on Punch Alley.** The hop jumped anything about to hit, rams included, and a ram meets a hop in the air; hard was slower than medium there. A hop now needs a metre up to be clear, which only a low arm is.
+- **Turned, a section that passed failed.** Big Balls' balls turned to run along X lost a clean runner eight times on the second ball: the landing came down 0.7 m past on the ball's curve. Straight, the same numbers had been just inside it.
+- **A spinner turning with its disc** (40 against 50 degrees a second) sat its arms on riders and put a field of sixteen in the water seventeen times. The builder refuses one within 60.
+- **Backing up for a run-up on a turntable** stood bots in a spinner's arms; not backing up on a seesaw jumped them short of the next plank. Only turntables are exempt.
+- **Tiles are the risky branch nobody's skill wins.** A field crowds onto one trapdoor and goes down with it whatever its preset, so the hardest stand-ins, who take the risk most, came last on Trapdoor Run until its risky branches became jumps and pads. Timing the step onto a tile at the walk made it far worse (a nightmare field finished none of sixteen) and was taken out.

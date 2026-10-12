@@ -1668,6 +1668,12 @@ func carries(ground_id: int) -> bool:
 	return found != null and bool(pieces[int((found as Array)[0])]["carrier"])
 
 
+## The kind of piece [param ground_id] belongs to (`turntable`, `seesaw`, `box`…), or "".
+func ground_kind(ground_id: int) -> String:
+	var found: Variant = _by_collider.get(ground_id)
+	return str(pieces[int((found as Array)[0])]["kind"]) if found != null else ""
+
+
 ## The upward speed a bouncer under [param ground_id] gives, or 0.
 func bounce(ground_id: int) -> float:
 	var found: Variant = _by_collider.get(ground_id)
@@ -2221,6 +2227,124 @@ static func _spread(seat: int, width: float) -> Vector3:
 ## The route a stand-in follows, as the document gives it.
 func route() -> Array:
 	return doc.get("route", [])
+
+
+## The route point after [param index] for somebody on [param branch] of a fork.
+##
+## [b]A fork is laid out in the route as one branch's points and then the other's[/b], between
+## the point everybody leaves from and the one everybody meets at. Walking on means skipping
+## the points of every branch but your own: on a branch point, its own branch; on the way
+## everybody goes, [param branch] (what a stand-in chose), else the first branch it meets.
+func route_next(index: int, branch: int = 0) -> int:
+	var points := route()
+	if index >= 0 and index < points.size() and int((points[index] as Dictionary).get("branch", 0)) != 0:
+		branch = int((points[index] as Dictionary)["branch"])
+	var next := index + 1
+	while next < points.size():
+		var on := int((points[next] as Dictionary).get("branch", 0))
+		if on == 0 or on == branch:
+			return next
+		if branch == 0:
+			branch = on
+			return next
+		next += 1
+	return next
+
+
+## The route point before [param index] on the same way through (see [method route_next]).
+func route_prev(index: int, branch: int = 0) -> int:
+	var points := route()
+	if index >= 0 and index < points.size() and int((points[index] as Dictionary).get("branch", 0)) != 0:
+		branch = int((points[index] as Dictionary)["branch"])
+	var before := index - 1
+	while before >= 0:
+		var on := int((points[before] as Dictionary).get("branch", 0))
+		if on == 0 or on == branch or branch == 0:
+			return before
+		before -= 1
+	return before
+
+
+## The branches of the fork that starts after route point [param index], as
+## `[{branch, risky}]` in the order they are laid out; empty where no fork starts.
+func route_branches(index: int) -> Array:
+	var points := route()
+	var out: Array = []
+	if index < 0 or index + 1 >= points.size() or int((points[index] as Dictionary).get("branch", 0)) != 0:
+		return out
+	var seen := {}
+	var next := index + 1
+	while next < points.size():
+		var point: Dictionary = points[next]
+		var on := int(point.get("branch", 0))
+		if on == 0:
+			break
+		if not seen.has(on):
+			seen[on] = true
+			out.append({"branch": on, "risky": bool(point.get("risky", false))})
+		next += 1
+	return out
+
+
+var _progress: PackedFloat32Array = PackedFloat32Array()
+var _progress_of: Array = []
+
+
+## How far along the course each route point is, metres, a fork counted as long as its
+## shortest branch (each branch's points spread over that length). What the race order reads,
+## so a runner on the long way round is not counted ahead of one who took the short cut just
+## because the long way's points come later in the list.
+func route_progress() -> PackedFloat32Array:
+	var points := route()
+	if is_same(_progress_of, points) and _progress.size() == points.size():
+		return _progress
+	var out := PackedFloat32Array()
+	out.resize(points.size())
+	var fork_from := 0
+	var index := 0
+	while index < points.size():
+		var point: Dictionary = points[index]
+		if index == 0:
+			out[0] = 0.0
+			index += 1
+			continue
+		if int(point.get("branch", 0)) == 0:
+			var before: Dictionary = points[index - 1]
+			out[index] = out[index - 1] + (before["at"] as Vector3).distance_to(point["at"])
+			fork_from = index
+			index += 1
+			continue
+		# A fork from `fork_from` to the next point on branch 0.
+		var join := index
+		while join < points.size() and int((points[join] as Dictionary).get("branch", 0)) != 0:
+			join += 1
+		var lengths := {}
+		var walked := {}
+		for b: Dictionary in route_branches(fork_from):
+			var on := int(b["branch"])
+			var last: Vector3 = (points[fork_from] as Dictionary)["at"]
+			var total := 0.0
+			for k in range(index, join):
+				if int((points[k] as Dictionary)["branch"]) == on:
+					total += last.distance_to((points[k] as Dictionary)["at"])
+					walked[k] = total
+					last = (points[k] as Dictionary)["at"]
+			if join < points.size():
+				total += last.distance_to((points[join] as Dictionary)["at"])
+			lengths[on] = maxf(total, 0.01)
+		var shortest := INF
+		for on: int in lengths:
+			shortest = minf(shortest, float(lengths[on]))
+		for k in range(index, join):
+			var on := int((points[k] as Dictionary)["branch"])
+			out[k] = out[fork_from] + float(walked.get(k, 0.0)) * shortest / float(lengths.get(on, 1.0))
+		if join < points.size():
+			out[join] = out[fork_from] + shortest
+			fork_from = join
+		index = join + 1
+	_progress = out
+	_progress_of = points
+	return out
 
 
 func spawn_areas() -> Array:

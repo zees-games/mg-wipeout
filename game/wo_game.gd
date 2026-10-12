@@ -1926,6 +1926,10 @@ func _fell(player: WoPlayer) -> void:
 
 	if player.is_bot:
 		_bot_route[player.player_id] = _route_after(player.controller.state.position)
+		var put_on := int((stage.route()[_bot_route[player.player_id]] as Dictionary).get("branch", 0)) \
+			if int(_bot_route[player.player_id]) < stage.route().size() else 0
+		if put_on != 0:
+			_racer_of(player)["branch"] = put_on
 		# Shaking it off: a person back on the deck looks round before running again.
 		var racing := _racer_of(player)
 		racing["pause_until"] = _tick + int(racer.value("recover") * float(racing["factor"]) * float(tick_rate))
@@ -2067,7 +2071,21 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 
 	var index := mini(int(_bot_route.get(player.player_id, 0)), route.size() - 1)
 	var point: Dictionary = route[index]
-	var next: Dictionary = route[index + 1] if index + 1 < route.size() else {}
+	var next_index := _bot_next(player, racing, index)
+	var next: Dictionary = route[next_index] if next_index < route.size() else {}
+	var before_index := stage.route_prev(index, int(racing.get("branch", 0)))
+	var before: Vector3 = (route[before_index] as Dictionary)["at"] if before_index >= 0 else player.controller.state.position
+
+	# Fallen onto an earlier part of the course (a leg below this one, a turn back): the point
+	# being run for is overhead, so start again from the nearest point. Only well back along
+	# the route and well below: on a climb the next point is above the runner too, and a
+	# nearest point one back is just the one passed.
+	if int(_tick + player.entity_id) % 32 == 0 and player.controller.state.mode == DotFpsState.Mode.GROUND \
+			and (point["at"] as Vector3).y - player.controller.state.position.y > 2.0:
+		var nearest := _route_after(player.controller.state.position, int(racing.get("branch", 0)))
+		if nearest < index - 1:
+			_bot_route[player.player_id] = nearest
+			return
 
 	# A column of tiles chosen for this point (see the board wait below), not the middle one.
 	if int(racing.get("shift_index", -1)) == index:
@@ -2087,21 +2105,28 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 	# Something to board too: a run at a row of tiles jumped at the deck's edge carried a
 	# runner two rows past the first one, onto a tile on its way down (Trapdoor Run).
 	if not grounded and (bool(point["jump"]) or bool(point.get("bounce", false)) or bool(point["board"])):
-		_bot_land_on(player, command, point["at"])
+		_bot_land_on(player, command, point["at"], (point["at"] as Vector3) - before, float(point["reach"]) > 0.6)
+	elif not grounded and before_index >= 0 and _bot_save_landing(player, command, point["at"],
+			(point["at"] as Vector3) - before):
+		return
 
 	# A bouncer is ground for one tick: its point is reached by coming down over it, and the
 	# bounce itself carries the runner on toward the next. Measured on First Splash's pads:
 	# held to "on the ground within reach", a stand-in braked onto the first pad for ever.
-	if bool(point.get("bounce", false)) and toward.length() < float(point["reach"]) \
+	# Or over it and past it, on the way up off the pad: a bounce that came down a metre and a
+	# half past the middle of the last pad went on braking back toward that middle, short of
+	# the deck after it (Grand Tour, every runner who took that bounce long).
+	var over_it := toward.length() < 2.5 and toward.dot((point["at"] as Vector3) - before) < 0.0
+	if bool(point.get("bounce", false)) and (toward.length() < float(point["reach"]) or over_it) \
 			and player.controller.state.velocity.y > 0.0 and not grounded:
-		_bot_route[player.player_id] = index + 1
+		_bot_route[player.player_id] = next_index
 		return
 
 	# A point ON something that moves is reached by standing on it, wherever it has got to:
 	# chasing the coordinates the mover started from walked the bot backwards off its tail.
 	if bool(point["ride"]) and grounded and stage.carries(player.controller.state.ground_id):
 		_bot_wait.erase(player.player_id)
-		_bot_route[player.player_id] = index + 1
+		_bot_route[player.player_id] = next_index
 		command.move = Vector2.ZERO
 		return
 
@@ -2123,10 +2148,10 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 				var moved := point.duplicate()
 				moved["at"] = (point["at"] as Vector3) + offset
 				if _bot_may_board(player, moved):
-					var before := (racing.get("shift", Vector3.ZERO) as Vector3) \
+					var shifted := (racing.get("shift", Vector3.ZERO) as Vector3) \
 						if int(racing.get("shift_index", -1)) == index else Vector3.ZERO
 					racing["shift_index"] = index
-					racing["shift"] = before + offset
+					racing["shift"] = shifted + offset
 					return
 
 			# And not standing on a tile that is going: anywhere is better than down with it.
@@ -2197,7 +2222,7 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 		racing["late_going"] = false
 		if grounded and not bool(racing["fumble"]):
 			command.set_button(DotFpsCommand.BUTTON_JUMP, true)
-		_bot_route[player.player_id] = index + 1
+		_bot_route[player.player_id] = next_index
 		return
 
 	# An early take-off is a jump point reached further back than it is.
@@ -2351,8 +2376,13 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 			jump_line.y = 0.0
 			if jump_line.length() > 0.01:
 				squint = rad_to_deg(Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z).angle_to(jump_line))
+		# Never on a turntable: the disc carries the runner sideways, which reads as a squint,
+		# and backing up under a spinner's arms is standing in their way (Spin Cycle's last two
+		# discs: hard stand-ins knocked in at the far edge). A seesaw still wants the run-up:
+		# without it the next plank was jumped short (Log Roll, a third more falls).
 		if (flat_speed < config.run_speed * 0.6 or squint > 30.0) and float(point["reach"]) <= 0.6 \
-				and int(racing.get("backed_up", -1)) != index:
+				and int(racing.get("backed_up", -1)) != index \
+				and stage.ground_kind(player.controller.state.ground_id) != "turntable":
 			racing["backed_up"] = index
 			racing["backup_until"] = _tick + int(0.4 * float(tick_rate))
 
@@ -2371,7 +2401,7 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 			command.set_button(DotFpsCommand.BUTTON_JUMP, true)
 
 
-	_bot_route[player.player_id] = index + 1
+	_bot_route[player.player_id] = next_index
 
 
 ## Whether somebody else is on, or coming down on, the top at route point [param point]: a
@@ -2484,7 +2514,7 @@ func _bot_queue(player: WoPlayer, command: DotFpsCommand, jump_at: Vector3) -> b
 ## motor's air control brakes hard when the wish is against the motion (it is the same
 ## arithmetic that lets a person stop a jump short), so this predicts where the jump comes
 ## down at the target's height and holds BACK while that is past it.
-func _bot_land_on(player: WoPlayer, command: DotFpsCommand, target: Vector3) -> void:
+func _bot_land_on(player: WoPlayer, command: DotFpsCommand, target: Vector3, line: Vector3, top: bool = false) -> void:
 	var state := player.controller.state
 	var flat := Vector3(target.x - state.position.x, 0.0, target.z - state.position.z)
 
@@ -2501,14 +2531,31 @@ func _bot_land_on(player: WoPlayer, command: DotFpsCommand, target: Vector3) -> 
 	var falls_in := (state.velocity.y + sqrt(root)) / g
 	command.yaw = rad_to_deg(atan2(-flat.x, -flat.z))
 	var current := Vector3(state.velocity.x, 0.0, state.velocity.z)
-	var over := current.dot(flat.normalized()) * falls_in - flat.length() if flat.length() > 0.01 else 0.0
+	# [b]How far past the target the landing is, along the JUMP'S LINE[/b] (from the point
+	# before to this one). Measured along the line from the runner to the target instead, a
+	# jump that had come level with a pad beside it counted nothing as "over" and stopped
+	# braking while its speed carried it on past: hard and nightmare stand-ins came down on
+	# Spin Cycle's second pad 1.9 m past its middle, at its rim, and jumped short of the
+	# third. Measured along the velocity, a runner drifting sideways counted the drift as
+	# "over" and braked short of every second ball on Big Balls.
+	var along := Vector3(line.x, 0.0, line.z)
+	if along.length() < 0.5:
+		along = current
+	var over := 0.0
+	if along.length() > 0.01:
+		var lands := state.position + current * falls_in
+		over = Vector3(lands.x - target.x, 0.0, lands.z - target.z).dot(along.normalized())
 
 	# Aiming a little PAST the top, never at it: a runner who comes down on a ball's top at a
 	# stroll cannot jump on to the next one. Braking all the way to the point left stand-ins a
 	# metre short of every third ball.
 	over -= LAND_PAST
 
-	if over <= 0.25 or falls_in <= 0.02 or current.length() < 0.5:
+	# Within a quarter of a metre is near enough for an edge or a pad; a ball's top is not
+	# flat, so a landing half a metre past it comes down lower and later, further past, on the
+	# slope: Big Balls turned to run along X lost a clean runner off its second ball eight times
+	# from landings 0.7 m past. A top is braked to within five centimetres.
+	if over <= (0.05 if top else 0.25) or falls_in <= 0.02 or current.length() < 0.5:
 		# Nothing in: no wish adds nothing to a jump already at speed, and the jump lands
 		# where it was always going to.
 		command.move = Vector2.ZERO
@@ -2531,6 +2578,49 @@ func _bot_land_on(player: WoPlayer, command: DotFpsCommand, target: Vector3) -> 
 	# little and comes down past a small top, which is how a person slides off a ball.
 	var skill := racer.value("landing") if racer != null else 1.0
 	command.move = Vector2(0.0, -clampf(per_tick / full * skill, 0.02, 1.0))
+
+
+## Brakes a jump that is going to come down off the side of the deck it was taken over: true
+## when it braked. Only while the ground is still under the bot (braking over a gap is
+## falling short of the far side) and only for a jump that will land on nothing.
+##
+## [b]A hop over an arm is taken the way the bot was running[/b], and running out to the side
+## of a centre spinner that is mostly sideways: six metres a second for seven tenths of a
+## second carried every stand-in of every preset off the edge of Spin Cycle's first spinner
+## deck, twelve falls a field. A person in the air over the edge pulls back.
+func _bot_save_landing(player: WoPlayer, command: DotFpsCommand, target: Vector3, line: Vector3) -> bool:
+	var state := player.controller.state
+	var current := Vector3(state.velocity.x, 0.0, state.velocity.z)
+
+	if current.length() < 0.5:
+		return false
+
+	var height := target.y
+	var root := state.velocity.y * state.velocity.y - 2.0 * config.gravity * (height - state.position.y)
+
+	if root < 0.0:
+		return false
+
+	var falls_in := (state.velocity.y + sqrt(root)) / config.gravity
+	var below := Vector3(state.position.x, height + 0.1, state.position.z)
+	var lands := below + current * falls_in
+
+	var lands_tick := _tick + int(falls_in * float(tick_rate))
+
+	if stage.supported(lands, lands_tick) or not stage.supported(below, _tick):
+		return false
+
+	# And only a jump going off the SIDE: the same jump straight down the route's line would
+	# have come down on something. A hop taken toward the front edge is a hop over an arm or a
+	# hammer, and braking it under the arm (Big Balls' wrecking balls) is worse than the edge.
+	var ahead := Vector3(line.x, 0.0, line.z)
+
+	if ahead.length() < 0.5 or not stage.supported(below + ahead.normalized() * current.length() * falls_in, lands_tick):
+		return false
+
+	command.yaw = rad_to_deg(atan2(-current.x, -current.z))
+	command.move = Vector2(0.0, -1.0)
+	return true
 
 
 ## Jumps when the bot has been running for a second and got nowhere.
@@ -2601,7 +2691,13 @@ func _bot_hop(player: WoPlayer, command: DotFpsCommand) -> void:
 
 		if high_arm and stage.knock(where_crouched, true, tick, limits) == Vector3.ZERO:
 			duck = true
-		elif ahead >= 0.2 and ahead <= 0.4:
+		elif ahead >= 0.2 and ahead <= 0.4 \
+				and stage.knock(where_standing + Vector3(0.0, 1.0, 0.0), false, tick, limits) == Vector3.ZERO:
+			# [b]Only what a jump clears.[/b] A metre up, which is where the feet are a fifth
+			# to two fifths of a second into a jump, a low arm has passed under; a ram, a
+			# hammer or a falling curtain is still there. Hopping a ram put the runner in it
+			# in the air: on Punch Alley the better a stand-in hopped (`hop_miss`), the more
+			# it fell, and hard was slower there than medium.
 			jump = true
 
 	# Missed now and then (`wo_bot_hop_miss`), decided per half second so one arm is one
@@ -2682,14 +2778,20 @@ func race_order() -> Array[StringName]:
 		else:
 			var at := player.controller.state.position
 			var index := _route_after(at) if not route.is_empty() else 0
-			# Between the nearest point and the next, so two runners at one point are told apart.
-			var toward := 0.0
-			if index + 1 < route.size():
+			# How far along, in metres (a fork counted at its shortest branch's length, so a
+			# runner on the long way round is not ahead for its points coming later in the
+			# list), and between the nearest point and the next, so two runners at one point
+			# are told apart.
+			var progress := stage.route_progress()
+			var along := float(progress[index]) if index < progress.size() else 0.0
+			var after := stage.route_next(index)
+			if after < route.size():
 				var here: Vector3 = (route[index] as Dictionary)["at"]
-				var next: Vector3 = (route[index + 1] as Dictionary)["at"]
+				var next: Vector3 = (route[after] as Dictionary)["at"]
 				var leg := here.distance_to(next)
-				toward = clampf(1.0 - at.distance_to(next) / maxf(leg, 0.01), -1.0, 1.0)
-			key = float(player.checkpoint + 1) * 1.0e5 + float(index) * 10.0 + toward
+				var toward := clampf(1.0 - at.distance_to(next) / maxf(leg, 0.01), -1.0, 1.0)
+				along += toward * (float(progress[after]) - float(progress[index]))
+			key = float(player.checkpoint + 1) * 1.0e5 + along
 
 		keys[id] = key
 		order.append(id)
@@ -2699,8 +2801,9 @@ func race_order() -> Array[StringName]:
 	return order
 
 
-## The route point a bot should head for from [param at]: the nearest one, then onward.
-func _route_after(at: Vector3) -> int:
+## The route point a bot should head for from [param at]: the nearest one, then onward
+## ([param branch] is the way it is going at a fork, when the nearest point is where one starts).
+func _route_after(at: Vector3, branch: int = 0) -> int:
 	var route := stage.route()
 	var best := 0
 	var best_distance := INF
@@ -2715,14 +2818,47 @@ func _route_after(at: Vector3) -> int:
 	# [b]Past the nearest point, the next one.[/b] A checkpoint just across a gap is nearer the
 	# jump point behind it than the point ahead, and a stand-in put back there turned round and
 	# jumped back across the gap, every time (Spin Cycle's second checkpoint).
-	if best + 1 < route.size():
+	var after := stage.route_next(best, branch)
+	if after < route.size():
 		var here: Vector3 = (route[best] as Dictionary)["at"]
-		var next: Vector3 = (route[best + 1] as Dictionary)["at"]
+		var next: Vector3 = (route[after] as Dictionary)["at"]
 		var ahead := Vector3(next.x - here.x, 0.0, next.z - here.z)
 		if ahead.dot(Vector3(at.x - here.x, 0.0, at.z - here.z)) > 0.0:
-			best += 1
+			best = after
 
 	return best
+
+
+## The route point after [param index] for this stand-in, choosing a branch where a fork starts.
+##
+## [b]The faster way is taken by `wo_bot_risk`[/b]: a chance in a hundred per fork and ATTEMPT
+## (`falls`), like every other decision, so a stand-in that went in off the risky branch may
+## take the safe one from the checkpoint. Harder presets take the risk more often, and
+## make it more often, which is most of why they are faster on a course with a fork.
+func _bot_next(player: WoPlayer, racing: Dictionary, index: int) -> int:
+	var route := stage.route()
+
+	if index < route.size() and int((route[index] as Dictionary).get("branch", 0)) != 0:
+		racing["branch"] = int((route[index] as Dictionary)["branch"])
+		return stage.route_next(index, int(racing["branch"]))
+
+	var branches := stage.route_branches(index)
+
+	if branches.is_empty():
+		return stage.route_next(index, 0)
+
+	if int(racing.get("fork_at", -1)) != index or int(racing.get("fork_falls", -1)) != player.falls:
+		var risky := _bot_roll(&"bot_risk", player, index * 64 + player.falls) * 100.0 < racer.value("risk")
+		var chosen := int((branches[0] as Dictionary)["branch"])
+		for b: Dictionary in branches:
+			if bool(b["risky"]) == risky:
+				chosen = int(b["branch"])
+				break
+		racing["fork_at"] = index
+		racing["fork_falls"] = player.falls
+		racing["branch"] = chosen
+
+	return stage.route_next(index, int(racing["branch"]))
 
 
 func _bot_fight(player: WoPlayer, command: DotFpsCommand) -> void:

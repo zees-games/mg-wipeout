@@ -55,8 +55,18 @@ func _run() -> void:
 	_check(catalogue.refused.is_empty(), "none was refused", str(catalogue.refused))
 	_finished()
 
+	# A course with a fork is run down each branch: the safe way with `wo_bot_risk` 0 and the
+	# risky way with 100. A branch nobody can finish is a hole as much as a gap nobody clears.
+	var forked := 0
+
 	for id: StringName in courses:
-		await _run_course(catalogue.courses[id])
+		var doc: Dictionary = catalogue.courses[id]
+		if _has_fork(doc):
+			forked += 1
+			await _run_course(doc, 0.0)
+			await _run_course(doc, 100.0)
+		else:
+			await _run_course(doc)
 
 	for id: StringName in arenas:
 		await _stand_in_arena(catalogue.arenas[id])
@@ -68,8 +78,8 @@ func _run() -> void:
 		remove_child(_world)
 		_world.free()
 
-	var sections := 2 + courses.size() + arenas.size()
-	var checks := 3 + courses.size() * 3 + arenas.size() * 4
+	var sections := 2 + courses.size() + forked + arenas.size()
+	var checks := 3 + (courses.size() + forked) * 3 + arenas.size() * 4
 
 	print("")
 	print("%d sections entered, %d finished" % [_sections_entered, _sections_finished])
@@ -91,9 +101,19 @@ func _run() -> void:
 	get_tree().quit(code)
 
 
-func _run_course(doc: Dictionary) -> void:
-	_section("%s — %s" % [doc["id"], doc["name"]])
+func _has_fork(doc: Dictionary) -> bool:
+	for point: Dictionary in doc.get("route", []):
+		if bool(point.get("risky", false)):
+			return true
+	return false
+
+
+func _run_course(doc: Dictionary, risk: float = -1.0) -> void:
+	_section("%s — %s%s" % [doc["id"], doc["name"],
+		"" if risk < 0.0 else (" (the risky way)" if risk > 50.0 else " (the safe way)")])
 	var game := await _fresh_world(doc)
+	if risk >= 0.0:
+		var _risk := game.racer.set_value("risk", str(risk))
 	var bot := game.add_player(&"u900001", "Runner")
 	bot.is_bot = true
 	var idle := game.add_player(&"u2", "Watcher")
@@ -102,7 +122,7 @@ func _run_course(doc: Dictionary) -> void:
 	var limit := game.course_limit() + game.config.countdown_seconds + 1.0
 	var ticks := int(limit * TICK_RATE)
 	var furthest := -1
-	var deepest := 0.0
+	var deepest := 0
 	var started := false
 
 	for i in range(ticks):
@@ -121,14 +141,15 @@ func _run_course(doc: Dictionary) -> void:
 			break
 
 		furthest = maxi(furthest, bot.checkpoint)
-		deepest = minf(deepest, bot.controller.state.position.z)
+		deepest = maxi(deepest, int(game._bot_route.get(bot.player_id, 0)))
 
 		if bot.finished:
 			break
 
 	var where := bot.controller.state.position
 	_check(bot.finished, "a stand-in finished it", "%s in %.1f s, %d falls, %d knocks" % [
-		"finished" if bot.finished else "got to z %.1f, last at %s, checkpoint %d" % [deepest, where, furthest],
+		"finished" if bot.finished else "got to route point %d of %d, last at %s, checkpoint %d" % [
+			deepest, game.stage.route().size(), where, furthest],
 		bot.finish_seconds if bot.finished else game.course_elapsed, bot.falls, bot.knocks])
 	_check(furthest == game.stage.checkpoint_count() - 1 or not bot.finished,
 		"crossing every checkpoint on the way", "%d of %d" % [furthest + 1, game.stage.checkpoint_count()])

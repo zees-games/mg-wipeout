@@ -27,9 +27,13 @@ extends RefCounted
 
 const CHANNEL := "wo.doc"
 
-## The format this build reads. A document written for a later one is refused rather than
-## half-built, because a piece kind this build has never heard of is a hole in the course.
-const FORMAT := 1
+## The newest format this build reads. A document written for a later one is refused rather
+## than half-built, because a piece kind this build has never heard of is a hole in the course.
+## Format 2 (2026-10-12) adds forks: route points on a `branch`, one branch `risky`. A course
+## with a fork says 2, so a build that reads only 1 refuses it with a sentence instead of
+## sending its stand-ins down both branches one after the other; every other course still
+## says 1 and plays on both.
+const FORMAT := 2
 
 const KIND_COURSE := "course"
 const KIND_ARENA := "arena"
@@ -103,12 +107,14 @@ static func parse_json(text: String, origin: String = "") -> DotResult:
 static func validate(source: Dictionary) -> DotResult:
 	var doc := source.duplicate(true)
 
-	if int(doc.get("format", 0)) != FORMAT:
-		return _refuse("format is %s; this build reads %d" % [str(doc.get("format")), FORMAT], doc)
+	var format := int(doc.get("format", 0))
+
+	if format < 1 or format > FORMAT:
+		return _refuse("format is %s; this build reads 1 to %d" % [str(doc.get("format")), FORMAT], doc)
 
 	# Back to an int: JSON has one number type, and a document that came over the wire would
 	# otherwise say 1.0 where the server's said 1, and the two digests would disagree.
-	doc["format"] = FORMAT
+	doc["format"] = format
 
 	var kind := str(doc.get("kind", ""))
 
@@ -236,7 +242,17 @@ static func _course(doc: Dictionary) -> DotResult:
 			# A point on a bouncer: reached by passing over it in the air, because a runner on a
 			# bouncer is on the ground for one tick and thrown up again before anything asks.
 			"bounce": bool((entry as Dictionary).get("bounce", false)),
+			# A fork (format 2): the points of one way through it carry its number; 0 is the
+			# way everybody goes. A stand-in picks one branch where they start and skips
+			# the other's points. See [method WoCourse.route_next].
+			"branch": maxi(int((entry as Dictionary).get("branch", 0)), 0),
+			# The faster way that is easier to fall off. Stand-ins take it by `wo_bot_risk`.
+			"risky": bool((entry as Dictionary).get("risky", false)),
 		})
+
+	if not route.is_empty() and (int((route[0] as Dictionary)["branch"]) != 0 \
+			or int((route[route.size() - 1] as Dictionary)["branch"]) != 0):
+		return DotResult.fail(DotError.CODE_INVALID, "A route starts and ends on the way everybody goes (branch 0).")
 
 	doc["route"] = route
 

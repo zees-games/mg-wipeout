@@ -20,7 +20,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 | `game/wo_course_doc.gd` | what a course and an arena are: JSON, validated, normalised, sent on the wire |
 | `game/wo_catalogue.gd` | every document the server has, one built-in course and arena, which is next |
 | `game/wo_game.gd` | the simulation: phases, falls, checkpoints, the finish, weather, the final death, bots, `race_order()` |
-| `game/wo_racer.gd` | how a stand-in races: mistake rates per dot-bot preset, `wo_bot_*` cvars |
+| `game/wo_racer.gd` | how a stand-in races: mistake rates and the fork choice (`risk`) per dot-bot preset, `wo_bot_*` cvars |
 | `game/wo_announcer.gd` | the show's voice: lines, the announcer, the crowd (client) |
 | `game/wo_config.gd` | every rule a course is played under |
 | `game/wo_controller.gd`, `wo_player.gd` | `DotFpsController` with the pre/post-simulate hooks; one person: movement, carry/knock, progress, hands |
@@ -38,7 +38,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 
 `./game.sh test` (every suite, with a timeout and the stderr check; `./game.sh suites` lists them). `./game.sh` plays it.
 
-- `headless_courses` runs every course with a stand-in and stands in every arena. It drives ticks **without** waiting on physics frames, legitimate only because every moving piece is a static body written straight into the physics server. It runs with damage and weather off, because it proves a course can be finished.
+- `headless_courses` runs every course with a stand-in (a course with a fork twice: `wo_bot_risk` 0 and 100) and stands in every arena. It drives ticks **without** waiting on physics frames, legitimate only because every moving piece is a static body written straight into the physics server. It runs with damage and weather off, because it proves a course can be finished.
 - `headless_net` proves both ends agree: obstacles at five ticks, the course digest, the final death.
 - **Every suite frees the previous world before building the next**: they share one physics space and every course is built at the origin.
 - `tools/race_times.tscn` (`godot --headless --path . res://tools/race_times.tscn -- --course=wo_first_splash --rounds=2`) is the measure of a course's length and a preset's mistakes; `--verbose` prints every fall, `--follow=NAME` one runner's every tick. [stand-ins](docs/stand-ins.md#measured)
@@ -64,6 +64,9 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 - `game.yml` names no courses pack; a server owner names mg-wipeout-maps in their map config. Re-add delivered courses after `wo_reload`. [design](docs/design.md#delivery-the-courses-are-a-second-pack)
 - Every `res://` string naming the game's own files goes through `WoPaths.rebase()` (the family's delivery rule; [dot-server-deploy](../dot-server-deploy/docs/delivery-constraint.md)).
 - A route flag is earned by a traced failure; `onward` is opt-in per point. [stand-ins](docs/stand-ins.md)
+- A course with a fork is format 2 (`branch`/`risky` on route points); walk the route with `WoCourse.route_next`/`route_prev`, never `index + 1`, and order a race by `route_progress`, never by index. [design](docs/design.md#courses-that-turn-climb-and-fork)
+- Nothing assumes a course runs down −Z: positions come from the document, directions from the route or the runner. [design](docs/design.md#courses-that-turn-climb-and-fork)
+- A stand-in hops only what a metre up clears, measures a landing's overshoot along the jump's line, and never backs up on a turntable. [stand-ins](docs/stand-ins.md#the-route-flags)
 - Stand-ins are on the `bot` collision layer and pass through each other; a person is solid to them. Never put a stand-in on `player` or a stand-in's mask on `bot`. [stand-ins](docs/stand-ins.md#a-field-of-them)
 - A stand-in's difficulty is dot-bot's `bot_difficulty`; racing mistakes are `WoRacer` columns (`wo_bot_*`), every draw per bot, point and attempt (never per round: a fumble drawn per round was fumbled for ever). `bot_mistakes 0` only in the course suite. [stand-ins](docs/stand-ins.md#how-a-stand-in-races)
 - A knock is charged at most once a second and a fall heals; a checkpoint is never in a hazard's reach (mg-wipeout-maps' builder refuses it). [design](docs/design.md#damage-on-the-course)
@@ -77,7 +80,6 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 ## Open items
 
 - **Course levels for the nightly quota**: see mg-wipeout-maps' CLAUDE.md for what a level is here.
-- Stand-ins are weakest on turning pads after a turntable (Spin Cycle): hard and nightmare are no faster than medium there. [stand-ins](docs/stand-ins.md#measured)
 - The crowd and announcer have not been heard in a browser build.
 - Most checks are not armed one by one yet.
 - The carrying pose is checked by `headless_run` but not rendered: staging a stand-in mid-carry in the shot tool is its own job.

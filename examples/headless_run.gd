@@ -152,7 +152,7 @@ func _test_documents() -> void:
 		"a piece without a field it needs is refused, naming the field")
 
 	var later := practice.duplicate(true)
-	later["format"] = 2
+	later["format"] = WoCourseDoc.FORMAT + 1
 	_check(not WoCourseDoc.validate(later).ok, "a document from a later format is refused")
 
 	var no_finish := practice.duplicate(true)

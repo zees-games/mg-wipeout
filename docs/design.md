@@ -22,6 +22,15 @@ A course is a JSON document (`WoCourseDoc`); the server reads documents from `co
 - **The document validator turns every weather number into a float**: JSON has one number type, and an int tick came back as a float and broke "the same document, to the byte".
 - **The warmup's course is round one's.** `_ready` lays a course out (a world is never empty), `start()` rebuilds the same one (on a server the bridge exists only by then, so this is the build clients are sent), and the first round keeps it (`_course_unplayed`); later rounds draw the next, seeded, never the same twice running. `start()` rebuilds the warmup course only if the catalogue still offers it. `WoClient._on_stage` introduces a stage at most once per five seconds, because both rebuilds announced it.
 
+## Courses that turn, climb and fork
+
+A course is not a corridor: mg-wipeout-maps' builder turns, curves, climbs and splits it, and every piece, checkpoint and the finish carry a `yaw`, which every piece kind already read. Nothing in the game assumes a course runs down −Z; the overview camera fits the course's bounds and the race shot looks the way the runner faces.
+
+- **A fork is format 2.** The route stays one list: a fork's branches are laid out after the point it starts at, each branch's points carrying its `branch` number and the faster one `risky`. `WoCourse.route_next(index, branch)` skips the other branch's points, `route_prev` walks back the same way, and `route_branches(index)` says what a fork offers. A format-1 build would send a stand-in down both branches one after the other, so a forked course says 2 and an older build refuses it with a sentence; every other course stays format 1 and plays on both.
+- **The race order is by distance**, a fork counted at its shortest branch (`route_progress`), because by index a runner on the second branch would always lead one on the first.
+- **No checkpoint inside a branch**: the other branch never crosses it. Checkpoints are crossed by number, so a branch only needs the trunk's.
+- **A leg over or beside another** is refused by the builder (`_check_shape`), and a stand-in that does end up on an earlier leg below starts again from the nearest point there.
+
 ## Decision 3: a round is decided by the game, not by dot-match
 
 `WoRules` returns CUSTOM when `WoGame` has decided, with the winner it decided; its only clock is a backstop (`countdown + course + handover + finale + 60 s`), so a round the game never decided still ends and dot-match does not warn at boot. **Solo is the default**: each player is a side of their own, numbered from `SOLO_SIDE_BASE` (100), so `team_of` gives dot-combat distinct sides (friendly fire is off, and everybody on side 0 would be team-mates). Sides are varints on the wire.

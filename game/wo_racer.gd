@@ -35,6 +35,7 @@ const SPEC := [
 	["landing", 0.0, 1.0, 0.55, 0.75, 0.9, 1.0, "How well a stand-in steers a jump onto a small top (1 is perfectly)."],
 	["recover", 0.0, 5.0, 1.4, 0.9, 0.5, 0.25, "Seconds a stand-in stands still after a fall, shaking it off."],
 	["variety", 0.0, 1.0, 0.45, 0.45, 0.4, 0.3, "How much one stand-in differs from the next, as a share of every mistake."],
+	["risk", 0.0, 100.0, 15.0, 40.0, 70.0, 90.0, "Chance in a hundred a stand-in takes the faster, riskier branch at a fork."],
 ]
 
 const COL_FIELD := 0
@@ -73,7 +74,9 @@ func value(field: String) -> float:
 	match field:
 		"landing":
 			return lerpf(1.0, raw, clampf(mistakes, 0.0, 1.0))
-		"variety":
+		"variety", "risk":
+			# A choice, not a mistake: a stand-in that is never wrong still picks a way, and
+			# the course suite sets it to send one down each branch.
 			return raw
 		_:
 			return raw * maxf(mistakes, 0.0)
