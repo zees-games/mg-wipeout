@@ -37,3 +37,16 @@ Every course ran down one straight line. mg-wipeout-maps' builder learned frames
 - **Backing up for a run-up on a turntable** stood bots in a spinner's arms; not backing up on a seesaw jumped them short of the next plank. Only turntables are exempt.
 - **Tiles are the risky branch nobody's skill wins.** A field crowds onto one trapdoor and goes down with it whatever its preset, so the hardest stand-ins, who take the risk most, came last on Trapdoor Run until its risky branches became jumps and pads. Timing the step onto a tile at the walk made it far worse (a nightmare field finished none of sixteen) and was taken out.
 - **A READY that overtook the seat was dropped (2026-10-12).** A client sends READY when its link says PLAYING, which the link decides itself after sending `loaded` on another ENet channel. Through a lossy link the READY can reach the server first; `_admit` found no player for the peer and returned, and nothing asked again, so that client never got a world. Loopback and WebSocket order the two, so no suite could see it until `headless_net` sent the READY before the seat.
+
+## Trapdoor tiles were timing, not crowding (2026-10-12)
+
+A field of stand-ins went down with one trapdoor together, and it looked like crowding (they pass through each other, so a waiting field stood on one tile). Claiming a column each spread them out and made it worse. Following single runners tick by tick found timing:
+
+- **The board check asked about the wrong moment.** "Will the tile be there?" was asked at the distance over the RUN speed plus an eighth of a second; the stand-in walks onto tiles and jumps, so it arrived about a second later. And it asked only that the next tile be there for a quarter of a second after landing: the runner then stood on it waiting for the row after, and went down with it. The whole crossing is searched forward now (`WoCourse.tile_crossing_clear`).
+- **The edge jump fired between rows when the tile ahead was down.** The gap between two rows is a stride; the jump came only from "nothing under the next metre and a half", which between rows means a dropped tile, and a walk's jump over a hole lands in it. Tile to tile is stepped now, and a dropped tile ahead is waited for.
+- **Margins that add up.** Reckoning a slow start onto every row of a straight run made Trapdoor Run's last grid uncrossable in every column; the start is reckoned only after a stop.
+- **Two of that grid's three columns can never be crossed straight.** Its third row comes back up just as its second drops, so a runner who keeps to the column has a window of a tenth of a second. Stand-ins only claim columns that can be crossed (`tile_column_crossable`).
+- **A stale unstick mark jumped a waiting stand-in from a standstill** onto the mover after the first grid, three of a field together, once the tile timing changed when they reached it. The mark is only trusted for a second and a half.
+
+A mistake-free nightmare field went from 1.25 tile falls a run (four rounds of eight on Trapdoor Run) to none; with mistakes, easy from 1.72 to 0.25 and nightmare from 0.84 to none.
+

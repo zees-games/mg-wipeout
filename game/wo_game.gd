@@ -2087,15 +2087,21 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 			_bot_route[player.player_id] = nearest
 			return
 
-	# A column of tiles chosen for this point (see the board wait below), not the middle one.
-	if int(racing.get("shift_index", -1)) == index:
-		point = point.duplicate()
-		point["at"] = (point["at"] as Vector3) + (racing["shift"] as Vector3)
-
 	var at := player.controller.state.position
+	var grounded := player.controller.state.mode == DotFpsState.Mode.GROUND
+	var ground_id := player.controller.state.ground_id
+	# On a tile of a grid of trapdoors (not merely near one): see [method _bot_tile_column].
+	var on_tile := grounded and not stage.tile_under(ground_id).is_empty()
+
+	# A column of tiles claimed for this grid, not the middle one (see [method _bot_tile_column]).
+	if bool(point["board"]) and not bool(point["ride"]):
+		var shift := _bot_tile_column(player, racing, point, on_tile)
+		if shift != Vector3.ZERO:
+			point = point.duplicate()
+			point["at"] = (point["at"] as Vector3) + shift
+
 	var toward: Vector3 = (point["at"] as Vector3) - at
 	toward.y = 0.0
-	var grounded := player.controller.state.mode == DotFpsState.Mode.GROUND
 	_bot_plan(player, racing, index)
 
 	command.yaw = rad_to_deg(atan2(-toward.x, -toward.z))
@@ -2137,34 +2143,80 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 
 		# Six seconds at the most: a window that never comes is a course to fix, and a bot
 		# standing still for ever would hide that rather than show it.
-		if waited < tick_rate * 6 and not _bot_may_board(player, point):
-			# [b]Another column, as a person would.[/b] Run straight down the middle of a
-			# grid of trapdoors and you wait on a tile for the one in front, and yours drops:
-			# half a field of eight went through the first grid of Trapdoor Run that way.
-			# Any column whose tile in the next row will be up is as good as the middle.
-			for offset: Vector3 in stage.tile_columns(point["at"]):
-				if offset.length() < 0.1:
-					continue
-				var moved := point.duplicate()
-				moved["at"] = (point["at"] as Vector3) + offset
-				if _bot_may_board(player, moved):
-					var shifted := (racing.get("shift", Vector3.ZERO) as Vector3) \
-						if int(racing.get("shift_index", -1)) == index else Vector3.ZERO
-					racing["shift_index"] = index
-					racing["shift"] = shifted + offset
-					return
+		var cell := stage.tile_cell(point["at"])
+		var line: Vector3 = (point["at"] as Vector3) - before
+		var from_deck := not cell.is_empty() and not on_tile
+		# [b]Lined up on its column before it goes, from a deck.[/b] Slantwise, the walk's
+		# jump came down short of the first row: the gap is crossed on the slant.
+		var across := stage.tile_column_shift(int(cell["piece"]), at, int(racing.get("tile_col", int(cell["col"])))) \
+			if from_deck else Vector3.ZERO
+		var may := across.length() <= TILE_LINED_UP and _bot_may_board(player, point, line)
 
-			# And not standing on a tile that is going: anywhere is better than down with it.
-			if not stage.tile_dropping(player.controller.state.ground_id, at, _tick):
+		# Rash (`wo_bot_rash`, drawn per point and attempt): off the deck onto the tiles
+		# without waiting for the column to be clear, as a window is not waited for.
+		if from_deck and not may and across.length() <= TILE_LINED_UP and bool(racing["rash"]) \
+				and stage.supported(point["at"], _tick):
+			may = true
+
+		if waited < tick_rate * 6 and not may:
+			# [b]Another column, from the deck only, once its own has kept it waiting.[/b] A
+			# person watches the column in front and takes the next one if it opens first,
+			# timed from where they will be once they have stepped across to it; never
+			# across a row once on the tiles, which is walking over tiles as they drop (a
+			# field that did it fell half as often again).
+			if from_deck and waited >= int(TILE_PATIENCE * float(tick_rate)):
+				var piece := int(cell["piece"])
+				var original: Vector3 = (route[index] as Dictionary)["at"]
+				var walk := config.run_speed * config.walk_speed_scale
+				var claims := _tile_claims(player, piece)
+				var own := int(racing.get("tile_col", -1))
+				var crowded := waited >= int(TILE_PATIENCE * 2.0 * float(tick_rate))
+				for col in range(claims.size()):
+					# Not into a column more of the field has claimed, until it has waited
+					# twice as long: a field that took whichever column opened first all
+					# crossed in one.
+					if col == own or (not crowded and own >= 0 and claims[col] > claims[own]):
+						continue
+					var step_across := stage.tile_column_shift(piece, at, col)
+					var later := _tick + int((step_across.length() / walk + TILE_START_SECONDS) * float(tick_rate))
+					var there := original + stage.tile_column_shift(piece, original, col)
+					if stage.tile_crossing_clear(at + step_across, there, later, walk, config.run_speed,
+							TILE_START_SECONDS, line):
+						racing["tile_col"] = col
+						point = point.duplicate()
+						point["at"] = there
+						across = step_across
+						break
+
+			# Standing on a tile that is going, anywhere is better than down with it, but only
+			# if the next one is there: the warning is on for the last 0.6 s a tile is up, and
+			# a crossing may leave in it; going on the warning alone walked into a dropped tile.
+			if not (stage.tile_dropping(ground_id, at, _tick) and stage.supported(point["at"], _tick)):
 				_bot_wait[player.player_id] = waited + 1
 				command.move = Vector2.ZERO
+				# Waiting on the deck, far enough back from the edge to be walking when it
+				# jumps (one that stopped where the edge jump fires jumped from a standstill
+				# when it went, into the gap before the first row: Trapdoor Run's last grid),
+				# and lined up on its column.
+				if from_deck:
+					var forward := line.normalized() if line.length() > 0.05 else Vector3.ZERO
+					forward.y = 0.0
+					if not stage.supported(at + forward * 1.3 + Vector3(0.0, 0.1, 0.0), _tick):
+						command.yaw = rad_to_deg(atan2(-forward.x, -forward.z))
+						command.move = Vector2(0.0, -1.0)
+						command.set_button(DotFpsCommand.BUTTON_WALK, true)
+					elif across.length() > TILE_LINED_UP * 0.5:
+						command.yaw = rad_to_deg(atan2(-across.x, -across.z))
+						command.move = Vector2(0.0, 1.0)
+						command.set_button(DotFpsCommand.BUTTON_WALK, true)
 				return
 
 	# Walked into, for its last metre and a half, a point the bot may have to stop at: one that
 	# arrived at a run and then stopped slid a metre past it, which beside a mover is off the
 	# edge. Not further out: a bot walking the last two and a half metres walked through the
 	# ram it had timed its window for at a run.
-	var stops := bool(point["wait"]) or (not next.is_empty() and bool(next["board"]))
+	# Never on the tiles, where the next row is run onto, not stopped for (see [method _bot_may_board]).
+	var stops := bool(point["wait"]) or (not next.is_empty() and bool(next["board"]) and not on_tile)
 
 	# Only on the way IN: a bot let go from a wait point timed its window at a run, and one
 	# that walked through it arrived late and was hit — every pusher on Punch Alley, every time.
@@ -2172,8 +2224,11 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 		command.set_button(DotFpsCommand.BUTTON_WALK, true)
 
 	# Onto a tile, at a walk: a running jump is nearly five metres and a row of tiles is two,
-	# and a stand-in that ran at the first row landed on the third (Trapdoor Run).
-	if bool(point["board"]) and not bool(point["ride"]) and not stage.tile_columns(point["at"]).is_empty():
+	# and a stand-in that ran at the first row landed on the third (Trapdoor Run). Once on
+	# them, at a run: walked, a crossing took three seconds, long enough for every tile in
+	# the column to drop once.
+	if bool(point["board"]) and not bool(point["ride"]) and not on_tile \
+			and not stage.tile_columns(point["at"]).is_empty():
 		command.set_button(DotFpsCommand.BUTTON_WALK, true)
 
 	# Two seconds at the most behind anybody: whoever is in front may be stuck themselves, and a
@@ -2193,8 +2248,20 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 	# centimetres between a deck and a mover beside it carried the bot clean over the mover.
 	if bool(point["board"]) and grounded:
 		var heading := Vector3(-sin(deg_to_rad(command.yaw)), 0.0, -cos(deg_to_rad(command.yaw)))
+		# From a deck onto tiles, the jump is put off until the runner is nearly at the edge:
+		# a jump taken at a walk is two metres, and fired the usual metre back it came down in
+		# the gap before the first row (Trapdoor Run's last grid, a mistake-free field).
+		var lead := 0.35 if not on_tile and not stage.tile_cell(point["at"]).is_empty() else 0.7
+		var ahead := at + heading * lead + Vector3(0.0, 0.1, 0.0)
 
-		if not stage.supported(at + heading * 0.7 + Vector3(0.0, 0.1, 0.0), _tick) \
+		# [b]Tile to tile is a step, never a jump.[/b] The gap between two rows is a stride;
+		# what made the edge jump fire there was the tile ahead being DOWN, and a jump at a
+		# walk over a dropped tile came down in the hole it left. A tile ahead that is down is
+		# waited for, unless the one underfoot is going too.
+		if on_tile and not stage.tile_cell(ahead).is_empty():
+			if not stage.supported(ahead, _tick) and not stage.tile_dropping(ground_id, at, _tick):
+				command.move = Vector2.ZERO
+		elif not stage.supported(ahead, _tick) \
 				and not stage.supported(at + heading * 1.6 + Vector3(0.0, 0.1, 0.0), _tick):
 			command.set_button(DotFpsCommand.BUTTON_JUMP, true)
 
@@ -2494,6 +2561,104 @@ const TAKEOFF_SPARE := 1.3
 ## Metres a second a full backward wish takes off a runner on the ground in one tick.
 const GROUND_BRAKE := 3.3
 
+## Seconds a stand-in standing still may take to get going, reckoned onto the latest it is on
+## each tile of a crossing (`WoCourse.tile_crossing_clear`).
+const TILE_START_SECONDS := 0.1
+
+## How much of the crossing's slow speed and margin a stand-in already on the tiles allows
+## for. With all of it, a runner who set off on a clear crossing found it not clear any more
+## from the first row (it lands at a walk, off the model) and stood there until the tile went.
+const TILE_ON_SLACK := 0.4
+
+## Metres off its column's middle a stand-in on a deck counts as lined up on it.
+const TILE_LINED_UP := 0.3
+
+## Seconds a stand-in waits on the deck for its own column of tiles before it takes another
+## whose crossing is clear and no more of the field has claimed; after twice this, any.
+const TILE_PATIENCE := 1.5
+
+
+## The offset that moves [param point], a route point on a grid of tiles, onto the column this
+## stand-in crosses it in; zero for a point on no tiles.
+##
+## [b]A field spread across the columns, each down its own.[/b] Stand-ins pass through each
+## other, so a field waiting at a grid stood on one tile and went down with it. On the deck
+## a stand-in claims, among the columns that can be crossed at all, the one fewest others on
+## the grid have claimed (the nearest of those); once on the tiles its column is the one
+## under its feet, wherever the jump put it, never one it would have to walk across a row to
+## reach.
+func _bot_tile_column(player: WoPlayer, racing: Dictionary, point: Dictionary, on_tile: bool) -> Vector3:
+	var at: Vector3 = point["at"]
+	var cell := stage.tile_cell(at)
+
+	if cell.is_empty():
+		return Vector3.ZERO
+
+	var piece := int(cell["piece"])
+
+	if on_tile:
+		var under := stage.tile_under(player.controller.state.ground_id)
+		if int(under["piece"]) == piece:
+			racing["tile_piece"] = piece
+			racing["tile_col"] = int(under["col"])
+			racing["tile_falls"] = player.falls
+	elif int(racing.get("tile_piece", -1)) != piece or int(racing.get("tile_falls", -1)) != player.falls:
+		var cols := int((stage.pieces[piece]["spec"] as Dictionary)["cols"])
+		var claims := _tile_claims(player, piece)
+
+		# Among the columns that can be crossed at all (see `WoCourse.tile_column_crossable`).
+		var here := player.controller.state.position
+		var walk := config.run_speed * config.walk_speed_scale
+		var line := _tile_line(at)
+		var best := -1
+		for col in range(cols):
+			if not stage.tile_column_crossable(piece, col, here, at, walk, config.run_speed, TILE_START_SECONDS, line):
+				continue
+			if best < 0 or claims[col] < claims[best] or (claims[col] == claims[best] \
+					and stage.tile_column_shift(piece, here, col).length() < stage.tile_column_shift(piece, here, best).length()):
+				best = col
+		if best < 0:
+			best = int(cell["col"])
+
+		racing["tile_piece"] = piece
+		racing["tile_col"] = best
+		racing["tile_falls"] = player.falls
+
+	return stage.tile_column_shift(piece, at, int(racing["tile_col"]))
+
+
+## How many other stand-ins have claimed each column of the grid of tiles [param piece] and
+## are still on their way over it.
+func _tile_claims(player: WoPlayer, piece: int) -> Array[int]:
+	var claims: Array[int] = []
+	claims.resize(int((stage.pieces[piece]["spec"] as Dictionary)["cols"]))
+	claims.fill(0)
+	var route := stage.route()
+
+	for id: StringName in _bot_racer:
+		var other: Dictionary = _bot_racer[id]
+		var them: WoPlayer = players.get(id)
+		if them == null or them == player or int(other.get("tile_piece", -1)) != piece \
+				or int(other.get("tile_falls", -1)) != them.falls:
+			continue
+		var their_index := mini(int(_bot_route.get(id, 0)), route.size() - 1)
+		var their_cell := stage.tile_cell((route[their_index] as Dictionary)["at"])
+		if not their_cell.is_empty() and int(their_cell["piece"]) == piece:
+			claims[int(other.get("tile_col", 0))] += 1
+
+	return claims
+
+
+## The way the route runs at the route point nearest [param at] (from the point before it).
+func _tile_line(at: Vector3) -> Vector3:
+	var route := stage.route()
+	var nearest := 0
+	for i in range(route.size()):
+		if ((route[i] as Dictionary)["at"] as Vector3).distance_to(at) < ((route[nearest] as Dictionary)["at"] as Vector3).distance_to(at):
+			nearest = i
+	var before := stage.route_prev(nearest, 0)
+	return ((route[nearest] as Dictionary)["at"] as Vector3) - ((route[before] as Dictionary)["at"] as Vector3) if before >= 0 else Vector3.ZERO
+
 
 ## Stops behind somebody standing (or nearly) right in front: a queue, the way people wait at
 ## the edge before a run of tops. True when it stopped.
@@ -2672,7 +2837,12 @@ func _bot_unstick(player: WoPlayer, command: DotFpsCommand) -> void:
 		return
 
 	if mark.is_empty() or _tick - int(mark[1]) >= tick_rate:
+		# [b]Only against a mark from the last second and a half.[/b] A bot held still (waiting
+		# for a mover, a window, a column of tiles) is not asked here, so its mark is as old as
+		# the wait: on the tick it set off it was "a second without moving" and jumped from a
+		# standstill, short of the mover it was timing (Trapdoor Run, three of a field together).
 		var stuck := not mark.is_empty() and command.move != Vector2.ZERO \
+			and _tick - int(mark[1]) < tick_rate * 3 / 2 \
 			and Vector2(at.x - (mark[0] as Vector3).x, at.z - (mark[0] as Vector3).z).length() < 0.4
 		var release := -1
 
@@ -2774,14 +2944,32 @@ func _bot_hop(player: WoPlayer, command: DotFpsCommand) -> void:
 
 ## Whether [param point] — something to land on — will be under a jump that sets off now:
 ## near enough to reach at a run, and there when the bot comes down and a moment after.
-func _bot_may_board(player: WoPlayer, point: Dictionary) -> bool:
+##
+## [b]Onto tiles, the whole crossing[/b] (`WoCourse.tile_crossing_clear`): at a walk to the
+## first row (the jump onto it is taken at a walk, so it is in the air for the walk's
+## distance, not the run's) and at a run across the rest. Asked as "the tile there in an
+## eighth of a second at a run", a stand-in standing still, a second and a half of walk and
+## jump away, was answered about the wrong moment; and a tile that was there on landing
+## dropped while it stood on it waiting for the next row.
+func _bot_may_board(player: WoPlayer, point: Dictionary, line: Vector3 = Vector3.ZERO) -> bool:
 	var from := player.controller.state.position
 	var to: Vector3 = point["at"]
 	var distance := Vector2(to.x - from.x, to.z - from.z).length()
 
-	# A ride that has not brought the bot this close yet is a ride to stay on.
-	if distance > 5.0:
+	var tiles := not stage.tile_cell(to).is_empty()
+
+	# A ride that has not brought the bot this close yet is a ride to stay on. Tiles are not
+	# a ride: a column two over is further than that from a deck, and the crossing is timed
+	# from wherever the runner is.
+	if distance > 5.0 and not tiles:
 		return false
+
+	if tiles:
+		var velocity := player.controller.state.velocity
+		var moving := Vector2(velocity.x, velocity.z).length() > 1.0
+		return stage.tile_crossing_clear(from, to, _tick, config.run_speed * config.walk_speed_scale,
+			config.run_speed, 0.0 if moving else TILE_START_SECONDS, line,
+			TILE_ON_SLACK if not stage.tile_under(player.controller.state.ground_id).is_empty() else 1.0)
 
 	var lands := _tick + int(distance / maxf(config.run_speed, 0.5) * float(tick_rate)) + tick_rate / 8
 	return stage.supported(to, lands) and stage.supported(to, lands + tick_rate / 4)

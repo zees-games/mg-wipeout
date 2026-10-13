@@ -44,6 +44,13 @@ const TILE_DROP := 60.0
 ## Seconds before a tile drops that it shakes and changes colour. See [method tile_warning].
 const TILE_WARN_SECONDS := 0.6
 
+## Seconds either side of a stand-in's time on a tile that the tile must be up too
+## ([method tile_crossing_clear]): a run is not quite the model's.
+const TILE_MARGIN_SECONDS := 0.08
+
+## The slowest share of the given speeds a stand-in crossing tiles is reckoned to go at.
+const TILE_SLOW := 0.9
+
 ## How far below a start gate goes when it opens.
 const GATE_DROP := 80.0
 
@@ -79,6 +86,9 @@ var strikes: Array[Dictionary] = []
 
 ## Collider instance id -> [code][piece index, sub-index][/code], for the carry and the bounce.
 var _by_collider: Dictionary = {}
+
+## "piece/col" to whether that column of tiles can be crossed at all. See [method tile_column_crossable].
+var _crossable: Dictionary = {}
 
 ## The tick the moving pieces were last posed at, so a second call for the same tick is free.
 var _posed_tick: int = -2147483648
@@ -2025,6 +2035,271 @@ func tile_columns(point: Vector3) -> Array[Vector3]:
 		return out
 
 	return out
+
+
+## The grid of tiles under [param point] and the cell there, as `{piece, row, col}` (`piece` an
+## index into [member pieces]), or empty off every grid. A point in the gap between two rows
+## counts as the nearer one, as [method supported] counts it.
+func tile_cell(point: Vector3) -> Dictionary:
+	for index in range(pieces.size()):
+		var piece: Dictionary = pieces[index]
+
+		if str(piece["kind"]) != "tiles":
+			continue
+
+		var spec: Dictionary = piece["spec"]
+		var local := (piece["node"] as Node3D).transform.affine_inverse() * point
+		var cols := int(spec["cols"])
+		var rows := int(spec["rows"])
+		var pitch := float(spec["tile"]) + float(spec.get("gap", 0.25))
+		var col := int(roundf(local.x / pitch + float(cols - 1) * 0.5))
+		var row := int(roundf(local.z / pitch + float(rows - 1) * 0.5))
+
+		if col >= 0 and col < cols and row >= 0 and row < rows and absf(local.y) < 3.0:
+			return {"piece": index, "row": row, "col": col}
+
+	return {}
+
+
+## The cell of the tile [param ground_id] is, as [method tile_cell] gives it, or empty when it
+## is not a tile. Where a runner actually landed, which is not always the column it aimed at.
+func tile_under(ground_id: int) -> Dictionary:
+	var found: Variant = _by_collider.get(ground_id)
+
+	if found == null:
+		return {}
+
+	var index := int((found as Array)[0])
+	var piece: Dictionary = pieces[index]
+
+	if str(piece["kind"]) != "tiles":
+		return {}
+
+	var cols := int((piece["spec"] as Dictionary)["cols"])
+	var sub := int((found as Array)[1])
+	return {"piece": index, "row": sub / cols, "col": sub % cols}
+
+
+## The offset, across the grid of tiles [param piece_index], from [param point] to the middle
+## of column [param col]: what moves a route point down the middle onto that column.
+func tile_column_shift(piece_index: int, point: Vector3, col: int) -> Vector3:
+	var piece: Dictionary = pieces[piece_index]
+	var spec: Dictionary = piece["spec"]
+	var root: Node3D = piece["node"]
+	var local := root.transform.affine_inverse() * point
+	var pitch := float(spec["tile"]) + float(spec.get("gap", 0.25))
+	var x := (float(col) - float(int(spec["cols"]) - 1) * 0.5) * pitch
+	return root.transform.basis * Vector3(x - local.x, 0.0, 0.0)
+
+
+## Whether a runner at [param from] that sets off on [param tick] toward [param to] (a tile, in
+## the column it crosses in) can get over every row from there to the grid's far side without
+## standing on, or coming down on, a tile that is down — stopping in the middle of a tile to
+## wait for the next row where it has to, for as long as the tile under it stays up.
+## [param approach_speed] until it is on the first row (a walk off a deck, which is what the
+## jump onto the first row is taken at), then [param tile_speed] across them, with
+## [param start_delay] seconds of getting going reckoned onto every set-off from a stand.
+## [param line] is the way the route crosses the grid; [param slack] (0..1) how much of the
+## slow speed and margin to allow for.
+##
+## [b]The whole crossing, not the next tile.[/b] A runner who asked only whether the tile it
+## jumped for would be there a quarter of a second after landing then stood on it waiting for
+## the next row, and went down with it: a mistake-free nightmare field fell 1.2 times a run on
+## Trapdoor Run's tiles that way. And not a straight run either: at honest margins a column
+## of four was clear end to end too seldom to wait for. Every tile is a function of the tick,
+## so the crossing is searched forward (where the runner can be standing, when) before it sets
+## off, the way a person watches the column and goes.
+func tile_crossing_clear(from: Vector3, to: Vector3, tick: int, approach_speed: float,
+		tile_speed: float, start_delay: float, line: Vector3 = Vector3.ZERO, slack: float = 1.0) -> bool:
+	# How much of the slow speed and the margin to reckon with: all of it before setting off,
+	# less once on the tiles, where the runner is already on a crossing that was clear.
+	var slow := lerpf(1.0, TILE_SLOW, slack)
+	var margin := TILE_MARGIN_SECONDS * slack
+	var target := tile_cell(to)
+
+	if target.is_empty():
+		return supported(to, tick)
+
+	var piece: Dictionary = pieces[int(target["piece"])]
+	var spec: Dictionary = piece["spec"]
+	var local_from := (piece["node"] as Node3D).transform.affine_inverse() * from
+	var cols := int(spec["cols"])
+	var rows := int(spec["rows"])
+	var tile := float(spec["tile"])
+	var pitch := tile + float(spec.get("gap", 0.25))
+	var col := int(target["col"])
+	var target_row := int(target["row"])
+	var target_z := (float(target_row) - float(rows - 1) * 0.5) * pitch
+
+	# Which way the rows are crossed: [param line], the way the route runs, or else away from
+	# the runner toward the target row (which on the target row past its middle is backwards).
+	# Distances below are along that way, `along` the runner's own.
+	var local_line := (piece["node"] as Node3D).transform.basis.inverse() * line
+	var step := 1 if target_z > local_from.z else -1
+	if absf(local_line.z) > 0.01:
+		step = 1 if local_line.z > 0.0 else -1
+	var along := local_from.z * float(step)
+	var here := int(roundf(local_from.z / pitch + float(rows - 1) * 0.5))
+	var on_tile := here >= 0 and here < rows \
+		and absf(along - (float(here) - float(rows - 1) * 0.5) * pitch * float(step)) <= pitch * 0.5
+
+	# The rows still to cross from the target row on, nearest first, and where each one's
+	# middle is along the way.
+	var order: Array[int] = []
+	var middles: Array[float] = []
+	var row := target_row
+	while row >= 0 and row < rows:
+		order.append(row * cols + col)
+		middles.append((float(row) - float(rows - 1) * 0.5) * pitch * float(step))
+		row += step
+
+	var now := float(tick) / float(maxi(tick_rate, 1))
+	var slots := TILE_PLAN_SLOTS
+	var dt := 1.0 / float(TILE_PLAN_RATE)
+	var half := tile * 0.5
+
+	# The first leg is the question asked: setting off NOW, from where the runner is, for the
+	# middle of the target row. Off a deck at the approach speed until over the row; off the
+	# tile underfoot, which has to stay up until the runner is off it.
+	# Off a deck the way there may be slantwise, to a column beside the runner.
+	var near := middles[0] - half
+	var across := absf(local_from.x - (float(col) - float(cols - 1) * 0.5) * pitch) if not on_tile else 0.0
+	var walked := Vector2(maxf(near - along, 0.0), across).length() if not on_tile else 0.0
+	var speed_on := approach_speed if not on_tile else tile_speed
+	var fast_on := now + Vector2(maxf(near - PLAYER_RADIUS - along, 0.0), across).length() / speed_on
+	var slow_mid := now + start_delay + walked / (approach_speed * slow) \
+		+ maxf(middles[0] - maxf(near, along), 0.0) / (tile_speed * slow)
+
+	if on_tile and here != target_row:
+		var here_index := here * cols + col
+		var leaves := (float(here) - float(rows - 1) * 0.5) * pitch * float(step) + half + PLAYER_RADIUS
+		var off := now + start_delay + maxf(leaves - along, 0.0) / (tile_speed * slow)
+		if not _tile_up_over(piece, here_index, now, off + margin):
+			return false
+	elif on_tile:
+		fast_on = now
+
+	if not _tile_up_over(piece, order[0], fast_on - margin, slow_mid + margin):
+		return false
+
+	# Where the runner can be standing in the middle of each row, by slot from now: from the
+	# moment it gets there for as long as the tile stays up.
+	# 1 where it can be, 2 where it gets there (and runs on without stopping).
+	var standing := PackedByteArray()
+	standing.resize(slots)
+	_tile_stand(piece, order[0], standing, slow_mid - now, now, dt)
+
+	# Leaving a middle: on the next row from the moment the body's edge can be over it at
+	# full speed (from a little short of the middle, where the route lets it go), off this one
+	# once the body's edge is past it at the slow speed. The getting going only after a stop:
+	# reckoned onto a runner going straight through, four rows of it added up to more than
+	# the time some columns are clear for (Trapdoor Run's last grid was never crossable).
+	var to_next_fast := maxf(pitch - half - PLAYER_RADIUS - 0.6, 0.0) / tile_speed
+
+	for i in range(order.size()):
+		var last := i == order.size() - 1
+		var next_standing := PackedByteArray()
+		next_standing.resize(slots)
+		var any := false
+
+		for k in range(slots):
+			if standing[k] == 0:
+				continue
+			var t := now + float(k) * dt
+			var delay := 0.0 if standing[k] == 2 else start_delay
+			var off_slow := delay + (half + PLAYER_RADIUS) / (tile_speed * slow)
+			var to_mid_slow := delay + pitch / (tile_speed * slow)
+
+			if not _tile_up_over(piece, order[i], t, t + off_slow + margin):
+				continue
+
+			if last:
+				return true
+
+			if not _tile_up_over(piece, order[i + 1], t + to_next_fast - margin,
+					t + to_mid_slow + margin):
+				continue
+
+			any = true
+			_tile_stand(piece, order[i + 1], next_standing, float(k) * dt + to_mid_slow, now, dt)
+
+		if not any:
+			return false
+		standing = next_standing
+
+	return false
+
+
+## Whether column [param col] of the grid of tiles [param piece_index] can be crossed at all,
+## setting off from a deck at [param from] for [param to] (a point on the grid), at any
+## moment of the tiles' cycle: [method tile_crossing_clear] asked at every sixteenth of a
+## second of one period. Worked out once per column and kept.
+##
+## [b]Some columns never are.[/b] Where one row comes back up just as the row before it
+## drops, no runner who keeps to the column gets over: Trapdoor Run's last grid has two
+## such columns. A stand-in that claimed one waited its six seconds and went anyway.
+func tile_column_crossable(piece_index: int, col: int, from: Vector3, to: Vector3, approach_speed: float,
+		tile_speed: float, start_delay: float, line: Vector3) -> bool:
+	var key := "%d/%d" % [piece_index, col]
+
+	if _crossable.has(key):
+		return bool(_crossable[key])
+
+	var piece: Dictionary = pieces[piece_index]
+	var lined := from + tile_column_shift(piece_index, from, col)
+	var there := to + tile_column_shift(piece_index, to, col)
+	var steps := maxi(int(float((piece["spec"] as Dictionary)["period"]) * float(TILE_PLAN_RATE)), 1)
+	var found := false
+
+	for step in range(steps):
+		var tick := int(float(step) / float(TILE_PLAN_RATE) * float(tick_rate))
+		if tile_crossing_clear(lined, there, tick, approach_speed, tile_speed, start_delay, line):
+			found = true
+			break
+
+	_crossable[key] = found
+	return found
+
+
+## How many slots ahead, and how many a second, [method tile_crossing_clear] looks.
+const TILE_PLAN_RATE := 16
+const TILE_PLAN_SLOTS := 128
+
+
+## Whether tile [param index] of [param piece] is up for the whole of [param from]..[param until].
+func _tile_up_over(piece: Dictionary, index: int, from: float, until: float) -> bool:
+	var spec: Dictionary = piece["spec"]
+	var cycle := tile_cycle(spec, index, from)
+
+	if cycle < float(spec["down"]):
+		return false
+
+	return (1.0 - cycle) * float(spec["period"]) > until - from
+
+
+## Marks in [param standing] every slot from [param arrive] seconds after [param now] for as
+## long as tile [param index] stays up after it.
+func _tile_stand(piece: Dictionary, index: int, standing: PackedByteArray, arrive: float, now: float, dt: float) -> void:
+	var spec: Dictionary = piece["spec"]
+	var from := maxi(int(ceilf(arrive / dt)), 0)
+
+	if from >= standing.size():
+		return
+
+	var at := now + float(from) * dt
+	var cycle := tile_cycle(spec, index, at)
+
+	if cycle < float(spec["down"]):
+		return
+
+	var up_for := (1.0 - cycle) * float(spec["period"])
+	var until := mini(from + int(up_for / dt), standing.size())
+
+	for k in range(from, until):
+		standing[k] = maxi(standing[k], 1)
+
+	if until > from:
+		standing[from] = 2
 
 
 ## Whether the tile [param ground_id] is, if it is one, is about to drop (its warning is on).
