@@ -33,6 +33,9 @@ const WoTextures := preload("wo_textures.gd")
 
 const CHANNEL := "wo.course"
 
+## dot-lighting's contact shade, loaded by path (API 4): see [method _add_contact_shade].
+const CONTACT_SHADE_SCRIPT := "res://addons/dot_lighting/runtime/dot_contact_shade.gd"
+
 ## The capsule a player is measured as, in metres. Matches [WoPlayer]'s tunables.
 const PLAYER_RADIUS := 0.35
 const PLAYER_HEIGHT := 1.8
@@ -59,6 +62,10 @@ signal built()
 
 ## Whether to draw the sky, the sun and the water. A client sets this; a server need not.
 @export var draw_world: bool = false
+
+## The start pen's still boxes (pad, side walls, back; never the gate, which drops), for the
+## contact shade: `{transform, size}` each, in this node's frame.
+var _pen_boxes: Array = []
 
 ## The collision layout everything is put on. Set by [WoGame] before [method build].
 var physics: DotPhysicsLayout = null
@@ -129,6 +136,7 @@ func build(p_doc: Dictionary) -> DotResult:
 		return checked
 
 	doc = checked.value
+	_pen_boxes = []
 
 	_read_weather()
 
@@ -147,6 +155,7 @@ func build(p_doc: Dictionary) -> DotResult:
 	if draw_world:
 		_build_world()
 		_build_dressing()
+		_add_contact_shade()
 
 	pose_at_time(0.0)
 	built.emit()
@@ -797,6 +806,10 @@ func _build_start() -> void:
 	pad.transform = Transform3D(basis, at - Vector3(0.0, 0.5, 0.0))
 	_add_box(pad, Vector3(size.x, 1.0, size.y), WoTextures.Role.SAFE, false, true)
 	add_child(pad)
+	# To the walls' outer faces for the shade only: the walls stand 5 cm off the pad's edge, so
+	# the pad as built meets no wall and the pen, the view every countdown is spent in, had none.
+	_pen_boxes.append({"transform": pad.transform.translated_local(Vector3(0.0, 0.0, 0.175)),
+		"size": Vector3(size.x + 0.7, 1.0, size.y + 0.35)})
 	_put_on_world_layer(pad)
 
 	# Across the front edge, which is -Z in the pad's own frame: yaw 0 faces -Z, and the
@@ -815,12 +828,14 @@ func _build_start() -> void:
 		wall.transform = Transform3D(basis, at + basis * Vector3(side * (size.x * 0.5 + 0.2), 0.7, 0.0))
 		_add_box(wall, Vector3(0.3, 1.4, size.y), WoTextures.Role.PILLAR, false, true)
 		add_child(wall)
+		_pen_boxes.append({"transform": wall.transform, "size": Vector3(0.3, 1.4, size.y)})
 		_put_on_world_layer(wall)
 
 	var back := StaticBody3D.new()
 	back.transform = Transform3D(basis, at + basis * Vector3(0.0, 0.7, size.y * 0.5 + 0.2))
 	_add_box(back, Vector3(size.x + 0.7, 1.4, 0.3), WoTextures.Role.PILLAR, false, true)
 	add_child(back)
+	_pen_boxes.append({"transform": back.transform, "size": Vector3(size.x + 0.7, 1.4, 0.3)})
 	_put_on_world_layer(back)
 
 	_place_gate()
@@ -910,6 +925,33 @@ func _build_gallery() -> void:
 ## ([method light_document]), so the family's look (game-arena's built-in maps: a warm sun
 ## with soft shadows, a pale cool fill, filmic tone map, glow) and each course's own sky,
 ## horizon, sun colour and water are one thing rather than two that can disagree.
+## dot-lighting's contact shade (API 4) where the course's still boxes meet: a wall on a deck, a
+## block on a platform, a bouncer on the floor. The Compatibility renderer the client draws has
+## no ambient occlusion, and every wall stood on its deck with no shade at its foot. Only the
+## still `box` and `bouncer` pieces and the start pen's pad and walls: everything else either moves (movers, seesaws, rollers,
+## conveyors, tiles, spinners, pendulums, pushers, a falling floor) and the shade is one mesh
+## built here, so it would stay where they were; or is tilted (a ramp), whose creases the helper
+## does not follow; or is round; the pen's gate drops. By path, behind the level, so a shell older than the helper
+## draws the course without it.
+func _add_contact_shade() -> void:
+	if DotAddonApi.build_level("dot_lighting") < 4 or not ResourceLoader.exists(CONTACT_SHADE_SCRIPT):
+		return
+	var boxes: Array = _pen_boxes.duplicate()
+	for piece: Dictionary in pieces:
+		var kind := str(piece["kind"])
+		if (kind != "box" and kind != "bouncer") or bool(piece["moving"]) or piece["node"] == null:
+			continue
+		boxes.append({"transform": (piece["node"] as Node3D).transform, "size": (piece["spec"] as Dictionary)["size"]})
+	if boxes.is_empty():
+		return
+	var shade: Variant = (load(CONTACT_SHADE_SCRIPT) as GDScript).call(&"node", boxes)
+	if shade is MeshInstance3D and (shade as MeshInstance3D).mesh != null:
+		(shade as Node).name = "ContactShade"
+		add_child(shade)
+	elif shade is Node:
+		(shade as Node).free()
+
+
 func _build_world() -> void:
 	var theme: Dictionary = doc.get("theme", {})
 
