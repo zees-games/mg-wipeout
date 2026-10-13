@@ -2244,7 +2244,34 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 		racing["queued"] = int(racing.get("queued", 0)) + 1
 		return
 
+	var running := command.move != Vector2.ZERO
 	_bot_hop(player, command)
+
+	# [b]Stopped to let an arm go by, it does not take off.[/b] The hop stops a runner whose
+	# landing the arm would be on, and the take-off below then jumped anyway, from a tick of
+	# braking with no wish: off the sweeper's far edge at a metre and a half a second, into
+	# the gap (Spin Cycle, most of every preset's falls there).
+	if running and command.move == Vector2.ZERO and bool(point["jump"]):
+		return
+
+	# [b]A hop that carries past the jump point ahead is the jump.[/b] An arm on the piece
+	# across a gap is hopped from the deck before it, short of the edge's jump point; aimed in
+	# the air at that point, behind it by then, the runner braked to come down on the deck and
+	# came down in the gap. Spin Cycle's falls by the spinner's turntable and off the far
+	# edges of the sweeper and the spinner deck were these, and nightmare, which misses the
+	# fewest hops, fell there most and finished behind hard. So the route moves on with it,
+	# and the landing is steered onto what is beyond the gap, when the hop reaches it: one that
+	# comes down in the gap is braked back onto this side, as before (a hop off the sweeper's
+	# deck at five metres a second, taken as the jump, fell a metre short of the next).
+	if grounded and command.is_pressed(DotFpsCommand.BUTTON_JUMP) and bool(point["jump"]) \
+			and float(point["reach"]) <= 0.6 and not next.is_empty():
+		var airtime := 2.0 * sqrt(2.0 * config.gravity * config.jump_height) / config.gravity
+		var flat := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z)
+		if flat.length() * airtime > toward.length() and stage.supported(at + flat * airtime + Vector3(0.0, 0.1, 0.0),
+				_tick + int(airtime * float(tick_rate))):
+			_bot_route[player.player_id] = next_index
+			return
+
 	_bot_unstick(player, command)
 
 	# Heading for something to land on, the jump is at whatever edge the bot reaches first,
@@ -2402,6 +2429,19 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 			if going >= need * TAKEOFF_SPARE and facing.length() > 0.1 \
 					and stage.carry(player.controller.state.ground_id, at, _tick).dot(facing) >= 0.0:
 				command.move = Vector2(0.0, -clampf((going - need * TAKEOFF_SPARE) / GROUND_BRAKE, 0.0, 1.0))
+		elif not next.is_empty():
+			# [b]An edge's jump point already behind: the jump goes on, not back.[/b] A hop
+			# on the sweeper came down a few centimetres past the point, the yaw was still
+			# at the point, and the take-off went backwards at a metre and a half a second
+			# into the gap ahead (Spin Cycle, most of every preset's falls there). Only once
+			# past it and still going on: before the point the run-up is left straight, as it
+			# always was, and turned for a runner going back, The Sweeper's easy field fell
+			# more and finished behind medium.
+			var jump_line: Vector3 = (next["at"] as Vector3) - (point["at"] as Vector3)
+			jump_line.y = 0.0
+			var onward := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z).dot(jump_line)
+			if jump_line.length() > 0.1 and toward.dot(jump_line) < 0.0 and onward > 0.0:
+				command.yaw = rad_to_deg(atan2(-jump_line.x, -jump_line.z))
 
 		# [b]Toward where the jump is GOING, on a point marked `onward`.[/b] A bot that
 		# landed half a metre past a lily pad's centre was still facing that centre, behind

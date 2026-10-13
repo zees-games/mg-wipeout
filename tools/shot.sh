@@ -39,6 +39,7 @@ for arg in "$@"; do
         --out=*)     out="${arg#*=}" ;;
         --wo-*)      config+=("$arg") ;;
         --arena=*)   config+=("$arg") ;;
+        --grid=*)    config+=("$arg") ;;
         --board)     config+=("$arg") ;;
         --ballot)    config+=("$arg") ;;
         --console=*) config+=("$arg") ;;

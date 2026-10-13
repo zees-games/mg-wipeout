@@ -11,6 +11,7 @@ extends Node
 ##   tools/shot.sh --view=duck --seconds=30 --wo-course-ids=wo_the_sweeper   # a stand-in ducking, close
 ##   tools/shot.sh --view=falls --seconds=3 --wo-course-ids=wo_punch_alley   # the first water/slime fall
 ##   tools/shot.sh --view=tiles --wo-course-ids=wo_trapdoor_run   # drop-tiles, warning in red
+##   tools/shot.sh --view=tiles --grid=2 --wo-course-ids=wo_trapdoor_run   # the third grid
 ##   tools/shot.sh --view=third                     # third person, mid-course
 ##   tools/shot.sh --view=arena --arena=wo_arena_pit   # an arena, from above
 ##   tools/shot.sh --view=finale                    # a real final death, from a finisher's eyes
@@ -40,6 +41,9 @@ var _console_line := ""
 ## with a few votes cast.
 var _ballot: bool = false
 
+## `--grid=N`: which grid of tiles the tiles view looks at, counting from 0 along the course.
+var _grid := 0
+
 
 func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -55,6 +59,8 @@ func _ready() -> void:
 			_ballot = true
 		elif arg.begins_with("--arena="):
 			_arena = arg.trim_prefix("--arena=")
+		elif arg.begins_with("--grid="):
+			_grid = arg.trim_prefix("--grid=").to_int()
 		elif arg.begins_with("--console="):
 			_console_line = arg.trim_prefix("--console=")
 
@@ -109,11 +115,14 @@ func _run() -> void:
 		"tiles":
 			await _seconds_of(_seconds)
 			var camera := _free_camera()
+			var seen := 0
 			for piece in game.stage.pieces:
 				if str(piece["kind"]) == "tiles":
-					var at: Vector3 = piece["spec"]["at"]
-					camera.look_at_from_position(at + Vector3(6.0, 6.0, 7.0), at)
-					break
+					if seen == _grid:
+						var at: Vector3 = piece["spec"]["at"]
+						camera.look_at_from_position(at + Vector3(6.0, 6.0, 7.0), at)
+						break
+					seen += 1
 		"race":
 			# The field mid-race, from over the shoulder of whoever is leading: the stand-ins
 			# spread out over the course, the stands and the show round them.
