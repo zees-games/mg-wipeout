@@ -97,6 +97,20 @@ var _posed_time: float = -1.0
 var _gate: StaticBody3D = null
 var _gate_rest: Transform3D = Transform3D.IDENTITY
 
+## The stage's toys (dot-props' [DotPropToyBox]): loose ones only, beach balls in the start pen
+## and balls in a finale's arena, simulated where [member authoritative] and posed from snapshots
+## elsewhere, under the game's `sv_toys*` [member toy_rules]. A runner walks through one and
+## pushes it (`WoGame._advance_toys`), so it never holds anybody up or covers anybody; a fixed toy
+## (a pad, a trampoline) would be a way past an obstacle, and is left out. Set by the game
+## before it builds.
+var toys: DotPropToyBox = null
+var authoritative: bool = true
+var toy_rules: DotPropToyRules = null
+var gravity: float = 20.0
+
+## The kinds a stage here may place: the rigid ones a person pushes and walks through.
+const TOY_KINDS: Array[StringName] = [&"ball", &"pin", &"barrel", &"tyre"]
+
 
 # --- Building ---------------------------------------------------------------
 
@@ -128,6 +142,8 @@ func build(p_doc: Dictionary) -> DotResult:
 	if is_arena():
 		_build_gallery()
 
+	_build_toys()
+
 	if draw_world:
 		_build_world()
 		_build_dressing()
@@ -154,6 +170,7 @@ func clear() -> void:
 	_confetti.clear()
 	doc = {}
 	_gate = null
+	toys = null
 	_posed_tick = -2147483648
 	_posed_time = -1.0
 
@@ -254,6 +271,44 @@ func _make_piece(index: int, spec: Dictionary) -> void:
 
 	piece["bodies"] = bodies
 	pieces.append(piece)
+
+
+## The toys, on their own layer: `toy`, which the course, its machinery, the props and the
+## other toys stop and a person never does. A placement of a kind other than [constant TOY_KINDS]
+## is left out with a line, never refused: the course still plays.
+func _build_toys() -> void:
+	toys = DotPropToyBox.new()
+	toys.name = "Toys"
+	toys.authoritative = authoritative
+	toys.draw = draw_world
+	if toy_rules != null:
+		toys.rules = toy_rules
+	toys.gravity = gravity
+	# In the water is lost: home it goes.
+	toys.kill_y = water_height() - 1.0
+	if physics != null:
+		toys.loose_layer = physics.layer_mask(&"toy")
+		toys.loose_mask = physics.collision_mask(&"toy")
+		toys.solid_layer = physics.layer_mask(&"world")
+		toys.solid_mask = physics.collision_mask(&"world")
+		toys.footprint_layer = physics.layer_mask(&"footprint")
+		toys.aim_mask = physics.layer_mask(&"world") | physics.layer_mask(&"toy")
+	add_child(toys)
+	var catalogue := DotPropToyCatalogue.stock()
+	toys.catalogue = catalogue
+	var placements: Array = []
+	var refused: PackedStringArray = PackedStringArray()
+	for placement: Dictionary in doc.get("toys", []):
+		var def := catalogue.get_def(StringName(str(placement.get("toy", ""))))
+		if not def.is_empty() and not TOY_KINDS.has(StringName(str(def.get("kind", "")))):
+			refused.append(str(placement["toy"]))
+			continue
+		placements.append(placement)
+	if not refused.is_empty():
+		DotLog.warn(CHANNEL, "a stage places toys that are not loose; they are left out", {"stage": String(id()), "toys": ", ".join(refused)})
+	var built := toys.build(placements)
+	if not built.ok:
+		DotLog.warn(CHANNEL, "a stage's toys would not build", {"stage": String(id()), "why": built.error.message})
 
 
 func _collect_bodies(node: Node, into: Array) -> void:

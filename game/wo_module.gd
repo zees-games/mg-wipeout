@@ -191,6 +191,12 @@ func _game_load() -> DotResult:
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
 
+	# The stage's toys: dot-props' sv_toys* set. REPLICATED, because a client hides the toys the
+	# server took away.
+	var _toys := world.toy_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
 	_build_vote(world)
 
 	_bots = add_cvar(

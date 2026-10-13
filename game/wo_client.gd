@@ -228,6 +228,11 @@ func _build_ragdolls() -> void:
 	add_child(ragdolls)
 
 
+func _toy_sound(id: StringName, at: Vector3, strength: float) -> void:
+	if audio != null:
+		var _played := audio.on_toy(id, at, strength)
+
+
 func _ragdoll_sound(id: StringName, at: Vector3, volume: float) -> void:
 	if audio != null:
 		var _played := audio.on_body(id, at, volume)
@@ -328,6 +333,8 @@ func _build_netcode() -> DotResult:
 		# predicts its own player.
 		var _view := game.view_rules.follow_cvars(link)
 		var _solid := game.body_rules.follow_cvars(link)
+		# And sv_toys*: this end hides the toys the server took away.
+		var _toys := game.toy_rules.follow_cvars(link)
 
 	net = DotNetManager.new()
 	net.name = "Net"
@@ -502,6 +509,10 @@ func _on_stage(stage_id: StringName, is_arena: bool) -> void:
 
 	if game.stage == null:
 		return
+
+	# The new stage's toys are heard: a beach ball's bounce, one knocked off an arena's edge.
+	if game.stage.toys != null and not game.stage.toys.sound.is_connected(_toy_sound):
+		var _toys := game.stage.toys.sound.connect(_toy_sound)
 
 	var name_of := str(game.stage.doc.get("name", ""))
 	var blurb := str(game.stage.doc.get("blurb", ""))

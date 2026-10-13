@@ -22,6 +22,8 @@ The course closes when everybody is across or the clock runs out. Then:
 - **One player or team finished:** they win.
 - **Two or more finished:** the **final death**. The finishers are dropped into a random arena while props and weapons land on its floor. Pick props up with **E** and throw them, or walk over a weapon to take it. Fall out of the arena and you're out. Everybody else watches from the gallery.
 
+There are beach balls to bat about in the start pen while the gate is up, and balls on most arenas' floors to shoot about and knock into the water. You walk through them and push them, so they never slow you down or hide anybody.
+
 Every player is their own side by default. `wo_teams 2` (up to 6) plays in teams, and a team is through if anybody on it finishes.
 
 The courses live in their own repository, [mg-wipeout-maps](https://github.com/zees-games/mg-wipeout-maps): eleven courses and five arenas, each a JSON file. Without it the game still runs, on one practice course built in.

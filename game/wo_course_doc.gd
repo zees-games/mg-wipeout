@@ -48,6 +48,9 @@ const WIRE_LIMIT := 65536
 ## The most pieces one document may hold.
 const MAX_PIECES := 600
 
+## The most toys a course or an arena may place (dot-props' loose ones: [WoCourse] `_build_toys`).
+const MAX_TOYS := 32
+
 ## Every piece kind, and the fields each one must have.
 ##
 ## [b]A table rather than a branch per kind,[/b] so the mapper's README, the validator and
@@ -151,6 +154,21 @@ static func validate(source: Dictionary) -> DotResult:
 		normalised.append(checked.value)
 
 	doc["pieces"] = normalised
+
+	# Toys: dot-props' placements, `{toy, at, yaw}`. Which ids exist is the catalogue's to say
+	# when the stage is built (an unknown one is left out and listed), so a course with a toy a
+	# newer dot-props has still plays on an older server. Only when present, so a document
+	# without any is byte for byte what it was.
+	if doc.has("toys"):
+		var toys: Array = []
+		for raw: Variant in (doc["toys"] if doc["toys"] is Array else []):
+			var toy := DotPropToyBox.normal_placement(raw)
+			if toy.is_empty():
+				return _refuse("toy %d is not {toy, at}" % toys.size(), doc)
+			toys.append(toy)
+		if toys.size() > MAX_TOYS:
+			return _refuse("it has %d toys; the most is %d" % [toys.size(), MAX_TOYS], doc)
+		doc["toys"] = toys
 
 	var rest := _course(doc) if kind == KIND_COURSE else _arena(doc)
 

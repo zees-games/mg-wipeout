@@ -24,8 +24,8 @@ const WoRequest := preload("../game/net/wo_request.gd")
 ##
 ## Sections and checks are both counted; mg-smash-copter's notes say why the second matters.
 
-const SECTIONS := 10
-const CHECKS := 50
+const SECTIONS := 11
+const CHECKS := 57
 
 const CLIENT_PEER := 7
 const SESSION := 42
@@ -70,6 +70,7 @@ func _run() -> void:
 	if await _build():
 		await _test_a_client_joins()
 		await _test_the_course_arrives()
+		await _test_the_toys_reach_the_client()
 		await _test_obstacles_agree()
 		await _test_a_knock_is_predicted()
 		await _test_the_local_player_is_predicted()
@@ -118,6 +119,10 @@ func _test_the_codec() -> void:
 	var stage := WoEvents.read_stage(DotNetReader.new(WoEvents.write_stage(WoCourseDoc.encode(doc))))
 	var decoded := WoCourseDoc.decode(stage["encoded"]) if bool(stage["ok"]) else DotResult.fail(DotError.CODE_PARSE, "no stage")
 	_check(decoded.ok and WoCourseDoc.digest(decoded.value) == WoCourseDoc.digest(doc), "STAGE carries the document whole")
+
+	var toys := WoEvents.read_toys(DotNetReader.new(WoEvents.write_toys(&"wo_first_splash", PackedInt64Array([7, 300, 9001]))))
+	_check(bool(toys["ok"]) and toys["stage_id"] == &"wo_first_splash" and toys["ids"] == PackedInt64Array([7, 300, 9001]),
+		"TOYS carries the stage and its toys' ids in order", str(toys))
 
 	var join := WoEvents.read_join(DotNetReader.new(WoEvents.write_join(SESSION, 9, "Ada", 101, null)))
 	_check(bool(join["ok"]) and int(join["team"]) == 101,
@@ -272,6 +277,60 @@ func _test_the_course_arrives() -> void:
 		"the same document, to the byte", WoCourseDoc.digest(_client_game.stage.doc))
 	_check(_client_game.stage.pieces.size() == _server_game.stage.pieces.size(), "every piece", "%d" % _client_game.stage.pieces.size())
 	_check(_heard.has("stage") and not bool(_heard["stage"][1]), "and the client said so, as a course")
+	_finished()
+
+
+## The start pen's toys over the wire: paired by index on both ends, frozen copies, a ball kicked on
+## the server followed on the client. Then a client without the stage (one whose STAGE never
+## came): it still registers the toys' mirrors from TOYS and reads every snapshot to its end,
+## because dot-net stops reading one at the first entity a client does not know; and pairs them
+## when the stage comes. Armed: registering the mirrors only once the stage was built here read
+## none of those snapshots.
+func _test_the_toys_reach_the_client() -> void:
+	_section("the start pen's toys reach the client, with or without its stage")
+	await _steps(4)
+	var count := _server_game.stage.toys.count()
+	_check(count == 2 and _server_bridge.toy_count() == count and _client_bridge.toy_count() == count,
+		"every toy is an entity on both ends, paired by index", "%d toys, %d and %d" % [count, _server_bridge.toy_count(), _client_bridge.toy_count()])
+	var server_ball := _server_game.stage.toys.toy(0)
+	var client_ball := _client_game.stage.toys.toy(0)
+	_check(client_ball.body.freeze and not client_ball.authoritative and not server_ball.body.freeze, "the client's are frozen copies")
+	var start := client_ball.body.global_position
+	var _kicked := _server_game.stage.toys.hit(server_ball.body, server_ball.body.global_position, Vector3(1, 0.3, 0), 2.0)
+	await _steps(60)
+	var apart := client_ball.body.global_position.distance_to(server_ball.body.global_position)
+	_check(client_ball.body.global_position.distance_to(start) > 0.5 and apart < 0.4,
+		"a ball kicked on the server is followed on the client", "%.2f m moved, %.2f m apart" % [client_ball.body.global_position.distance_to(start), apart])
+
+	# The client loses its stage, and is told the toys again (a joiner whose STAGE never built).
+	var ids: Array = []
+	for behaviour: Node in (_server_bridge.get("_toy_nets") as Array):
+		ids.append((behaviour.get("identity") as DotNetIdentity).net_id)
+	# As a STAGE this build could not build does it: the old stage cleared, nothing in its place.
+	_client_game.world_clearing.emit()
+	_client_game.stage.clear()
+	_server_bridge._tell(CLIENT_PEER, WoEvents.Kind.TOYS, _server_bridge.get("_toys_body"))
+	await _steps(2)
+	var applied := [0]
+	var count_applied := func(_t: int) -> void: applied[0] += 1
+	_client_net.snapshot_applied.connect(count_applied)
+	var received := _client_net.stats.snapshots_received
+	var _again := _server_game.stage.toys.hit(server_ball.body, server_ball.body.global_position, Vector3(-1, 0.3, 0), 2.0)
+	await _steps(30)
+	_client_net.snapshot_applied.disconnect(count_applied)
+	received = _client_net.stats.snapshots_received - received
+	var known := ids.filter(func(id: int) -> bool: return _client_net.registry.has(id)).size()
+	_check(known == ids.size() and ids.size() == 2 and _client_bridge.toy_count() == 0,
+		"without its stage the client still registers every toy, paired with nothing", "%d of %d known" % [known, ids.size()])
+	_check(received > 10 and applied[0] == received, "and reads every snapshot to its end", "%d of %d applied" % [applied[0], received])
+
+	_server_bridge._tell(CLIENT_PEER, WoEvents.Kind.STAGE, _server_bridge.get("_stage_body"))
+	await _steps(30)
+	client_ball = _client_game.stage.toys.toy(0) if _client_game.stage.toys != null else null
+	_check(_client_bridge.toy_count() == 2 and client_ball != null
+		and client_ball.body.global_position.distance_to(server_ball.body.global_position) < 0.4,
+		"when the stage comes, the same mirrors pose its toys where the server has them",
+		"%d paired" % _client_bridge.toy_count())
 	_finished()
 
 

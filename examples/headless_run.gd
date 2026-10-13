@@ -24,9 +24,9 @@ const WoSettings := preload("../game/wo_settings.gd")
 ## because the section announced itself on the way in. mg-smash-copter and dot-settings both
 ## have the story; every total here was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 31
+const SECTIONS := 32
 
-const CHECKS := 152
+const CHECKS := 159
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -69,6 +69,7 @@ func _run() -> void:
 	await _test_the_show()
 	await _test_one_finisher_wins()
 	await _test_the_final_death()
+	await _test_the_toys()
 	await _test_nobody_finishes()
 	await _test_knocks_hurt()
 	await _test_the_weather()
@@ -772,6 +773,74 @@ func _test_the_final_death() -> void:
 		"a client builds the body from the figure it draws, under the game's rules")
 	client.ragdolls.queue_free()
 	client.free()
+	_finished()
+
+
+## dot-props' loose toys: beach balls in the start pen, balls in a finale's arena. A runner walks
+## through one and sends it on without losing a step; a shot pushes one and goes on, because the
+## combat's trace never sees a toy; a barrel's blast throws one; `sv_toys 0` takes them away.
+func _test_the_toys() -> void:
+	_section("toys: beach balls in the start pen, balls in the arena, never in anybody's way")
+	var game := await _world()
+	var toys := game.stage.toys
+	var start: Vector3 = game.course_doc["start"]["at"]
+	var in_pen := toys.toys.filter(func(t: DotPropToy) -> bool:
+		return absf(t.global_position.x - start.x) < 5.0 and absf(t.global_position.z - start.z) < 4.0)
+	_check(toys.count() == 2 and in_pen.size() == 2 and in_pen.all(func(t: DotPropToy) -> bool: return t.kind == &"ball"),
+		"the practice course's two beach balls are in the start pen", "%d toys, %d in the pen" % [toys.count(), in_pen.size()])
+
+	# Run into the right-hand ball across the pen, side on: it goes, the runner does not slow.
+	var runner := game.add_player(&"u1", "Ada")
+	var ball := toys.toy(1)
+	var was := ball.body.global_position
+	runner.place_at(Vector3(was.x - 3.0, start.y, was.z), -90.0)
+	await _step(game, 4)
+	var slowest := 100.0
+	var met := false
+	for _i in range(int(0.6 * TICK_RATE)):
+		await _hold_for(game, runner, Vector2(0, 1), -90.0, 1)
+		var flat := Vector2(runner.controller.state.velocity.x, runner.controller.state.velocity.z).length()
+		if not met and ball.body.global_position.distance_to(was) > 0.05:
+			met = true
+		elif met and runner.controller.state.position.x < was.x + 0.3:
+			slowest = minf(slowest, flat)
+	_check(met and ball.body.global_position.distance_to(was) > 0.4, "a runner walking into a beach ball sends it on",
+		"%.2f m" % ball.body.global_position.distance_to(was))
+	_check(slowest > 0.9 * game.config.run_speed,
+		"and loses no speed to it", "%.1f m/s at the slowest" % slowest)
+
+	# The finale's arena: a shot down the line at a ball pushes it, and the combat's trace, which
+	# is what decides who is hit, cannot see it.
+	var _arena := game.build_stage(WoCatalogue.practice_arena())
+	await _physics_frame()
+	await _physics_frame()
+	toys = game.stage.toys
+	var football := toys.toy(1)
+	var resting := football.body.global_position
+	var shot := DotShot.new()
+	shot.origin = resting + Vector3(-6.0, 0.0, 0.0)
+	shot.direction = Vector3(1, 0, 0)
+	shot.damage = 25.0
+	shot.max_range = 40.0
+	game._shoot_toys(shot)
+	await _step(game, TICK_RATE / 2)
+	_check(toys.count() == 2 and football.body.global_position.distance_to(resting) > 0.5,
+		"the arena's balls are there, and a shot sends one off", "%.2f m" % football.body.global_position.distance_to(resting))
+	var trace_mask := game.physics.layer_mask(&"world")
+	_check(trace_mask & game.physics.layer_mask(&"toy") == 0 and football.body.collision_layer & trace_mask == 0,
+		"and the combat's trace cannot meet one, so a ball is never cover")
+
+	# A barrel going off beside the other ball throws it.
+	var beach := toys.toy(0)
+	var beach_was := beach.body.global_position
+	game._on_prop_exploded(beach_was + Vector3(1.0, 0.0, 0.0), 4.0, 0.0, 0.0, &"")
+	await _step(game, TICK_RATE / 2)
+	_check(beach.body.global_position.distance_to(beach_was) > 0.5, "a barrel's blast throws a ball",
+		"%.2f m" % beach.body.global_position.distance_to(beach_was))
+
+	var _off := game.toy_rules.set_cvar(DotPropToyRules.CVAR_ENABLED, "0")
+	_check(not toys.toy(0).visible and toys.toy(0).process_mode == Node.PROCESS_MODE_DISABLED, "sv_toys 0 takes them away")
+	var _on := game.toy_rules.set_cvar(DotPropToyRules.CVAR_ENABLED, "1")
 	_finished()
 
 

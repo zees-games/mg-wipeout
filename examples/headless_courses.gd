@@ -79,7 +79,7 @@ func _run() -> void:
 		_world.free()
 
 	var sections := 2 + courses.size() + forked + arenas.size()
-	var checks := 3 + (courses.size() + forked) * 3 + arenas.size() * 4
+	var checks := 3 + (courses.size() + forked) * 3 + courses.size() * 2 + arenas.size() * (4 + 2)
 
 	print("")
 	print("%d sections entered, %d finished" % [_sections_entered, _sections_finished])
@@ -117,6 +117,9 @@ func _run_course(doc: Dictionary, risk: float = -1.0) -> void:
 	var bot := game.add_player(&"u900001", "Runner")
 	bot.is_bot = true
 	var idle := game.add_player(&"u2", "Watcher")
+	# The start pen's toys, once a course (not again down a fork's other branch).
+	if risk < 50.0:
+		await _check_toys(game, doc)
 	game.start()
 
 	var limit := game.course_limit() + game.config.countdown_seconds + 1.0
@@ -237,7 +240,40 @@ func _stand_in_arena(doc: Dictionary) -> void:
 			open.append(str(direction))
 
 	_check(open.is_empty(), "and walls all round it", ", ".join(open))
+	await _check_toys(game, doc)
 	_finished()
+
+
+## A stage's toys (dot-props', loose only): every one built, none inside a piece, and after a
+## second and a half of real physics every one still where the document put it. Two checks.
+## Real physics frames, unlike the course run: a toy is a rigid body, simulated only by them.
+func _check_toys(game: WoGame, doc: Dictionary) -> void:
+	var box := game.stage.toys
+	var placed := (doc.get("toys", []) as Array).size()
+	var stuck: Array = []
+	var space := game.get_world_3d().direct_space_state
+	for toy in box.toys:
+		for child in toy.body.get_children():
+			var shape := child as CollisionShape3D
+			if shape == null or shape.shape == null:
+				continue
+			var query := PhysicsShapeQueryParameters3D.new()
+			query.shape = shape.shape
+			query.transform = shape.global_transform.translated(Vector3(0, 0.05, 0))
+			query.collision_mask = game.physics.layer_mask(&"world")
+			if not space.intersect_shape(query, 1).is_empty():
+				stuck.append("%s %d at %s" % [toy.def["id"], toy.index, toy.global_position.snapped(Vector3.ONE * 0.1)])
+				break
+	# Every course has the start pen's; an arena may have none (the turning floor's).
+	_check(box.count() == placed and (placed > 0 or str(doc["kind"]) == "arena") and box.missing.is_empty() and stuck.is_empty(),
+		"%d toys, every one dot-props' and loose, standing clear" % placed, "; ".join(stuck))
+	for _i in range(90):
+		await get_tree().physics_frame
+	var strayed: Array = []
+	for toy in box.toys:
+		if toy.body.global_position.distance_to(toy.rest.origin) > 0.3:
+			strayed.append("%s %d to %s" % [toy.def["id"], toy.index, toy.body.global_position.snapped(Vector3.ONE * 0.1)])
+	_check(strayed.is_empty(), "and still where it was put a second and a half on", "; ".join(strayed))
 
 
 func _floor_under(space: PhysicsDirectSpaceState3D, at: Vector3) -> bool:

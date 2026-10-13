@@ -281,6 +281,12 @@ static func practice() -> Dictionary:
 			{"at": [0.0, 0.0, -45.5], "board": true, "reach": 0.9},
 			{"at": [0.0, 0.0, -47.5]},
 		],
+		# dot-props' beach balls in the back corners of the start pen, to bat about while the
+		# gate is up. headless_run walks into one; nothing on the course itself.
+		"toys": [
+			{"toy": "beach_ball", "at": [-3.8, 0.0, 2.8]},
+			{"toy": "beach_ball", "at": [3.8, 0.0, 2.8]},
+		],
 	}
 
 	var checked := WoCourseDoc.validate(doc)
@@ -309,6 +315,12 @@ static func practice_arena() -> Dictionary:
 		],
 		"drops": [{"at": [0.0, 0.0, 0.0], "size": [12.0, 12.0]}],
 		"gallery": {"at": [0.0, 6.0, 20.0], "size": [14.0, 5.0]},
+		# Two balls between the corners, clear of the drops and the pillar: shot about, thrown by
+		# a barrel's blast, never cover. headless_run shoots one.
+		"toys": [
+			{"toy": "beach_ball", "at": [-8.0, 0.0, 0.0]},
+			{"toy": "football", "at": [8.0, 0.0, 0.0]},
+		],
 	}
 
 	var checked := WoCourseDoc.validate(doc)

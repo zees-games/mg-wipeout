@@ -55,6 +55,9 @@ enum Kind {
 	PICKUP_GONE,
 	## Your shot landed: where, whether it killed, whether to the head. To the shooter only.
 	HIT,
+	## The stage's toys: their net ids in toy order, then the stage's id (both ends build the toys
+	## in the same order from the document). After STAGE, and to a joiner after theirs.
+	TOYS,
 }
 
 enum Ask {
@@ -653,6 +656,30 @@ static func write_notice(text: String) -> PackedByteArray:
 static func read_notice(r: DotNetReader) -> Dictionary:
 	var text := r.read_string(TEXT_BYTES)
 	return {"text": text, "ok": r.ok()}
+
+
+# --- The stage's toys -----------------------------------------------------------
+
+## The toys' net ids in toy order, then the stage's id, which is what a client pairs them by:
+## one whose STAGE has not been built (or never came) has another stage's toys, or none.
+static func write_toys(stage_id: StringName, net_ids: PackedInt64Array) -> PackedByteArray:
+	var w := _w()
+	w.write_varint(net_ids.size())
+	for id in net_ids:
+		w.write_varint(maxi(int(id), 0))
+	w.write_string(String(stage_id), ID_BYTES)
+	return w.to_bytes()
+
+
+static func read_toys(r: DotNetReader) -> Dictionary:
+	var count := r.read_varint()
+	var ids := PackedInt64Array()
+	if count < 0 or count > 256:
+		return {"stage_id": &"", "ids": ids, "ok": false}
+	for i in count:
+		ids.append(r.read_varint())
+	var stage_id := StringName(r.read_string(ID_BYTES))
+	return {"stage_id": stage_id, "ids": ids, "ok": r.ok()}
 
 
 # --- A hit ----------------------------------------------------------------------
