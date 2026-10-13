@@ -22,6 +22,16 @@ const WoPlayer := preload("wo_player.gd")
 var game: WoGame = null
 var player: WoPlayer = null
 
+## Bottom right while armed: the weapon in hand and `magazine | reserve`. See [method _draw_ammo].
+var ammo: DotAmmoCounter = null
+
+## The rig the counter reads: the gun this client draws (`WoClient.weapons`), which
+## `WoClient.correct_drawn` brings to the server's count once quiet.
+var weapons_fn: Callable = Callable()
+
+## Four ticks round the crosshair for a hit the server confirmed. See [method confirm_hit].
+var hit_marker: DotHitMarker = null
+
 ## The clock with the phase line under it: dot-ui's [DotScoreStrip], clock alone.
 var strip: DotScoreStrip = null
 ## Health in a final death: dot-ui's [DotVitals], bar and number on one plate, red at a
@@ -198,6 +208,25 @@ func _build() -> void:
 	vitals.visible = false
 	_root.add_child(vitals)
 
+
+	# Bottom right, above the field line: what is in hand and how much is in it. The play test
+	# found a gun with no counter anywhere; dot-ui's DotAmmoCounter is the family's one.
+	ammo = DotAmmoCounter.new()
+	ammo.name = "Ammo"
+	ammo.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	ammo.offset_left = -420.0
+	ammo.offset_right = -24.0
+	ammo.offset_top = -176.0
+	ammo.offset_bottom = -100.0
+	ammo.visible = false
+	_root.add_child(ammo)
+
+	hit_marker = DotHitMarker.new()
+	hit_marker.name = "HitMarker"
+	hit_marker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hit_marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(hit_marker)
+
 	_field = _label(size)
 	_field.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	_field.offset_left = -400.0
@@ -357,6 +386,8 @@ func _process(delta: float) -> void:
 	else:
 		_field.text = "%d across of %d" % [game.finished_count(), game.players.size()]
 
+	_draw_ammo()
+
 	_draw_progress()
 
 	if _shout_for > 0.0:
@@ -438,3 +469,44 @@ func _draw_progress() -> void:
 	_tilt_fill.offset_right = -150.0 + 300.0 * fraction
 	_tilt_fill.color = Color(0.98, 0.80, 0.30, 0.95) if player.finished \
 		else Color(0.40, 0.72, 0.95, 0.9)
+
+
+## A hit the server confirmed for this player's shot: the marker, larger and red on a kill.
+func confirm_hit(killed: bool, headshot: bool) -> void:
+	if hit_marker != null:
+		hit_marker.flash(killed, headshot)
+
+
+## The counter, from the rig this player draws: the magazine and the reserve, low at a quarter
+## of a magazine; a melee weapon by its name alone; hidden unarmed, dead or blind.
+func _draw_ammo() -> void:
+	if ammo == null:
+		return
+
+	var rig: ZeeWeaponRig = null
+	if weapons_fn.is_valid():
+		rig = weapons_fn.call() as ZeeWeaponRig
+
+	var def := rig.current_def() if rig != null and is_instance_valid(rig) and rig.arsenal != null else null
+	var shown := def != null and player != null and is_instance_valid(player) and player.is_alive() \
+		and not is_blind()
+	ammo.visible = shown
+
+	if not shown:
+		ammo.clear()
+		return
+
+	var title := def.display_name if def.display_name != "" else String(def.id)
+	var held := rig.arsenal.current()
+
+	if def.ammo_type == &"" or held == null:
+		ammo.show_ammo(title, -1, -1)
+		return
+
+	var reserve := rig.arsenal.ammo().count(def.ammo_type)
+
+	if def.magazine > 0:
+		ammo.show_ammo(title, held.magazine, reserve,
+			float(held.magazine) <= float(def.magazine) * 0.25, def.infinite_reserve)
+	else:
+		ammo.show_ammo(title, reserve, -1, reserve <= 0, false)

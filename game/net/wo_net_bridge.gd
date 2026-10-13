@@ -83,6 +83,8 @@ signal blast_received(at: Vector3, radius: float)
 
 ## Somebody was handed, or picked up, a weapon. The HUD names it.
 signal armed_received(player_id: int, weapon_id: StringName)
+## Your shot landed (see [signal WoGame.hit_landed]); only ever to the shooter.
+signal hit_received(point: Vector3, killed: bool, headshot: bool)
 
 signal notice_received(text: String)
 
@@ -262,6 +264,11 @@ func attach(p_game: Object, p_net: DotNetManager) -> DotResult:
 		game.props.spawned.connect(_on_prop_spawned)
 		game.props.removed.connect(_on_prop_removed)
 		game.round_began.connect(_on_round_began)
+		# To the shooter alone: a hit marker is that player's business.
+		game.hit_landed.connect(func(id: StringName, point: Vector3, killed: bool, headshot: bool) -> void:
+			var hit_peer := peer_for_player(session_of(id))
+			if hit_peer > 0:
+				_tell(hit_peer, WoEvents.Kind.HIT, WoEvents.write_hit(point, killed, headshot)))
 		game.round_over.connect(_on_round_over)
 		game.phase_changed.connect(_on_phase_changed)
 		game.player_died.connect(_on_player_died)
@@ -1314,6 +1321,11 @@ func _on_event(message: DotNetMessage) -> void:
 
 			if bool(went_off["ok"]):
 				blast_received.emit(went_off["position"], float(went_off["radius"]))
+		WoEvents.Kind.HIT:
+			var hit := WoEvents.read_hit(reader)
+
+			if bool(hit["ok"]):
+				hit_received.emit(hit["point"], bool(hit["killed"]), bool(hit["headshot"]))
 		WoEvents.Kind.ARMED:
 			var armed := WoEvents.read_armed(reader)
 

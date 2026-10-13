@@ -53,6 +53,8 @@ enum Kind {
 	PICKUP,
 	## A weapon was picked up, or cleared away.
 	PICKUP_GONE,
+	## Your shot landed: where, whether it killed, whether to the head. To the shooter only.
+	HIT,
 }
 
 enum Ask {
@@ -651,3 +653,22 @@ static func write_notice(text: String) -> PackedByteArray:
 static func read_notice(r: DotNetReader) -> Dictionary:
 	var text := r.read_string(TEXT_BYTES)
 	return {"text": text, "ok": r.ok()}
+
+
+# --- A hit ----------------------------------------------------------------------
+
+static func write_hit(point: Vector3, killed: bool, headshot: bool) -> PackedByteArray:
+	var w := _w()
+	w.write_float32(point.x)
+	w.write_float32(point.y)
+	w.write_float32(point.z)
+	w.write_bool(killed)
+	w.write_bool(headshot)
+	return w.to_bytes()
+
+
+static func read_hit(r: DotNetReader) -> Dictionary:
+	var point := Vector3(r.read_float32(), r.read_float32(), r.read_float32())
+	var killed := r.read_bool()
+	var headshot := r.read_bool()
+	return {"point": point if point.is_finite() else Vector3.ZERO, "killed": killed, "headshot": headshot, "ok": r.ok()}

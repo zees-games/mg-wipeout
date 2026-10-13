@@ -24,9 +24,9 @@ const WoSettings := preload("../game/wo_settings.gd")
 ## because the section announced itself on the way in. mg-smash-copter and dot-settings both
 ## have the story; every total here was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 30
+const SECTIONS := 31
 
-const CHECKS := 147
+const CHECKS := 152
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -79,6 +79,7 @@ func _run() -> void:
 	await _test_help_and_menu()
 	await _test_the_map_menu()
 	await _test_offline_trigger()
+	await _test_the_drawn_gun()
 
 	for world in _worlds.duplicate():
 		await _dispose(world)
@@ -1350,3 +1351,68 @@ func _dispose(game: WoGame) -> void:
 	remove_child(game)
 	game.free()
 	await get_tree().process_frame
+
+
+## The play test's weapons, from a pickup: the drawn rig was given the whole pack, so the slot
+## held whatever was given last and never the gun the server fired; nothing counted the magazine;
+## nothing said a shot had landed. Armed: with `give_everything` back the first check fails,
+## without `correct_drawn` the fourth, without the HIT path the last.
+func _test_the_drawn_gun() -> void:
+	_section("an armed racer draws the server's gun, counted on the HUD, with a marker for a hit")
+	var client: Node = (load("res://game/wo_client.gd") as GDScript).new()
+	client.set(&"force_offline", true)
+	client.set(&"config_file", "user://cfg/headless-none.json")
+	add_child(client)
+	for i in 8:
+		await get_tree().process_frame
+	var world: WoGame = client.get("game")
+	var me: WoPlayer = client.get("player")
+	var _armed := world.arm(me, ZeeWeaponIds.SMG)
+	for i in 4:
+		await get_tree().physics_frame
+
+	var drawn: ZeeWeaponRig = client.get("weapons")
+	var held: Array[String] = []
+	var same := drawn != null and me.weapons != null and drawn != me.weapons
+	for slot in range(1, 6):
+		var mine := drawn.arsenal.slot_at(slot) if drawn != null else null
+		var theirs := me.weapons.arsenal.slot_at(slot) if me.weapons != null else null
+		var a := String(mine.def.id) if mine != null else "-"
+		var b := String(theirs.def.id) if theirs != null else "-"
+		held.append("%d:%s/%s" % [slot, a, b])
+		same = same and a == b
+	_check(same, "the drawn gun holds exactly the server's weapons, slot for slot", " ".join(held))
+
+	var hud: Node = client.get("hud")
+	hud.call("_process", 0.0)
+	var counter: DotAmmoCounter = hud.get("ammo")
+	var def := drawn.current_def() if drawn != null else null
+	var expected := "%d | %d" % [drawn.arsenal.current().magazine, drawn.arsenal.ammo().count(def.ammo_type)] if def != null else "?"
+	_check(counter != null and counter.visible and def != null and counter.weapon_name == def.display_name
+		and counter.count_text() == expected,
+		"the HUD has DotAmmoCounter, counting the drawn gun",
+		"%s %s, want %s" % [counter.weapon_name if counter else "-", counter.count_text() if counter else "-", expected])
+	_check(counter.anchor_left == 1.0 and counter.anchor_top == 1.0 and counter.offset_top >= -180.0
+		and counter.offset_bottom <= -100.0,
+		"it sits bottom right, above the field line and clear of the chat and the health plate")
+
+	var world_count := me.weapons.arsenal.current().magazine
+	drawn.arsenal.current().magazine = maxi(world_count - 5, 0)
+	client.set("_drawn_quiet", 0.0)
+	for i in 10:
+		await get_tree().physics_frame
+	var early := drawn.arsenal.current().magazine
+	for i in 60:
+		await get_tree().physics_frame
+	_check(early == maxi(world_count - 5, 0) and drawn.arsenal.current().magazine == world_count,
+		"the drawn gun takes the server's count once quiet, and not before",
+		"after 10 ticks %d, after 70 %d, server %d" % [early, drawn.arsenal.current().magazine, world_count])
+
+	var marker: DotHitMarker = hud.get("hit_marker")
+	world.hit_landed.emit(&"local", Vector3(0.0, 1.0, -4.0), true, false)
+	_check(marker != null and marker.alpha() > 0.9 and marker.kill, "a hit the world confirms flashes the marker, a kill's")
+
+	remove_child(client)
+	client.free()
+	await get_tree().process_frame
+	_finished()
