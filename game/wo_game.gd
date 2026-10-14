@@ -32,6 +32,10 @@ const CHANNEL := "wo.game"
 ## autoload: a server and a client in one process are two of these.
 const SERVICE := &"wo_game"
 
+## Where a host that runs this game with no server (the client shell's Solo play) publishes
+## the map packs it mounted for it. See [method solo_map_dirs].
+const SOLO_SERVICE := &"dot_solo"
+
 ## Snapshots a second. Thirty, like mg-smash-copter: what a player reads continuously here is
 ## other people on moving ground, and at twenty a rider on a turntable steps.
 const NET_SNAPSHOT_RATE := 30
@@ -296,6 +300,10 @@ func _ready() -> void:
 	if authoritative:
 		catalogue = WoCatalogue.new()
 		var _loaded := catalogue.load_from(config.course_directory)
+		# Solo in the client shell: the map packs it mounted for this game, which a server
+		# would have named. See [method solo_map_dirs].
+		for root in solo_map_dirs("courses"):
+			var _added := catalogue.add_directory(root)
 		# Laid out now, not on the first round: dot-match runs a warmup first, and an empty
 		# world through the warmup is indistinguishable from a map that failed to load.
 		_lay_out_course()
@@ -336,6 +344,19 @@ func _on_bot_changed(player: WoPlayer) -> void:
 func _on_body_rules_changed() -> void:
 	for id in players:
 		_apply_body_mask(players[id] as WoPlayer)
+
+
+## The `<pack>/<subdir>` directories of the map packs a host running this game with no server
+## has mounted for it: the client shell's Solo play, which fetches the packs a server owner
+## would name (dot-server-deploy's `client/solo.json`) because a tab has no server to name
+## them. Read the way the module reads its server's ([DotGameContent]). Empty everywhere else:
+## a server, a suite, a run from the repository. Looked up by name and duck-typed, because a
+## delivered game may not name a host's class.
+static func solo_map_dirs(subdir: String) -> PackedStringArray:
+	var host: Object = DotRegistry.get_service(SOLO_SERVICE)
+	if host == null or not host.has_method(&"map_dirs"):
+		return PackedStringArray()
+	return host.call(&"map_dirs", subdir)
 
 
 func _exit_tree() -> void:
