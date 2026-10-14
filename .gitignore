@@ -48,7 +48,7 @@
 # The courses and arenas: the mg-wipeout-maps repository, linked here by dot-bootstrap off
 # the comment line below (copied, on Windows). A checkout without it plays the one practice
 # course built into game/wo_catalogue.gd, which is a supported state, not a broken one.
-# bootstrap-link: mg-wipeout-maps/courses
+# bootstrap-link: mg-wipeout-maps/courses ci
 /courses
 
 # Exports
