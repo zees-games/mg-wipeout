@@ -26,7 +26,7 @@ const WoSettings := preload("../game/wo_settings.gd")
 
 const SECTIONS := 34
 
-const CHECKS := 174
+const CHECKS := 175
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -1320,7 +1320,11 @@ func _test_the_hud() -> void:
 		"on a course the strip shows the clock with the phase line under it",
 		"%s / %s" % [hud.strip.clock, hud.strip.under_text()]
 	)
-	_check(not hud.vitals.visible, "and no health: nothing on a course can hurt you")
+	_check(hud.vitals.visible == game.config.health_enabled, "on a course the health bar shows while health is on")
+	game.config.health_enabled = false
+	hud._process(0.0)
+	_check(not hud.vitals.visible, "and is hidden when health is off: nothing on a course can hurt you")
+	game.config.health_enabled = true
 
 	game.phase = WoGame.Phase.FINALE
 	me.health.health = 17.4

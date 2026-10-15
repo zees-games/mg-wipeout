@@ -56,6 +56,13 @@ var _root: Control = null
 ## Seconds left of the big shouted line in the middle of the screen.
 var _shout_for: float = 0.0
 
+## Damage feedback: the last health seen, and a flash that fades (a red wash and a shake of the bar).
+var _health_seen: float = -1.0
+var _hurt_flash: float = 0.0
+var _hurt_wash: ColorRect = null
+var _course_seen: int = 1
+const HURT_FLASH_SEC := 0.45
+
 ## An administrator's `blind`, over the world and under the HUD's numbers.
 ##
 ## [b]Under the numbers, on purpose.[/b] A blind takes the game away, not the player's
@@ -207,6 +214,13 @@ func _build() -> void:
 	vitals.offset_bottom = -206.0
 	vitals.visible = false
 	_root.add_child(vitals)
+
+	_hurt_wash = ColorRect.new()
+	_hurt_wash.name = "HurtWash"
+	_hurt_wash.color = Color(0.85, 0.05, 0.05, 0.0)
+	_hurt_wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hurt_wash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_root.add_child(_hurt_wash)
 
 
 	# Bottom right, above the field line: what is in hand and how much is in it. The play test
@@ -375,11 +389,26 @@ func _process(delta: float) -> void:
 
 	var fighting := game.phase == WoGame.Phase.FINALE or game.phase == WoGame.Phase.HANDOVER
 
-	if player != null and player.health != null and fighting and not player.watching:
+	# The bar is the fight's, and the course's too unless `health_enabled` is off.
+	var on_course := game.phase == WoGame.Phase.COURSE or game.phase == WoGame.Phase.COUNTDOWN
+	var shows_health := fighting or (on_course and game.config.health_enabled)
+
+	if player != null and player.health != null and shows_health and not player.watching:
 		vitals.show_vitals(player.health.health, player.health.max_health)
 		vitals.visible = true
+		_feel_damage(player.health.health, delta)
 	else:
 		vitals.visible = false
+		_health_seen = -1.0
+		_hurt_flash = 0.0
+		_hurt_wash.color.a = 0.0
+
+	# Between courses of one round, said once.
+	var number := game.course_number()
+	if number != _course_seen:
+		if number > 1 and game.phase == WoGame.Phase.COUNTDOWN:
+			shout("COURSE %d OF %d" % [number, game.config.courses_per_round], 3.0)
+		_course_seen = number
 
 	if fighting:
 		_field.text = "%d still up" % game.alive_count()
@@ -395,6 +424,25 @@ func _process(delta: float) -> void:
 
 		if _shout_for <= 0.0:
 			_shout.text = ""
+
+
+## A drop in health flashes the screen's edge red and shakes the bar for a moment.
+func _feel_damage(health: float, delta: float) -> void:
+	if _health_seen >= 0.0 and health < _health_seen - 0.01:
+		_hurt_flash = HURT_FLASH_SEC
+	_health_seen = health
+
+	if _hurt_flash > 0.0:
+		_hurt_flash = maxf(_hurt_flash - delta, 0.0)
+
+	var k := _hurt_flash / HURT_FLASH_SEC
+	_hurt_wash.color.a = 0.28 * k
+	var t := float(Time.get_ticks_msec())
+	var shake := Vector2(sin(t * 0.09), cos(t * 0.13)) * 6.0 * k
+	vitals.offset_left = 24.0 + shake.x
+	vitals.offset_right = 24.0 + 340.0 + shake.x
+	vitals.offset_top = -262.0 + shake.y
+	vitals.offset_bottom = -206.0 + shake.y
 
 
 func present_blind(delta: float) -> void:

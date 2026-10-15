@@ -1230,6 +1230,11 @@ func _course_is_over() -> bool:
 	return not players.is_empty()
 
 
+## Which course of the round is running, from 1, for the HUD's "Course 2 of 3".
+func course_number() -> int:
+	return _courses_run
+
+
 ## dot-match's backstop for a round: every course it may run, then the final death.
 func _round_time_limit() -> float:
 	return float(config.courses_per_round) * (config.countdown_seconds + config.course_seconds) \

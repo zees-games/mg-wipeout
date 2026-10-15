@@ -211,6 +211,15 @@ func _run() -> void:
 					focus = (parts[0] as Node3D).global_position
 			print("knockout: %d ragdolls, flight at %s (spinner %s)" % [bodies.size(), focus, hub])
 			camera.look_at_from_position(focus + Vector3(7.0, 3.0, 7.0), focus)
+		"hurt":
+			# The local player at 60 health, just hit: the health bar and the red flash.
+			await _seconds_of(game.config.countdown_seconds + 0.6)
+			var me = _client.get("player")
+			if me != null:
+				me.health.health = 85.0
+				await _frames(2)
+				me.health.health = 55.0
+				await _frames(2)
 		"hazard":
 			await _seconds_of(_seconds)
 			var hazard := _first_hazard(game)
