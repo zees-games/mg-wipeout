@@ -44,6 +44,13 @@ extends DotConfig
 ## Seconds the final death runs before the round is called on the clock (a draw).
 @export_range(10.0, 900.0, 5.0) var finale_seconds: float = 100.0
 
+## How many courses a round runs before its final death, when more than one side finishes.
+##
+## [b]Only a course two sides finished goes on to the next.[/b] A course nobody or one side
+## finished ends the round there, as before: the second course is the reward for a close race, not a
+## second chance to be alone. 1 is the old round (one course, then the final death).
+@export_range(1, 12, 1) var courses_per_round: int = 3
+
 ## Seconds between rounds.
 @export_range(0.0, 60.0, 1.0) var intermission_seconds: float = 8.0
 
@@ -80,6 +87,27 @@ extends DotConfig
 @export_group("The players")
 
 @export_range(1.0, 400.0, 1.0) var player_health: float = 100.0
+
+## Whether the course hurts at all: knocks, lightning and hard landings. Off, a player's health
+## on the course never moves (the final death's fight still uses it, or nobody could win it).
+@export var health_enabled: bool = true
+
+## Metres a player may drop onto a deck without it costing health. A jump is 1.25 and a step
+## down a course's own platforms is two or three.
+@export_range(0.0, 30.0, 0.25) var fall_safe_height: float = 3.5
+
+## Health a hard landing costs, per metre fallen past [member fall_safe_height]. 0: never.
+@export_range(0.0, 50.0, 0.5) var fall_damage_per_metre: float = 6.0
+
+## The health fraction (of [member player_health]) at or below which the blow that knocks a
+## player out throws the body into the air as a ragdoll. Lower health, wilder flight: just under
+## this it is a quarter of [member knockout_fling_power], at no health the whole of it.
+## 0 turns the flight off, and a knockout falls as the server's ragdoll rules pick.
+@export_range(0.0, 1.0, 0.01) var knockout_fling_below: float = 0.5
+
+## How hard a knockout at no health throws the body: the ragdoll's push strength, 1 being a
+## hundred points of damage (the ragdoll caps it at three).
+@export_range(0.0, 10.0, 0.1) var knockout_fling_power: float = 3.0
 
 ## How fast a player runs, in m/s.
 @export_range(1.0, 20.0, 0.1) var run_speed: float = 7.0

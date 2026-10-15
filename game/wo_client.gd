@@ -224,6 +224,7 @@ func _build_ragdolls() -> void:
 	ragdolls = DotPlayerRagdolls.new()
 	ragdolls.name = "Ragdolls"
 	ragdolls.rules = game.ragdoll_rules
+	ragdolls.reactions = WoGame.death_reactions()
 	ragdolls.sound_fn = _ragdoll_sound
 	add_child(ragdolls)
 
@@ -609,6 +610,8 @@ func _on_death(session_id: int, _by: int, why: StringName) -> void:
 			line = "%s stood next to a barrel" % name_of
 		WoGame.DIED_KNOCKED:
 			line = "%s was knocked out of the round" % name_of
+		WoGame.DIED_LANDED:
+			line = "%s landed too hard" % name_of
 		WoGame.DIED_STRUCK:
 			line = "%s was struck by lightning" % name_of
 
@@ -799,7 +802,9 @@ func _hear_death(who: WoPlayer, why: StringName) -> void:
 
 	# Knocked to pieces by a blow or a blast is this game's own look; anything less, what is
 	# left of the body falls as a ragdoll, the way the server picked.
-	if not _break(who, why):
+	# A flung body (a knockout at low health) is the flight itself: not broken up on the way.
+	var flung := who.death != null and who.death.reaction == WoGame.FLING
+	if flung or not _break(who, why):
 		_fall(who)
 
 	if audio == null:

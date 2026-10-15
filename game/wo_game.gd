@@ -94,6 +94,13 @@ const DIED_BLAST := &"blast"
 ## Knocked out on the course by an obstacle, or by lightning.
 const DIED_KNOCKED := &"knocked"
 const DIED_STRUCK := &"struck"
+## Landed too hard on the course: [member WoConfig.fall_damage_per_metre].
+const DIED_LANDED := &"landed"
+
+## The ragdoll reaction a knockout at low health gets: a flight, not a fall. This game's own
+## entry on dot-player-char's stock set, on the server (which picks it) and on the client (which
+## looks it up by this id). Weight 0 so a roll never picks it; only [method decide_death] names it.
+const FLING := &"wipeout_fling"
 
 ## Metres within which a player standing over a weapon picks it up.
 const PICKUP_REACH := 1.3
@@ -232,6 +239,9 @@ var pickups: Dictionary = {}
 var _tick: int = 0
 var _round_seed: int = 0
 var _finish_count: int = 0
+
+## Which course of the round is running, from 1. See [member WoConfig.courses_per_round].
+var _courses_run: int = 1
 var _next_solo_side: int = SOLO_SIDE_BASE
 var _next_pickup: int = 1
 
@@ -550,8 +560,7 @@ func _build_match() -> void:
 	# (`minimum_players`) are what makes an empty server playable.
 	rules.min_players = 2
 	rules.set(&"decision_fn", _decision)
-	rules.time_limit_sec = config.countdown_seconds + config.course_seconds \
-		+ config.handover_seconds + config.finale_seconds + 60.0
+	rules.time_limit_sec = _round_time_limit()
 	match_node.rules = rules
 
 	# Scoped to the match node, which finds nothing: this game places its own players, and an
@@ -958,6 +967,10 @@ func _on_round_started(number: int) -> void:
 	_winner = 0
 	_winner_name = ""
 	_finish_count = 0
+	_courses_run = 1
+
+	if match_node != null and match_node.rules != null:
+		match_node.rules.time_limit_sec = _round_time_limit()
 
 	if progress != null:
 		progress.on_round_began()
@@ -1217,6 +1230,25 @@ func _course_is_over() -> bool:
 	return not players.is_empty()
 
 
+## dot-match's backstop for a round: every course it may run, then the final death.
+func _round_time_limit() -> float:
+	return float(config.courses_per_round) * (config.countdown_seconds + config.course_seconds) \
+		+ config.handover_seconds + config.finale_seconds + 60.0
+
+
+## The next course of the same round: everybody back on a start pad, healed, with their points
+## kept. Nobody is told "round began" again; the new STAGE and the phase say it.
+func _begin_next_course() -> void:
+	_courses_run += 1
+	_finish_count = 0
+	_lay_out_course()
+	_place_on_start()
+	_set_phase(Phase.COUNTDOWN)
+	DotLog.info(CHANNEL, "the next course of the round", {
+		"course": String(stage.id()), "number": _courses_run, "of": config.courses_per_round,
+	})
+
+
 ## The course is closed. Who finished decides what happens next.
 func _close_course() -> void:
 	var through := finishing_sides()
@@ -1227,6 +1259,9 @@ func _close_course() -> void:
 	})
 
 	if through.size() >= 2:
+		if _courses_run < config.courses_per_round:
+			_begin_next_course()
+			return
 		_begin_handover(through)
 		return
 
@@ -1939,18 +1974,16 @@ func _watch_progress() -> void:
 			# every few ticks, and charged each time it killed a stand-in pinned there in a
 			# second — half of a field of eight was knocked out of Punch Alley that way.
 			var hurt_since := _tick - int(player.get_meta(&"knock_hurt_tick", -100000))
-			if authoritative and stage.is_course() and phase == Phase.COURSE and combat != null \
-					and player.is_alive() and not player.finished and hurt_since >= tick_rate:
-				player.set_meta(&"knock_hurt_tick", _tick)
+			if hurt_since >= tick_rate:
 				var amount := player.last_knock_speed * config.knock_damage_per_speed
 				if player.last_knock_struck:
 					amount = maxf(amount, config.strike_damage)
-				if amount > 0.0:
-					var hurt := DotDamage.make(0, player.entity_id, amount, null)
-					hurt.point = feet
-					hurt.tick = _tick
-					hurt.context = {"why": DIED_STRUCK if player.last_knock_struck else DIED_KNOCKED}
-					var _applied := combat.apply_damage(hurt)
+				if _hurt_on_course(
+						player, amount, DIED_STRUCK if player.last_knock_struck else DIED_KNOCKED,
+						player.last_knock_direction):
+					player.set_meta(&"knock_hurt_tick", _tick)
+
+		_watch_landing(player, feet)
 
 		if feet.y < stage.water_height():
 			_fell(player)
@@ -1969,6 +2002,50 @@ func _watch_progress() -> void:
 
 		if stage.in_finish(feet):
 			_finish(player)
+
+
+## Takes [param amount] of a player's health on the course, once the checks every course hit
+## shares have passed: the authority, a course in play, health switched on, somebody alive and
+## not yet across. The health they had BEFORE rides in the damage's context, because the death
+## the blow may cause is decided from it ([method decide_death]). True when it was charged.
+func _hurt_on_course(player: WoPlayer, amount: float, why: StringName, direction: Vector3) -> bool:
+	if not authoritative or not config.health_enabled or amount <= 0.0 or stage == null \
+			or not stage.is_course() or phase != Phase.COURSE or combat == null \
+			or player.health == null or not player.is_alive() or player.finished:
+		return false
+
+	var hurt := DotDamage.make(0, player.entity_id, amount, null)
+	hurt.point = player.controller.state.position
+	hurt.direction = direction
+	hurt.tick = _tick
+	hurt.context = {"why": why, "health_before": player.health.health}
+	var _applied := combat.apply_damage(hurt)
+	return true
+
+
+## Hard landings: the height a player fell from before their feet found a deck, past
+## [member WoConfig.fall_safe_height], costs [member WoConfig.fall_damage_per_metre] a metre. The peak
+## is kept while in the air and forgotten on a fall into the water, which has its own rule.
+func _watch_landing(player: WoPlayer, feet: Vector3) -> void:
+	if not authoritative or player.controller == null:
+		return
+
+	var airborne := player.controller.state.mode != DotFpsState.Mode.GROUND
+
+	if airborne:
+		var peak := float(player.get_meta(&"air_peak", feet.y))
+		player.set_meta(&"air_peak", maxf(peak, feet.y))
+		return
+
+	if not player.has_meta(&"air_peak"):
+		return
+
+	var dropped := float(player.get_meta(&"air_peak")) - feet.y
+	player.remove_meta(&"air_peak")
+	var over := dropped - config.fall_safe_height
+
+	if over > 0.0 and config.fall_damage_per_metre > 0.0 and feet.y >= stage.water_height():
+		var _charged := _hurt_on_course(player, over * config.fall_damage_per_metre, DIED_LANDED, Vector3.ZERO)
 
 
 func _fell(player: WoPlayer) -> void:
@@ -1990,6 +2067,7 @@ func _fell(player: WoPlayer) -> void:
 	# On a course a fall costs time and nothing else: back to the last checkpoint crossed,
 	# or the start, or — for somebody already finished — the lounge.
 	player.falls += 1
+	player.remove_meta(&"air_peak")
 
 	if player.finished:
 		var spot := stage.lounge_spot(player.place)
@@ -3324,9 +3402,44 @@ func _bot_now() -> float:
 
 # --- Reacting ---------------------------------------------------------------
 
+## The stock death reactions plus this game's [constant FLING]. One list for both ends.
+static func death_reactions() -> DotPlayerDeathReactions:
+	var out := DotPlayerDeathReactions.stock()
+	var fling := DotPlayerDeathReaction.new()
+	fling.id = FLING
+	fling.display_name = "Wipeout fling"
+	fling.weight = 0.0
+	fling.pose = DotPlayerDeathReaction.Pose.LAUNCH
+	fling.push = 9.0
+	fling.hit_push = 6.0
+	fling.launch_up = 9.0
+	fling.launch_along = 4.0
+	fling.spin = 12.0
+	fling.start_sound = DotPlayerDeathReactions.SOUND_WHOOSH
+	fling.land_sound = DotPlayerDeathReactions.SOUND_THUD
+	fling.land_speed = 3.0
+	var _added := out.add(fling)
+	return out
+
+
+## How wild a knockout is, 0 to 1, from the fraction of health the player had BEFORE the blow:
+## 0 at or above [member WoConfig.knockout_fling_below] (or with the flight off), 1 at no health.
+func fling_wildness(health_before: float) -> float:
+	var below := config.knockout_fling_below
+	if below <= 0.0 or config.player_health <= 0.0:
+		return 0.0
+	var fraction := clampf(health_before / config.player_health, 0.0, 1.0)
+	if fraction > below:
+		return 0.0
+	return 1.0 - fraction / below
+
+
 ## The fall a death gets: dot-player-char's reaction rule over the server's weights, seeded from
 ## the player and the tick, with the killing weapon's def (zee's sniper and launcher always throw
 ## the body). A death with no sideways direction (a fall, a trap) pushes nothing.
+##
+## [b]A course knockout at low health is a flight[/b] ([constant FLING]): the lower the health
+## the blow found, the harder the push, written into the death's damage (which is what travels).
 func decide_death(player: WoPlayer, damage: DotDamage) -> DotPlayerDeath:
 	if _weapon_defs.is_empty():
 		_weapon_defs = ZeeWeaponPack.table()
@@ -3334,10 +3447,20 @@ func decide_death(player: WoPlayer, damage: DotDamage) -> DotPlayerDeath:
 	var attacker: WoPlayer = players.get(entities.key_for_id(damage.attacker)) if damage.attacker != 0 else null
 	if direction.length_squared() < 0.0001 and attacker != null and attacker != player:
 		direction = player.controller.state.position - attacker.controller.state.position
-	return DotPlayerDeath.decide(
-		ragdoll_rules.reactions(), damage.is_headshot(), damage.amount, direction,
+	var death := DotPlayerDeath.decide(
+		ragdoll_rules.reactions(death_reactions()), damage.is_headshot(), damage.amount, direction,
 		DotPlayerDeath.seed_of(player.entity_id, _tick), _weapon_defs.get(damage.weapon_id)
 	)
+
+	if damage.context.has("health_before"):
+		var wild := fling_wildness(float(damage.context["health_before"]))
+		if wild > 0.0:
+			death.reaction = FLING
+			# 25 percent of the power at the edge, all of it at no health; 1.0 is a hundred damage.
+			death.damage = config.knockout_fling_power * (0.25 + 0.75 * wild) * 100.0
+			death.headshot = false
+
+	return death
 
 
 func _on_player_died(player: WoPlayer, damage: DotDamage) -> void:

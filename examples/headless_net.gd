@@ -679,6 +679,7 @@ func _make_game(server: bool, parent: Node) -> WoGame:
 	config.minimum_players = 0
 	config.keep_progress = false
 	config.course_ids = PackedStringArray(["wo_practice"])
+	config.courses_per_round = 1
 	config.arena_ids = PackedStringArray(["wo_practice_arena"])
 
 	var game := WoGame.new()

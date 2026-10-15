@@ -24,9 +24,9 @@ const WoSettings := preload("../game/wo_settings.gd")
 ## because the section announced itself on the way in. mg-smash-copter and dot-settings both
 ## have the story; every total here was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 32
+const SECTIONS := 34
 
-const CHECKS := 159
+const CHECKS := 174
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -72,6 +72,8 @@ func _run() -> void:
 	await _test_the_toys()
 	await _test_nobody_finishes()
 	await _test_knocks_hurt()
+	await _test_courses_per_round()
+	await _test_hard_landings()
 	await _test_the_weather()
 	await _test_the_machinery_is_heard()
 	await _test_the_client_settings()
@@ -910,6 +912,135 @@ func _test_knocks_hurt() -> void:
 	_finished()
 
 
+func _test_courses_per_round() -> void:
+	_section("a round runs courses_per_round courses, but only while more than one side finishes")
+	var game := await _world(func(c: WoConfig) -> void:
+		c.courses_per_round = 2
+		c.countdown_seconds = 0.2
+		c.wind_chance = 0.0
+		c.storm_chance = 0.0)
+	var a := game.add_player(&"u1", "Ada")
+	var b := game.add_player(&"u2", "Bo")
+	game.start()
+	await _step(game, int(1.0 * TICK_RATE))
+	var finish: Dictionary = game.course_doc["finish"]
+	a.place_at(finish["at"], 0.0)
+	await _step(game, 2)
+	b.place_at(finish["at"], 0.0)
+	await _step(game, 2)
+	var points := a.points
+	_check(game.phase == WoGame.Phase.COUNTDOWN and game.stage.is_course(),
+		"two finished on course 1 of 2: a second course, not the final death", str(game.phase))
+	_check(not a.finished and not b.finished and a.points == points and points > 0,
+		"everybody is back to run it, with the points kept", str(a.points))
+	_check(a.health.health >= a.health.max_health - 0.01, "and healed")
+	await _step(game, int((game.config.countdown_seconds + 0.4) * TICK_RATE))
+	_check(game.phase == WoGame.Phase.COURSE, "the second course is running")
+	a.place_at(finish["at"], 0.0)
+	await _step(game, 2)
+	b.place_at(finish["at"], 0.0)
+	await _step(game, 2)
+	_check(game.phase == WoGame.Phase.HANDOVER and game.stage.is_arena(),
+		"two finished on course 2 of 2: the final death", str(game.phase))
+
+	# One finisher ends the round at once however many courses it was going to run.
+	var solo := await _world(func(c: WoConfig) -> void:
+		c.courses_per_round = 3
+		c.countdown_seconds = 0.2
+		c.wind_chance = 0.0
+		c.storm_chance = 0.0)
+	var c1 := solo.add_player(&"u1", "Ada")
+	var _c2 := solo.add_player(&"u2", "Bo")
+	var ended: Array = []
+	solo.round_over.connect(func(n: int, w: int, _why: String) -> void: ended.append([n, w]))
+	solo.start()
+	await _step(solo, int(1.0 * TICK_RATE))
+	c1.place_at((solo.course_doc["finish"] as Dictionary)["at"], 0.0)
+	await _step(solo, 2)
+	solo.course_elapsed = solo.course_limit()
+	await _step(solo, 2)
+	_check(ended.size() == 1 and int(ended[0][1]) == c1.team and solo.phase != WoGame.Phase.HANDOVER,
+		"one finisher of three courses: the round ends there, no more courses", str(ended))
+	_finished()
+
+
+func _test_hard_landings() -> void:
+	_section("falls and hits cost health by how bad they were; health can be switched off")
+	var game := await _world(func(c: WoConfig) -> void:
+		c.wind_chance = 0.0
+		c.storm_chance = 0.0)
+	var victim := game.add_player(&"u1", "Ada")
+	var _other := game.add_player(&"u2", "Bo")
+	game.start()
+	await _step(game, int((game.config.countdown_seconds + 0.2) * TICK_RATE))
+	var start := victim.global_position
+
+	# A drop under the safe height is free; a high one costs per metre past it.
+	victim.place_at(start + Vector3(0.0, 1.5, 0.0), 0.0)
+	await _step(game, int(1.5 * TICK_RATE))
+	_check(victim.health.health >= victim.health.max_health - 0.01, "a one and a half metre drop is free")
+
+	var expected := (8.0 - game.config.fall_safe_height) * game.config.fall_damage_per_metre
+	victim.place_at(start + Vector3(0.0, 8.0, 0.0), 0.0)
+	await _step(game, int(2.0 * TICK_RATE))
+	var lost := victim.health.max_health - victim.health.health
+	_check(absf(lost - expected) < 8.0 and lost > 0.0, "an eight metre drop costs per metre past the safe height",
+		"%.1f lost, about %.1f expected" % [lost, expected])
+
+	victim.health.health = victim.health.max_health
+	var hard := victim.global_position
+	game.config.health_enabled = false
+	victim.place_at(hard + Vector3(0.0, 8.0, 0.0), 0.0)
+	await _step(game, int(2.0 * TICK_RATE))
+	_check(victim.health.health >= victim.health.max_health - 0.01, "with health off the same fall costs nothing")
+	game.config.health_enabled = true
+
+	# The lower the health, the wilder the knockout.
+	var wild_5 := game.fling_wildness(5.0)
+	var wild_40 := game.fling_wildness(40.0)
+	_check(wild_5 > wild_40 and wild_40 > 0.0 and game.fling_wildness(80.0) == 0.0,
+		"wildness grows as health falls and is nothing when healthy", "%.2f %.2f" % [wild_5, wild_40])
+	game.config.knockout_fling_below = 0.0
+	_check(game.fling_wildness(1.0) == 0.0, "knockout_fling_below 0 turns the flight off")
+	game.config.knockout_fling_below = 0.5
+
+	var hurt := DotDamage.make(0, victim.entity_id, 10.0, null)
+	hurt.direction = Vector3(1.0, 0.0, 0.0)
+	hurt.context = {"why": WoGame.DIED_KNOCKED, "health_before": 5.0}
+	var low := game.decide_death(victim, hurt)
+	hurt.context = {"why": WoGame.DIED_KNOCKED, "health_before": 40.0}
+	var mid := game.decide_death(victim, hurt)
+	hurt.context = {"why": WoGame.DIED_KNOCKED, "health_before": 90.0}
+	var healthy := game.decide_death(victim, hurt)
+	_check(low.reaction == WoGame.FLING and mid.reaction == WoGame.FLING and healthy.reaction != WoGame.FLING
+		and low.damage > mid.damage, "5 hp and 40 hp are flung, 5 harder; 90 hp falls as the rules pick",
+		"%.0f %.0f" % [low.damage, mid.damage])
+	_check(WoGame.death_reactions().has(WoGame.FLING), "the fling is a reaction both ends know")
+
+	# A real punch at 5 hp: out of the round, and the death that travels is the flight.
+	var hub: Vector3 = _piece(game, "spinner")["spec"]["at"]
+	victim.health.health = 5.0
+	victim.place_at(hub + Vector3(2.6, 0.05, 0.0), 0.0)
+	for _i in range(TICK_RATE * 4):
+		await _step(game, 1)
+		if victim.watching:
+			break
+	_check(victim.watching and victim.death != null and victim.death.reaction == WoGame.FLING
+		and victim.death.damage > 100.0, "a knock at 5 hp knocks them out with a flinging death",
+		str(victim.death.describe()) if victim.death != null else "no death")
+
+	# The same blow with health off costs nothing.
+	game.config.health_enabled = false
+	var other_victim := game.add_player(&"u3", "Cy")
+	other_victim.health.health = 5.0
+	other_victim.place_at(hub + Vector3(2.6, 0.05, 0.0), 0.0)
+	for _i in range(TICK_RATE * 3):
+		await _step(game, 1)
+	_check(not other_victim.watching and other_victim.health.health >= 5.0 and other_victim.knocks > 0,
+		"with health off a knock still throws but never hurts", str(other_victim.knocks))
+	_finished()
+
+
 func _test_the_weather() -> void:
 	_section("gusts and lightning are drawn once and computed from the tick")
 	var game := await _world(func(c: WoConfig) -> void:
@@ -1378,6 +1509,9 @@ func _world(configure: Callable = Callable(), course: Dictionary = {}) -> WoGame
 	config.course_ids = PackedStringArray(["wo_practice"])
 	config.arena_ids = PackedStringArray(["wo_practice_arena"])
 	config.keep_progress = true
+	# One course then the final death, the round most sections were written against; the
+	# courses-per-round section asks for more.
+	config.courses_per_round = 1
 
 	if configure.is_valid():
 		configure.call(config)

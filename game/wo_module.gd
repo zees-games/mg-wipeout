@@ -333,6 +333,30 @@ func _add_tunables(world: WoGame) -> void:
 	_tunable("wo_course_seconds", config.course_seconds,
 		"The most seconds a course stays open (a course may ask for less)",
 		func(value: float) -> void: config.course_seconds = clampf(value, 10.0, 1200.0))
+	_tunable("wo_courses_per_round", float(config.courses_per_round),
+		"Courses a round runs before the final death, while more than one side finishes each (1: one course)",
+		func(value: float) -> void: config.courses_per_round = clampi(int(value), 1, 12))
+	_tunable("wo_health", 1.0 if config.health_enabled else 0.0,
+		"Whether the course hurts: knocks, lightning and hard landings cost health (0 turns it all off)",
+		func(value: float) -> void: config.health_enabled = value > 0.5)
+	_tunable("wo_knock_damage", config.knock_damage_per_speed,
+		"Health a knock costs per m/s it threw the player (0: knocks never hurt)",
+		func(value: float) -> void: config.knock_damage_per_speed = clampf(value, 0.0, 10.0))
+	_tunable("wo_strike_damage", config.strike_damage,
+		"Health lightning costs at the least",
+		func(value: float) -> void: config.strike_damage = clampf(value, 0.0, 400.0))
+	_tunable("wo_fall_safe_height", config.fall_safe_height,
+		"Metres a player may drop onto a deck for free",
+		func(value: float) -> void: config.fall_safe_height = clampf(value, 0.0, 30.0))
+	_tunable("wo_fall_damage", config.fall_damage_per_metre,
+		"Health a hard landing costs per metre fallen past wo_fall_safe_height (0: never)",
+		func(value: float) -> void: config.fall_damage_per_metre = clampf(value, 0.0, 50.0))
+	_tunable("wo_fling_below", config.knockout_fling_below,
+		"Health fraction at or below which a knockout flings the body (0: never; the lower, the wilder)",
+		func(value: float) -> void: config.knockout_fling_below = clampf(value, 0.0, 1.0))
+	_tunable("wo_fling_power", config.knockout_fling_power,
+		"How hard a knockout at no health flings the body (the ragdoll caps it at 3)",
+		func(value: float) -> void: config.knockout_fling_power = clampf(value, 0.0, 10.0))
 	_tunable("wo_finale_seconds", config.finale_seconds,
 		"Seconds a final death lasts before it is called on the clock",
 		func(value: float) -> void: config.finale_seconds = clampf(value, 10.0, 900.0))

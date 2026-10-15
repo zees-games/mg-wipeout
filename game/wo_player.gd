@@ -126,6 +126,8 @@ var ping_ms: int = -1
 
 var last_knock_speed: float = 0.0
 var last_knock_struck: bool = false
+## Which way the last knock threw them, flat and unit length: where a knockout's body flies.
+var last_knock_direction: Vector3 = Vector3.ZERO
 
 ## An administrator's `blind`: this player's own screen is blacked out. Owner-only on the wire.
 var blinded: bool = false
@@ -350,6 +352,7 @@ func _after_tick(tick: int, state: DotFpsState) -> void:
 		knocks += 1
 		last_knock_speed = Vector2(bolt.x, bolt.z).length()
 		last_knock_struck = true
+		last_knock_direction = Vector3(bolt.x, 0.0, bolt.z).normalized()
 		state.velocity = bolt
 		state.mode = DotFpsState.Mode.AIR
 		state.position.y += 0.05
@@ -362,6 +365,7 @@ func _after_tick(tick: int, state: DotFpsState) -> void:
 			knocks += 1
 			last_knock_speed = Vector2(thrown.x, thrown.z).length()
 			last_knock_struck = false
+			last_knock_direction = Vector3(thrown.x, 0.0, thrown.z).normalized()
 			state.velocity = thrown
 			state.mode = DotFpsState.Mode.AIR
 			# Lifted clear of the ground this tick, or the motor's ground snap takes the throw
@@ -415,6 +419,9 @@ func place_at(at: Vector3, yaw_degrees: float) -> void:
 	# second, which is about a ram pinning somebody, not about the next obstacle.
 	if has_meta(&"knock_hurt_tick"):
 		remove_meta(&"knock_hurt_tick")
+	# Nor is a placement a fall from wherever they last were: [WoGame] charges a hard landing.
+	if has_meta(&"air_peak"):
+		remove_meta(&"air_peak")
 	controller.teleport(at, yaw_degrees, 0.0)
 
 	if sampler != null:

@@ -178,6 +178,39 @@ func _run() -> void:
 					var at: Vector3 = piece["spec"]["at"]
 					camera.look_at_from_position(at + Vector3(3.5, 2.6, 7.5), at + Vector3(0.0, 1.6, 0.0))
 					break
+		"knockout":
+			# A stand-in at 5 hp struck by the first spinner: out of the round, and the body
+			# goes up as a ragdoll. The frame is a moment into the flight, from the side.
+			await _seconds_of(game.config.countdown_seconds + 0.5)
+			var victim = null
+			for id: StringName in game.players:
+				if game.players[id].is_bot:
+					victim = game.players[id]
+					break
+			var hub := _first_hazard(game)
+			for piece in game.stage.pieces:
+				if str(piece["kind"]) == "spinner":
+					hub = piece["spec"]["at"]
+					break
+			if victim != null:
+				victim.health.health = 5.0
+				victim.place_at(hub + Vector3(2.6, 0.05, 0.0), 0.0)
+				var waited := 0.0
+				while not victim.watching and waited < 6.0:
+					await _frames(1)
+					waited += get_process_delta_time()
+				print("knockout: out=%s death=%s" % [victim.watching, victim.death.describe() if victim.death != null else "none"])
+				await _seconds_of(0.35)
+			var camera := _free_camera()
+			var bodies: Array = (_client.get("ragdolls") as DotPlayerRagdolls).live()
+			var focus := hub + Vector3(3.0, 3.0, 0.0)
+			if not bodies.is_empty():
+				# The ragdoll node itself sits at the origin; its parts are the rigid bodies under it.
+				var parts: Array[Node] = (bodies[0] as Node).find_children("*", "RigidBody3D", true, false)
+				if not parts.is_empty():
+					focus = (parts[0] as Node3D).global_position
+			print("knockout: %d ragdolls, flight at %s (spinner %s)" % [bodies.size(), focus, hub])
+			camera.look_at_from_position(focus + Vector3(7.0, 3.0, 7.0), focus)
 		"hazard":
 			await _seconds_of(_seconds)
 			var hazard := _first_hazard(game)

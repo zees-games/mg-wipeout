@@ -292,6 +292,8 @@ func _fresh_world(doc: Dictionary) -> WoGame:
 	# before its first checkpoint would be knocked out of the round, which is a fact about the
 	# stand-in. Damage and weather are headless_run's.
 	config.knock_damage_per_speed = 0.0
+	config.fall_damage_per_metre = 0.0
+	config.courses_per_round = 1
 	config.wind_chance = 0.0
 	config.storm_chance = 0.0
 	config.warmup_seconds = 0.0

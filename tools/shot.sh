@@ -5,6 +5,7 @@
 #   tools/shot.sh --view=course --wo-course-ids=wo_spin_cycle   # a course, from above
 #   tools/shot.sh --view=start                         # the start pad, from behind the runners
 #   tools/shot.sh --view=hazard --seconds=2            # the first thing that throws you, close
+#   tools/shot.sh --view=knockout                      # a stand-in at 5 hp struck by a spinner: the body flung
 #   tools/shot.sh --view=third --seconds=8             # third person, on the course
 #   tools/shot.sh --view=race --seconds=25             # the field mid-race, from over a runner's shoulder
 #   tools/shot.sh --view=crowd --seconds=6             # a grandstand and its crowd, from the course
