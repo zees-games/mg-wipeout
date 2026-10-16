@@ -1604,7 +1604,14 @@ func _adopt_tick_rate(rate: int) -> void:
 	# The LIVE one, which is built from the config back at `setup()` and is therefore not
 	# updated by writing the config alone.
 	net.clock.tick_rate = game.tick_rate
-	Engine.physics_ticks_per_second = game.tick_rate
+	# dot-net API 7 has DotNetClock.adopt_tick_rate(), which also raises the engine's step cap to
+	# a quarter second of ticks, so a slow-frame client keeps up with the server. A shell built
+	# before it gets the same rule here; remove this branch when the oldest shell is API 7.
+	if DotAddonApi.build_level("dot_net") >= 7:
+		DotNetClock.adopt_tick_rate(game.tick_rate)
+	else:
+		Engine.max_physics_steps_per_frame = maxi(Engine.max_physics_steps_per_frame, ceili(0.25 * float(game.tick_rate)))
+		Engine.physics_ticks_per_second = game.tick_rate
 
 	DotLog.info(CHANNEL, "adopted the server's tick rate", {
 		"was": before, "now": game.tick_rate, "engine": Engine.physics_ticks_per_second,
