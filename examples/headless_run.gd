@@ -24,9 +24,9 @@ const WoSettings := preload("../game/wo_settings.gd")
 ## because the section announced itself on the way in. mg-smash-copter and dot-settings both
 ## have the story; every total here was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 34
+const SECTIONS := 35
 
-const CHECKS := 175
+const CHECKS := 176
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -54,6 +54,7 @@ func _run() -> void:
 	_test_the_wire()
 	_test_catalogue()
 	_test_delivery()
+	_test_the_weapon_art_is_vendored()
 	_test_formulas()
 	await _test_world_builds()
 	await _test_the_gate()
@@ -1470,6 +1471,15 @@ func _test_the_map_menu() -> void:
 	_check(not settings.menu.picker.is_open(), "and the picker is closed")
 	settings.queue_free()
 	await get_tree().process_frame
+	_finished()
+
+
+## The pack carries its art (a delivered game has only what is vendored in assets/), so every
+## model the weapons table names must be here. Sync it with zee-dot-weapons' tools/sync-art.sh.
+func _test_the_weapon_art_is_vendored() -> void:
+	_section("every model the weapon art table names is vendored in this game")
+	var models := ZeeWeaponArtTable.validate_models()
+	_check(models.ok, "no weapon model is missing", "" if models.ok else models.error.message)
 	_finished()
 
 
