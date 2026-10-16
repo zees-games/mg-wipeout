@@ -15,7 +15,7 @@ const WoRacer := preload("../game/wo_racer.gd")
 ## nothing but the stand-ins the module seats itself.
 
 const SECTIONS := 9
-const CHECKS := 58
+const CHECKS := 59
 
 const SERVER_DIR := "user://wo_dedicated"
 const PORT := 28931
@@ -469,9 +469,15 @@ func _test_the_course_vote() -> void:
 	# Past dot-vote's cooldown between two ballots, on the director alone so the course's own
 	# ballot timer does not open one first. In play a course outlasts it.
 	director.advance(director.rules.vote_cooldown_sec + 0.1)
+	var opened_count := [0]
+	var counter := func(_options: Array, _seconds: float) -> void: opened_count[0] += 1
+	director.vote_opened.connect(counter)
 	var _rocked := _run_command("rtv")
 	vote.call("advance", 0.05)
 	_check(director.is_voting(), "and rock-the-vote opens a ballot before its time", str(_rocked))
+	# The director opens it under MANUAL; this game used to open it from clock.expired too.
+	_check(opened_count[0] == 1, "and opens exactly one rtv ballot, not a second from the game", str(opened_count[0]))
+	director.vote_opened.disconnect(counter)
 	_finished()
 
 ## [b]`time_up: finish_round` waits for a round being played, never for warmup.[/b] The game

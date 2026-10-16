@@ -26,6 +26,9 @@ const CHANNEL := "wipeout.vote"
 ## [code]metadata: course_vote:[/code] in a delivered game's [code]game.yml[/code].
 const METADATA_KEY := "course_vote"
 
+## The dot-vote API level at which the director opens a rocked vote itself under MANUAL.
+const RTV_OPENS_IN_DIRECTOR_LEVEL := 2
+
 ## What the vote command is called: `!vote 2` in chat, `vote 2` in a console.
 const COMMAND_NAMES := {"vote": "vote"}
 
@@ -121,21 +124,23 @@ func setup() -> DotResult:
 
 	add_child(director)
 
-	# [b]Rock the vote opens the ballot here, because MANUAL never does.[/b] Under MANUAL the
-	# director hands every opening to its host, a rocked vote included: the clock expires
-	# with reason rtv, the director does nothing, and `!rtv` answered "Rocked. 1 of 1." and
-	# nothing happened. Connected after the director's own handler (its _ready runs first),
-	# so the director has finished with the expiry before this asks for a ballot.
-	director.clock.expired.connect(func(reason: StringName) -> void:
-		if reason != DotVoteClock.REASON_RTV or director.is_voting():
-			return
+	# [b]Rock the vote opens its own ballot from dot-vote API level 2 on[/b]: the director's
+	# _on_vote_due opens a rocked vote under MANUAL as under any trigger, and a second
+	# start_vote here would only be refused. Below level 2 (an older shell dot-vote under a
+	# delivered pack) MANUAL dropped it: the clock expired with reason rtv, the director did
+	# nothing, and `!rtv` answered "Rocked. 1 of 1." and nothing happened. Only there does
+	# this game open it, connected after the director's own handler.
+	if DotAddonApi.build_level("dot_vote") < RTV_OPENS_IN_DIRECTOR_LEVEL:
+		director.clock.expired.connect(func(reason: StringName) -> void:
+			if reason != DotVoteClock.REASON_RTV or director.is_voting():
+				return
 
-		_opened_this_course = true
-		var opened := director.start_vote(DotVoteClock.REASON_RTV)
+			_opened_this_course = true
+			var opened := director.start_vote(DotVoteClock.REASON_RTV)
 
-		if not opened.ok:
-			DotLog.debug(CHANNEL, "the rocked vote could not open", {"why": opened.error.message})
-	)
+			if not opened.ok:
+				DotLog.debug(CHANNEL, "the rocked vote could not open", {"why": opened.error.message})
+		)
 
 	director.vote_closed.connect(func(result: DotVoteResult) -> void:
 		DotLog.info(CHANNEL, "the course vote closed", {"winner": String(result.winner_id), "votes": result.votes_cast})
