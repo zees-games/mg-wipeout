@@ -216,9 +216,23 @@ func _race(doc: Dictionary, difficulty: String, bots: int, round_index: int, dam
 
 	var limit := game.course_limit() + config.countdown_seconds + 1.0
 	var started := false
+	# What each runner had done at the last tick the course was open. Read after the loop, the
+	# runner has already been reset: a course that everybody finishes closes at once (the
+	# intermission is 0 here) and the next one's countdown puts them back on the start pad with
+	# `finished` cleared, so every field read 0/N on any course it got home on.
+	var last := {}
 
 	for i in range(int(limit * TICK_RATE)):
 		game.simulate(TICK)
+
+		if game.phase == WoGame.Phase.COURSE:
+			for bot in field:
+				var seen: Dictionary = last.get(bot.player_id, {})
+				if not seen.get("finished", false):
+					seen = {"finished": bot.finished, "seconds": bot.finish_seconds if bot.finished else game.course_elapsed}
+				seen["falls"] = bot.falls
+				seen["knocks"] = bot.knocks
+				last[bot.player_id] = seen
 
 		if verbose:
 			for bot in field:
@@ -265,9 +279,10 @@ func _race(doc: Dictionary, difficulty: String, bots: int, round_index: int, dam
 
 	for bot in field:
 		out.append({
-			"name": bot.display_name, "finished": bot.finished,
-			"seconds": bot.finish_seconds if bot.finished else game.course_elapsed,
-			"falls": bot.falls, "knocks": bot.knocks, "out": eliminated.has(bot.player_id) and not bot.finished,
+			"name": bot.display_name, "finished": last[bot.player_id]["finished"],
+			"seconds": last[bot.player_id]["seconds"],
+			"falls": last[bot.player_id]["falls"], "knocks": last[bot.player_id]["knocks"],
+			"out": eliminated.has(bot.player_id) and not last[bot.player_id]["finished"],
 		})
 
 	return out
