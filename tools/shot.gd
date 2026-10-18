@@ -13,6 +13,7 @@ extends Node
 ##   tools/shot.sh --view=tiles --wo-course-ids=wo_trapdoor_run   # drop-tiles, warning in red
 ##   tools/shot.sh --view=tiles --grid=2 --wo-course-ids=wo_trapdoor_run   # the third grid
 ##   tools/shot.sh --view=third                     # third person, mid-course
+##   tools/shot.sh --view=cover                     # the loading cover, before it lifts
 ##   tools/shot.sh --view=arena --arena=wo_arena_pit   # an arena, from above
 ##   tools/shot.sh --view=finale                    # a real final death, from a finisher's eyes
 ##   tools/shot.sh --view=third --ballot            # the course vote's ballot, mid-vote
@@ -105,6 +106,17 @@ func _ready() -> void:
 	_client.set("force_offline", true)
 	_client.set("third_person", _view == "third")
 	add_child(_client)
+	# --view=cover: the loading cover dot-game's DotGameClient puts up first, before it lifts.
+	if _view == "cover":
+		for _i in 2:
+			await RenderingServer.frame_post_draw
+		var platform: DotGameClient = _client.get("platform")
+		print("cover %s" % ("lifted" if platform.is_shown() else "up"))
+		var cover_path := ProjectSettings.globalize_path(_out)
+		DirAccess.make_dir_recursive_absolute(cover_path.get_base_dir())
+		print("saved %s: %s" % [_out, error_string(_client.get_viewport().get_texture().get_image().save_png(cover_path))])
+		get_tree().quit(0)
+		return
 	_run.call_deferred()
 
 
@@ -281,7 +293,10 @@ func _run() -> void:
 			await _seconds_of(_seconds)
 
 	if _board:
-		_client.call("_show_board", true)
+		var tab := InputEventKey.new()
+		tab.physical_keycode = KEY_TAB
+		tab.pressed = true
+		_client.settings.menu.handle_event(tab)
 	if _ballot:
 		_show_ballot(game)
 		# The voters' discs slide to the row they chose; a frame too soon catches one between.

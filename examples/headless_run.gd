@@ -1235,13 +1235,20 @@ func _test_the_client_settings() -> void:
 	client.set(&"config_file", "user://cfg/headless-none.json")
 	add_child(client)
 
-	# Long enough for the load gate to settle the body and lift its cover: keys are ignored
-	# under it, so Escape and Tab would otherwise go nowhere.
+	# The course used to be drawn, and steered, while it was still being built: the cover is up
+	# at the start, blocks input, and lifts once the player is in.
+	var platform: DotGameClient = client.get("platform")
+	var covered := platform != null and platform.gate != null and not platform.is_shown() \
+		and platform.is_input_blocked()
 	for i in 400:
 		await get_tree().physics_frame
-		if client.get("gate") != null and client.get("gate").is_open():
+		if platform != null and platform.is_shown():
 			break
-	_check(client.get("gate") != null and client.get("gate").is_open(), "the load gate has lifted its cover")
+	for i in 2:
+		await get_tree().process_frame
+	_check(covered and platform.is_shown() and not platform.is_input_blocked() and platform.console != null,
+		"the loading cover is up at the start and lifts once the player is in, with the console built",
+		str(platform.describe()) if platform != null else "no platform")
 
 	var settings: Variant = client.get("settings")
 	var camera: Camera3D = client.get("camera")
@@ -1263,14 +1270,14 @@ func _test_the_client_settings() -> void:
 	var tab := InputEventKey.new()
 	tab.physical_keycode = KEY_TAB
 	tab.pressed = true
-	client.call("_unhandled_input", tab)
+	settings.menu.handle_event(tab)
 	var board: DotMenuScoreboard = client.get("board")
 	_check(board != null and board.is_open() and board.rows().size() >= 1
 		and board.rows().any(func(r: Dictionary) -> bool: return bool(r.get("you", false))),
 		"Tab holds the scoreboard up, with this player on it and picked out",
 		str(board.rows()) if board != null else "no board")
 	tab.pressed = false
-	client.call("_unhandled_input", tab)
+	settings.menu.handle_event(tab)
 	_check(board != null and not board.is_open() and not settings.is_open(), "and letting go puts it away")
 
 	remove_child(client)

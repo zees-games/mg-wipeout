@@ -39,9 +39,6 @@ const WoPlayer := preload("wo_player.gd")
 
 const CHANNEL := "wo.client"
 
-## Where a dot-server client link publishes itself.
-const LINK_SERVICE := &"dot_client_link"
-
 ## Where the camera sits behind the player in third person, in metres.
 const CHASE_BACK := 4.6
 const CHASE_UP := 2.1
@@ -113,8 +110,6 @@ var _introduced_msec: int = -1000000
 ## The course time this frame drew the obstacles at, or a negative before the first.
 var _stage_seconds: float = -1.0
 
-## Whether the pointer is ours. See [method _capture].
-var _captured: bool = false
 
 ## The camera rig, in third person. Null in first.
 var _arm: DotCameraBoom = null
@@ -144,7 +139,16 @@ var _beeped: int = -1
 
 func _ready() -> void:
 	# First, before anything can be drawn: the course arrives after this node is in the tree.
-	_build_gate()
+	# The platform puts the loading cover up, held until the player exists and the camera is
+	# current, and finds the link.
+	platform = DotGameClient.new()
+	platform.name = "Platform"
+	platform.force_offline = force_offline
+	platform.spawned_fn = func() -> bool: return player != null
+	platform.scoreboard_action = WoBindings.SCOREBOARD
+	add_child(platform)
+	gate = platform.gate
+	gate.hold(&"map", "Loading the course")
 
 	# [b]zee-dot-weapons' art is this game's copy of it, wherever this game is mounted.[/b]
 	# `ZeeWeaponArtTable` names `res://assets/…`, and in a delivered pack that is the one place
@@ -161,10 +165,8 @@ func _ready() -> void:
 	if not loaded.ok:
 		DotLog.warn(CHANNEL, "falling back to defaults", {"why": loaded.error.message})
 
-	link = DotRegistry.get_node_service(LINK_SERVICE)
-	_offline = force_offline \
-		or link == null \
-		or OS.get_cmdline_user_args().has("--offline")
+	link = platform.link as Node
+	_offline = platform.offline
 
 	game = WoGame.new()
 	game.name = "World"
@@ -205,19 +207,6 @@ func _ready() -> void:
 		# order that leaves nothing to be missed.
 		DotLog.result(CHANNEL, "the netcode", _build_netcode())
 
-	# Desktop captures immediately; a browser cannot and must be asked. Pointer lock needs
-	# transient user activation — a real click — and `_ready` is the one moment in a client's
-	# life guaranteed not to have one. It is refused SILENTLY: the mode reads back as
-	# CAPTURED and the cursor sits on top of the game anyway.
-	#
-	# [b]`is_web()` and not a capability, which is the one place this game breaks the
-	# family's own rule on purpose.[/b] "Ask about capabilities, not platforms" holds because
-	# the mapping is not one-to-one — except here, where it is: pointer lock needing a
-	# gesture is a property of the browser security model rather than of anything
-	# [DotPlatform] can measure, and there is no capability to ask.
-	if not DotPlatform.is_web():
-		_capture()
-
 
 # --- The load gate ---------------------------------------------------------
 
@@ -225,25 +214,18 @@ func _ready() -> void:
 ## is built, the local player exists and its camera is current.
 var gate: DotLoadGate = null
 
+## dot-game's client platform: the cover, settings and menu, console, HUD theme, Tab, M, the
+## pointer and the input block. See [DotGameClient].
+var platform: DotGameClient = null
+
 
 ## [b]Without it the first frames were a half-built world.[/b] Offline the runner stood in a
 ## course whose pieces were still being posed and the countdown ran behind nothing; connected,
 ## the client drew from its first frame with no stage, no player and a HUD with nobody to read,
 ## and a new course (each round) was torn down in front of a body that kept moving. The gate
-## does not stop the simulation by itself: [member WoGame.covered] holds every clock and every
-## obstacle still but the local body, [method WoPlayer.simulate] skips a frozen body, and the
-## keys and the netcode sampling check [method _covered].
-func _build_gate() -> void:
-	gate = DotLoadGate.new()
-	gate.name = "LoadGate"
-	# A headless run draws nothing, so there is nothing to compile; its warm-up would only wait
-	# out its timeout, and every suite that drives a client would wait with it.
-	gate.warm_up_on_open = DisplayServer.get_name() != "headless"
-	add_child(gate)
-	gate.hold(&"map", "Loading the course")
-	gate.require(&"spawned", func() -> bool:
-		return player != null and camera != null and camera.is_inside_tree(),
-		"Joining")
+## (DotGameClient's) does not stop the simulation by itself: [member WoGame.covered] holds every
+## clock and every obstacle still but the local body, [method WoPlayer.simulate] skips a frozen
+## body, and the keys and the netcode sampling check [method _covered].
 
 
 ## Holds again for each stage rebuild (a new course or the arena) and releases once it stands.
@@ -493,6 +475,8 @@ func _adopt(candidate: WoPlayer) -> void:
 	if gate != null:
 		gate.freeze(player)
 	_build_camera()
+	if platform != null:
+		_suspend_input(platform.is_input_blocked())
 
 	# Offline the world samples this player's movement itself, so the buttons go onto that
 	# sample (`command_stamp`); stamping `current_command` below only reaches the drawn gun.
@@ -675,14 +659,28 @@ func _build_settings() -> void:
 	settings = WoSettings.new()
 	settings.name = "Settings"
 	add_child(settings)
+	platform.settings = settings
+	# Not handed over: WoHud is a CanvasLayer and the platform's hud is a Control, so it
+	# follows the menu's theme itself, below.
+	platform.chat = chat
+	platform.board_snapshot_fn = board_snapshot
+	# M: the course list. Solo a choice changes the course here at once; connected the server
+	# decides, by the owner's `sv_map_menu_flag`, and anybody without it gets a vote instead
+	# (dot-vote's map menu, wired in [WoModule]).
+	platform.maps_rows_fn = func() -> Array: return game.course_rows() if game != null else []
+	platform.maps_change_fn = func(id: StringName) -> DotResult: return game.change_course_now(id)
+	platform.maps_title = "Change course"
+	platform.maps_noun = "courses"
+	DotLog.result(CHANNEL, "the platform", platform.setup())
+	# Walking is off while the cover is up, a menu is open or a line is typed: the sampler
+	# polls the keyboard, and a player dragging a volume slider with the arrow keys would
+	# otherwise walk off whatever they had stopped on.
+	platform.input_blocked_changed.connect(_suspend_input)
+	_suspend_input(platform.is_input_blocked())
 
-	var built: DotResult = settings.setup()
-
-	if not built.ok:
-		DotLog.warn(CHANNEL, "no settings; everything is at its default", {"why": built.error.message})
-		remove_child(settings)
-		settings.free()
-		settings = null
+	settings = platform.settings as WoSettings
+	console = platform.console as DotConsoleController
+	if settings == null:
 		return
 
 	if _sampler != null:
@@ -691,48 +689,11 @@ func _build_settings() -> void:
 	if audio != null:
 		settings.bind_audio(audio.manager)
 
-	if settings.menu != null:
-		# [b]Walking is off while the menu is up, as it is while typing.[/b] The sampler
-		# polls the keyboard, and a player dragging a volume slider with the arrow keys
-		# would otherwise walk off whatever they had stopped on.
-		settings.menu_state_changed.connect(func(any_open: bool) -> void:
-			_suspend_input(any_open or (chat != null and chat.is_typing()))
-			# The menu takes Escape itself now, so the pointer is freed here rather than
-			# by the key. Back into the game on desktop on close; a browser needs the
-			# click that follows, which `_unhandled_input` already turns into a capture.
-			if any_open:
-				_release()
-			elif not DotPlatform.is_web():
-				_capture()
-		)
-		# Typing a line is the chat box's keyboard: Escape there closes the line, not
-		# opens the menu.
-		settings.menu.busy = func() -> bool: return chat != null and chat.is_typing()
-		# The console (the key under Escape): net_stat and every other setting by name, and
-		# the server's console when one runs in this process. One of the menu's overlays, so
-		# opening it stops the player and frees the pointer exactly as the menu does.
-		console = DotConsoleKit.build(self, settings.settings, settings.menu)
-		_bind_bot_console()
-		# The HUD in the menu's theme and at the player's HUD size, live.
-		if hud != null:
-			hud.follow_menu(settings.menu)
-		_wire_board()
-		_wire_maps()
-
-
-## M: the course list (dot-menu's map menu). Solo a choice changes the course here at once;
-## connected the server decides, by the owner's `sv_map_menu_flag`, and anybody without it
-## gets a vote instead (dot-vote's map menu, wired in [WoModule]). By name, so a client shell
-## older than the map menu still runs the game without it.
-func _wire_maps() -> void:
-	if not settings.has_method(&"use_maps"):
-		return
-	var maps: Variant = settings.call(&"use_maps",
-		func() -> Array: return game.course_rows() if game != null else [],
-		func(id: StringName) -> DotResult: return game.change_course_now(id))
-	if maps is Object:
-		(maps as Object).set(&"title", "Change course")
-		(maps as Object).set(&"noun", "courses")
+	_bind_bot_console()
+	if hud != null and settings.menu != null:
+		hud.follow_menu(settings.menu)
+	board = platform.board as DotMenuScoreboard
+	_dress_board()
 
 
 func _build_audio() -> void:
@@ -1199,17 +1160,16 @@ func _build_hud() -> void:
 
 
 ## The Tab board: dot-menu's, with this game's columns. Built once the menu exists (see
-## [method _build_settings]).
+## [method _build_settings]); the platform feeds it and holds it on Tab.
 ##
 ## [b]Online it is the server's roster with this game's numbers merged in.[/b] Names, pings
 ## and how long each player has been on come from dot-server, which is the only thing that
 ## knows them for everybody; points, the round's place, the face and the side are already
 ## replicated here, so they are joined in by id rather than sent twice. Offline there is no
 ## server and the board is [method board_snapshot], all local.
-func _wire_board() -> void:
-	if settings == null or settings.menu == null:
+func _dress_board() -> void:
+	if board == null:
 		return
-	board = settings.menu.scoreboard
 	board.title_text = "Wipeout"
 	board.columns = [
 		{"key": &"avatar", "kind": DotMenuScoreboard.KIND_AVATAR, "width": 0.0},
@@ -1225,19 +1185,6 @@ func _wire_board() -> void:
 		return str(a.get("name", "")) < str(b.get("name", ""))
 	board.decorate = _decorate_row
 	board.prepare = _prepare_board
-	if not _offline and link != null:
-		board.feed_from(link)
-	else:
-		board.source = board_snapshot
-
-
-func _show_board(on: bool) -> void:
-	if board == null:
-		return
-	if on:
-		board.open()
-	else:
-		board.close()
 
 
 ## This game's numbers onto a row of the server's roster, by id.
@@ -1340,12 +1287,6 @@ func _build_chat() -> void:
 	chat = new_chat()
 	add_child(chat)
 
-	# [b]Typing is not moving.[/b] The sampler is what turns keys into a command, so
-	# suspending it is what stops a player walking off a beam while typing "brb".
-	chat.typing_changed.connect(func(typing: bool) -> void:
-		_suspend_input(typing or (settings != null and settings.is_open()))
-	)
-
 
 ## Walking off and on: typing, or the settings screen up. Both samplers, because offline the
 ## player samples for themselves and connected the client does.
@@ -1357,14 +1298,9 @@ func _suspend_input(suspended: bool) -> void:
 		player.sampler.suspended = suspended
 
 
-func _capture() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	_captured = true
-
-
-func _release() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	_captured = false
+## Whether the pointer is the game's: captured. A menu frees it and the platform takes it back.
+func _pointer_ours() -> bool:
+	return Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 
 
 # --- The frame -------------------------------------------------------------
@@ -1895,25 +1831,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _covered():
 		return
 
-	# The Tab board, held: shown while the key is down, like every scoreboard in the genre.
-	if event.is_action(WoBindings.SCOREBOARD) and not event.is_echo():
-		_show_board(event.is_pressed())
-		return
-
-	if event is InputEventMouseButton and event.pressed and not _captured:
-		# Handled BEFORE the player guard below, because somebody clicks while the world is
-		# still loading more often than not, and a click swallowed for want of a player is a
-		# click that never captures anything.
-		_capture()
-		return
-
+	# Tab, M and a click taking the pointer back are the platform's (DotGameClient).
 	if event.is_action_pressed("ui_cancel"):
-		# Releases, never toggles. A browser exits pointer lock on Escape itself and then
-		# refuses to re-enter for about a second, so a toggle bound to it does nothing every
-		# other press.
-		_release()
-		# And opens the settings, because a released pointer with nothing on screen to click
-		# was a key that did half a job. A second Escape never reaches here: dot-ui's stack
+		# Opens the settings when the menu left this Escape alone, because a released pointer
+		# with nothing on screen to click was a key that did half a job. A second Escape never reaches here: dot-ui's stack
 		# sits deeper in the tree, sees it first, and closes the screen.
 		if settings != null:
 			settings.open()
@@ -1964,7 +1885,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 		# The wheel goes through the weapons held, and does nothing with fewer than two:
 		# never a jump some of the time. Spectating returned above, so this is alive only.
-		if button.pressed and _captured:
+		if button.pressed and _pointer_ours():
 			if event.is_action_pressed(&"dot_menu_weapon_next"):
 				_wanted_cycle(1)
 			elif event.is_action_pressed(&"dot_menu_weapon_previous"):
@@ -1980,7 +1901,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# Every event, not only motion: the sampler also reads the wheel (dot-player-controller 5).
 	# Motion still waits for the captured pointer.
-	if event is InputEventMouseMotion and not _captured:
+	if event is InputEventMouseMotion and not _pointer_ours():
 		return
 
 	if _offline and player.sampler != null:
