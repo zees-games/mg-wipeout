@@ -22,6 +22,8 @@ extends Node
 const WoClient := preload("../game/wo_client.gd")
 const WoGame := preload("../game/wo_game.gd")
 const WoVote := preload("../game/wo_vote.gd")
+const WoCatalogue := preload("../game/wo_catalogue.gd")
+const WoCourseDoc := preload("../game/wo_course_doc.gd")
 
 var _view := "eyes"
 var _seconds := 4.0
@@ -49,6 +51,31 @@ var _workshop: bool = false
 var _grid := 0
 
 
+## --view=maps: a fixture course pack in the shared [DotContentIndex], as the solo shell leaves
+## one after a subscribed pack mounts, so the M menu shows what a player would see. The pack's
+## course is the practice course under another name, written to user://.
+func _subscribe_fixture() -> void:
+	var dir := "user://ws_shot_wo/"
+	DirAccess.make_dir_recursive_absolute(dir)
+	var doc := WoCatalogue.practice().duplicate(true)
+	doc["id"] = "fixture_hill"
+	doc["name"] = "Fixture Hill"
+	doc["blurb"] = "From the Workshop."
+	var file := FileAccess.open(dir + "hill.json", FileAccess.WRITE)
+	file.store_string(WoCourseDoc.to_json(doc))
+	file.close()
+	var index := DotContentIndex.shared()
+	index.set_session(DotContentIndex.SESSION_SOLO)
+	var _added := index.add_pack({
+		"content_id": "fixture/hills", "version": "1.0.0", "prefix": dir,
+		"session": DotContentIndex.SESSION_SOLO, "source": &"subscription",
+		"provides": {"schema": 1, "title": "Hilltop Pack", "kinds": ["map"], "entries": [
+			{"kind": "map", "id": "fixture_hill", "name": "Fixture Hill", "scene": "hill.json", "map_kind": "obstacle"},
+			{"kind": "map", "id": "fixture_run", "name": "Fixture Run", "scene": "hill.json", "map_kind": "surf"},
+		]},
+	})
+
+
 func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--view="):
@@ -69,6 +96,9 @@ func _ready() -> void:
 			_grid = arg.trim_prefix("--grid=").to_int()
 		elif arg.begins_with("--console="):
 			_console_line = arg.trim_prefix("--console=")
+
+	if _view == "maps":
+		_subscribe_fixture()
 
 	_client = WoClient.new()
 	_client.name = "Client"
@@ -97,6 +127,22 @@ func _run() -> void:
 			var _built := game.build_stage(doc)
 			await _frames(6)
 			_overview(game, 0.9)
+		"maps":
+			# M: the solo course list, with the Workshop's course among the game's own.
+			# Past the load gate's cover, which holds the screen for the first seconds.
+			await _seconds_of(6.0)
+			var settings: Object = _client.get("settings")
+			var menu: Variant = settings.get("menu")
+			menu.call(&"open_maps")
+			var picker: Variant = menu.get("picker")
+			if picker != null:
+				# Past the last row and back: the fixture sorts after the shipped ids of its letter.
+				var rows := game.course_rows()
+				for i in range(rows.size()):
+					if str(rows[i]["id"]) == "fixture_hill":
+						picker.call(&"turn", 99)
+						picker.call(&"turn", i - rows.size() + 1)
+			await _seconds_of(_seconds)
 		"finale":
 			await _seconds_of(game.config.countdown_seconds + 1.5)
 			# Everybody across, so the course closes into a final death the way a real one does.

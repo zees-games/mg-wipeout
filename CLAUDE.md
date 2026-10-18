@@ -30,7 +30,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 | `game/wo_content.gd`, `wo_textures.gd`, `wo_paths.gd`, `wo_avatars.gd` | final-death props; surface roles and tints; `rebase()` for delivery; site avatars |
 | `game/net/` | the codec (`STAGE`, `PROGRESS`, `PICKUP`…), the link, two behaviours, the bridge |
 | `courses` | a dot-bootstrap link to `../mg-wipeout-maps/courses` (gitignored) |
-| `examples/` | `headless_run`, `headless_courses`, `headless_net`, `dedicated` |
+| `examples/` | `headless_run`, `headless_courses`, `headless_net`, `headless_workshop` (subscribed packs' courses: solo, online, kinds, own ids, the ballot), `dedicated` |
 | `tools/` | `shot.sh`/`shot.gd` (render a view), `trace_course` (where one stand-in falls and why), `race_times` (a field per preset, finish times), `make_sounds.py` (writes `audio/`) |
 | `audio/` | the crowd, the horn and the water (synthesised by `tools/make_sounds.py`), the announcer (Kenney, CC0) |
 
@@ -47,6 +47,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 - **Arming**: `headless_net`'s obstacle agreement and every suite's total are armed; most other checks are not yet armed one by one. Arm a check before trusting it.
 
 ## Rules that bite
+
+- **Workshop courses are `WoCatalogue.follow_content`**: a pack's map entry names a course document in `scene`, read on every `playable_courses()`, so solo plays it as `Name [Pack]` and online lists none. Limits in [docs/not-yet.md](docs/not-yet.md).
 
 - **Everybody steps (padding underfoot) and the courses have an outdoor bed** (dot-audio's stock, `WoAudio`). Levels are measured with `addons/dot_audio/tools/loudness.sh` (−17 LUFS band, `loudness_trim_db`).
 - A dead body falls as dot-player-char's ragdoll: the server picks the fall (`WoGame.decide_death`, on `player.death`), it rides DEATH last and optional, and the client copies it from the figure it draws (`WoClient._fall`). The `sv_ragdoll*` cvars are bound in the module, REPLICATED, and followed by the client. A blow or a blast still knocks the body to pieces (`_break`, this game's own look); anything less leaves a ragdoll. See dot-player-char's [docs/ragdolls.md](../dot-player-char/docs/ragdolls.md).

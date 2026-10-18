@@ -10,7 +10,6 @@ const WoProgress := preload("wo_progress.gd")
 const WoRacer := preload("wo_racer.gd")
 const WoRules := preload("wo_rules.gd")
 const WoSpectate := preload("wo_spectate.gd")
-const WoVote := preload("wo_vote.gd")
 
 ## The simulation. Headless, authoritative, and the only thing that decides anything.
 ##
@@ -315,6 +314,8 @@ func _ready() -> void:
 		# would have named. See [method solo_map_dirs].
 		for root in solo_map_dirs("courses"):
 			var _added := catalogue.add_directory(root)
+		# The Workshop's courses, solo only by the index's own session (an online session lists none).
+		catalogue.follow_content(DotContentIndex.shared(), WoCatalogue.accepted_map_kinds())
 		# Laid out now, not on the first round: dot-match runs a warmup first, and an empty
 		# world through the warmup is indistinguishable from a map that failed to load.
 		_lay_out_course()
@@ -1038,25 +1039,11 @@ func course_rows() -> Array:
 		var doc: Dictionary = catalogue.courses.get(id, {})
 		# The blurb under the name ("Everything once, and gently"): a course has no mode, and its
 		# `theme` is the sky's colours, not a word.
-		var row := {"id": String(id), "name": str(doc.get("name", id)), "current": id == now,
+		var row := {"id": String(id), "name": catalogue.label_of(id), "current": id == now,
 			"detail": str(doc.get("blurb", ""))}
 		if doc.has("thumbnail"):
 			row["thumbnail"] = str(doc["thumbnail"])
 		out.append(row)
-	# Subscribed packs' maps, solo only (the shared index lists none online), after the game's
-	# own so an id of ours wins. Listed, not playable: a course here is a document and a pack's
-	# map is a scene (docs/not-yet.md).
-	var own := {}
-	for row: Dictionary in out:
-		own[StringName(str(row["id"]))] = true
-	for entry in DotContentIndex.shared().entries(&"map"):
-		var kind := str(entry.raw.get("map_kind", ""))
-		if entry.id == "" or own.has(StringName(entry.id)) \
-				or not WoVote.accepted_map_kinds().has(kind):
-			continue
-		var title: String = entry.pack_title
-		out.append({"id": entry.id, "name": "%s [%s]" % [entry.name, title] if title != "" else entry.name,
-			"current": false, "detail": "Workshop map"})
 	return out
 
 
@@ -1066,11 +1053,6 @@ func course_rows() -> Array:
 func change_course_now(id: StringName) -> DotResult:
 	if not authoritative:
 		return DotResult.fail(DotError.CODE_STATE, "Only the server changes the course.")
-	if catalogue != null and not catalogue.courses.has(id) and not catalogue.arenas.has(id):
-		for entry in DotContentIndex.shared().entries(&"map"):
-			if entry.id == String(id):
-				return DotResult.fail(DotError.CODE_UNSUPPORTED,
-					"Wipeout cannot play Workshop maps yet.")
 	if catalogue == null or not catalogue.playable_courses(config.course_ids).has(id):
 		return DotResult.fail(DotError.CODE_INVALID, "There is no course called '%s' here." % id)
 	next_course_id = id

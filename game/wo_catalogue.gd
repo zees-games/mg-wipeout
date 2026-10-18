@@ -24,9 +24,18 @@ var arenas: Dictionary = {}
 ## Files that were refused, with why. What `wo_courses` prints, so a mapper can see it.
 var refused: Dictionary = {}
 
+## id -> pack title, for the courses in [member courses] that a subscribed pack provided (solo
+## only). The game's own courses are never in it, and an id of theirs is never taken by a pack.
+var workshop: Dictionary = {}
+
+## The Workshop's index and the `map_kind`s taken from it; see [method follow_content].
+var content_index: DotContentIndex = null
+var content_kinds: PackedStringArray = PackedStringArray()
+
 ## The order courses come up in when they are not shuffled.
 var _order: Array[StringName] = []
 var _next: int = 0
+var _workshop_docs: Dictionary = {}
 
 
 ## Reads every document under [param directory] (relative to this game's root), and adds the
@@ -35,6 +44,7 @@ func load_from(directory: String) -> int:
 	courses.clear()
 	arenas.clear()
 	refused.clear()
+	workshop.clear()
 
 	_add(practice(), "built-in")
 	_add(practice_arena(), "built-in")
@@ -138,10 +148,124 @@ func _rebuild_order() -> void:
 	_next = 0
 
 
+## Takes the courses subscribed packs provide, for the index's current session only. Opt-in.
+## A pack's map is a [b]course document[/b] (the JSON `courses/` holds, see its README) named
+## by the entry's `scene` path, with `map_kind` one of [param accepted_kinds] ("*" is every kind,
+## empty none). The document is the whole map (pieces, checkpoints, finish, route), so a pack
+## ships no code and the game needs no second format. Arenas are not offered: the final death
+## stays the game's own.
+##
+## [b]Synced on every read rather than copied once[/b]: the index filters by its current
+## session, so a game that goes online loses them with no signal to miss.
+## [method playable_courses] is the read everything goes through.
+func follow_content(index: DotContentIndex, accepted_kinds: PackedStringArray = PackedStringArray()) -> void:
+	content_index = index
+	content_kinds = accepted_kinds
+	sync_content()
+
+
+## Brings [member courses] in line with the index's current session: a pack course in, one that
+## left out. The game's own ids win, and a pack course that is not a valid document is listed in
+## [member refused] and left out.
+func sync_content() -> void:
+	var wanted := {}
+
+	if content_index != null:
+		for entry in content_index.entries(&"map"):
+			var kind := str(entry.raw.get("map_kind", ""))
+
+			if kind == "" or not (content_kinds.has("*") or content_kinds.has(kind)):
+				continue
+
+			var id := StringName(entry.id)
+
+			if wanted.has(id) or arenas.has(id) or (courses.has(id) and not workshop.has(id)):
+				continue
+
+			var doc := _workshop_doc(entry)
+
+			if not doc.is_empty():
+				wanted[id] = [doc, entry.pack_title]
+
+	var changed := false
+
+	for id: StringName in workshop.keys():
+		if not wanted.has(id):
+			courses.erase(id)
+			workshop.erase(id)
+			changed = true
+
+	for id: StringName in wanted:
+		if not courses.has(id):
+			courses[id] = wanted[id][0]
+			workshop[id] = wanted[id][1]
+			changed = true
+
+	if changed:
+		_rebuild_order()
+
+
+func _workshop_doc(entry: DotContentEntry) -> Dictionary:
+	if _workshop_docs.has(entry.key):
+		return _workshop_docs[entry.key]
+
+	var path := entry.path("scene")
+	var text := FileAccess.get_file_as_string(path) if path != "" else ""
+	var parsed := WoCourseDoc.parse_json(text, path) if text != "" \
+		else DotResult.fail(DotError.CODE_IO, "empty or unreadable", path)
+	var doc: Dictionary = {}
+
+	if parsed.ok and str(parsed.value.get("kind", "")) == WoCourseDoc.KIND_COURSE:
+		doc = parsed.value
+		doc["id"] = entry.id
+	else:
+		var why: String = parsed.error.message if not parsed.ok else "a pack map must be a course, not an arena"
+		refused[entry.key] = why
+		DotLog.warn(CHANNEL, "a Workshop course was refused", {"entry": entry.key, "why": why})
+
+	_workshop_docs[entry.key] = doc
+	return doc
+
+
+## The file a game pack states what it takes from subscriptions in (dot-cloud's
+## docs/workshop.md, "What a game accepts"). Read from there so the site and this list cannot drift.
+const PROVIDES_PATH := "res://provides.json"
+const ACCEPTED_MAP_KINDS_FALLBACK := ["obstacle", "race"]
+
+
+## The `map_kind`s of subscribed maps this game takes: `accepts.map_kinds` in `provides.json`.
+static func accepted_map_kinds() -> PackedStringArray:
+	var out := PackedStringArray()
+	var path := WoPaths.rebase(PROVIDES_PATH)
+	var parsed: Variant = null
+	if FileAccess.file_exists(path):
+		parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var accepts: Variant = (parsed as Dictionary).get("accepts") if parsed is Dictionary else null
+	var kinds: Variant = (accepts as Dictionary).get("map_kinds") if accepts is Dictionary else null
+	if not (kinds is Array):
+		kinds = ACCEPTED_MAP_KINDS_FALLBACK
+	for kind: Variant in (kinds as Array):
+		out.append(str(kind))
+	return out
+
+
+## Whether [param id] came from a subscribed pack.
+func is_workshop(id: StringName) -> bool:
+	return workshop.has(id)
+
+
+## The name a menu shows: "Name [Pack]" for a pack's course, the plain name otherwise.
+func label_of(id: StringName) -> String:
+	var name := str((courses.get(id, {}) as Dictionary).get("name", id))
+	var pack := str(workshop.get(id, ""))
+	return "%s [%s]" % [name, pack] if pack != "" else name
+
+
 ## The ids a server may draw from, after [param allowed] (empty is all). The built-in
 ## practice course drops out once there is anything else, because a server with ten real
 ## courses should not spend one round in eleven on the tutorial.
 func playable_courses(allowed: PackedStringArray) -> Array[StringName]:
+	sync_content()
 	var out: Array[StringName] = []
 
 	for id in _order:
@@ -212,7 +336,7 @@ func describe_lines() -> PackedStringArray:
 	for id in _order:
 		var doc: Dictionary = courses[id]
 		lines.append("  %-22s %-24s %d pieces  %s" % [
-			id, str(doc["name"]), (doc["pieces"] as Array).size(), str(doc["author"]),
+			id, label_of(id), (doc["pieces"] as Array).size(), str(doc["author"]),
 		])
 
 	lines.append("arenas (%d)" % arenas.size())

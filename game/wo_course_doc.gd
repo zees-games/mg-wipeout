@@ -510,6 +510,12 @@ static func digest(doc: Dictionary) -> String:
 	return JSON.stringify(_to_plain(doc), "", true).sha256_text().substr(0, 12)
 
 
+## A validated document as JSON text a mapper's file could hold: [method parse_json] reads it
+## back. What a suite or a render writes as a pack's course.
+static func to_json(doc: Dictionary) -> String:
+	return JSON.stringify(_to_plain(doc))
+
+
 ## Vectors and colours back to arrays, so JSON can carry them.
 static func _to_plain(value: Variant) -> Variant:
 	match typeof(value):

@@ -1,22 +1,24 @@
 extends Node
 
-## What a subscribed map pack does to this game's course vote, against a fixture
+## What a subscribed map pack does to this game's course list and course vote, against a fixture
 ## [DotContentIndex] and never the process's shared one.
 ##
 ## [codeblock]
 ## godot --headless --path . res://examples/headless_workshop.tscn
 ## [/codeblock]
 ##
-## Solo lists a pack's map as "Name [Pack]", an online session lists none, a map kind the
-## game does not accept is left out, and the game's own ids win. Listed, not playable: a
-## course here is a document (docs/not-yet.md).
+## A pack's map is a course document (the JSON `courses/` holds). Solo lists and plays it as
+## "Name [Pack]", an online session lists none, a map kind the game does not accept is left out,
+## and the game's own ids win.
 
+const WoCatalogue := preload("../game/wo_catalogue.gd")
+const WoCourseDoc := preload("../game/wo_course_doc.gd")
 const WoVote := preload("../game/wo_vote.gd")
 
-const SECTIONS := 4
+const SECTIONS := 5
 const MAP := &"fixture_hill"
-const OTHER_KIND := &"fixture_run"
-const OWN := &"wo_first_splash"
+const OWN := &"wo_practice"
+const DIR := "user://ws_fixture_wo/"
 
 var _passed := 0
 var _failed := 0
@@ -31,11 +33,13 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("mg-wipeout — Workshop maps")
+	print("mg-wipeout — Workshop courses")
+	_write_fixture()
 	_test_accepts()
 	_test_solo()
 	_test_online()
 	_test_ids()
+	await _test_vote()
 	print("")
 	_check(_completed == _entered and _entered == SECTIONS,
 		"every section ran to its last line (%d of %d, %d expected)" % [_completed, _entered, SECTIONS])
@@ -46,43 +50,52 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 or _completed != SECTIONS else 0)
 
 
+func _write_fixture() -> void:
+	DirAccess.make_dir_recursive_absolute(DIR)
+	var doc := WoCatalogue.practice().duplicate(true)
+	doc["id"] = String(MAP)
+	doc["name"] = "Fixture Hill"
+	_write("hill.json", WoCourseDoc.to_json(doc))
+	_write("arena.json", WoCourseDoc.to_json(WoCatalogue.practice_arena()))
+
+
+func _write(file_name: String, text: String) -> void:
+	var file := FileAccess.open(DIR + file_name, FileAccess.WRITE)
+	file.store_string(text)
+	file.close()
+
+
+## A pack with a course, a map of a kind the game does not accept, a map that claims the
+## built-in's id, and an accepted-kind map whose document is an arena (refused).
 func _index(session: StringName) -> DotContentIndex:
 	var index := DotContentIndex.new()
 	index.set_session(session)
 	var added := index.add_pack({
-		"content_id": "fixture/hills", "version": "1.0.0", "prefix": "res://fixture/",
+		"content_id": "fixture/hills", "version": "1.0.0", "prefix": DIR,
 		"session": session, "source": &"subscription",
 		"provides": {"schema": 1, "title": "Fixture Pack", "kinds": ["map"], "entries": [
-			{"kind": "map", "id": String(MAP), "name": "Fixture Hill", "scene": "hill.tscn", "map_kind": "obstacle"},
-			{"kind": "map", "id": String(OTHER_KIND), "name": "Fixture Run", "scene": "run.tscn", "map_kind": "surf"},
-			{"kind": "map", "id": String(OWN), "name": "Not The Splash", "scene": "box.tscn", "map_kind": "obstacle"},
+			{"kind": "map", "id": String(MAP), "name": "Fixture Hill", "scene": "hill.json", "map_kind": "obstacle"},
+			{"kind": "map", "id": "fixture_run", "name": "Fixture Run", "scene": "hill.json", "map_kind": "surf"},
+			{"kind": "map", "id": String(OWN), "name": "Not The Practice", "scene": "hill.json", "map_kind": "obstacle"},
+			{"kind": "map", "id": "fixture_arena", "name": "Fixture Arena", "scene": "arena.json", "map_kind": "race"},
 		]},
 	})
 	_check(added.ok, "the fixture pack registers for %s" % session)
 	return index
 
 
-## A vote the way [WoModule] builds one, over [param index]; the shared index is swapped out
-## of the way by following the fixture afterwards.
-func _labels(index: DotContentIndex) -> PackedStringArray:
-	var vote := WoVote.new()
-	vote.config_path = ""
-	vote.courses_fn = func() -> Array: return [[String(OWN), "First Splash"], ["wo_other", "Other"]]
-	add_child(vote)
-	var _set := vote.setup()
-	vote.source.follow_content(index, WoVote.accepted_map_kinds())
-	var out := PackedStringArray()
-	for choice in vote.source.choices():
-		out.append(choice.label())
-	vote.queue_free()
-	return out
+func _catalogue(index: DotContentIndex) -> WoCatalogue:
+	var catalogue := WoCatalogue.new()
+	var _loaded := catalogue.load_from("courses")
+	catalogue.follow_content(index, WoCatalogue.accepted_map_kinds())
+	return catalogue
 
 
 func _test_accepts() -> void:
 	_entered += 1
 	print("")
 	print("what the game accepts")
-	var kinds := WoVote.accepted_map_kinds()
+	var kinds := WoCatalogue.accepted_map_kinds()
 	_check(kinds == PackedStringArray(["obstacle", "race"]), "provides.json accepts obstacle and race", str(kinds))
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://provides.json"))
 	var accepts: Dictionary = (parsed as Dictionary).get("accepts", {})
@@ -94,9 +107,16 @@ func _test_solo() -> void:
 	_entered += 1
 	print("")
 	print("solo")
-	var labels := _labels(_index(DotContentIndex.SESSION_SOLO))
-	_check(labels.has("Fixture Hill [Fixture Pack]"), "the ballot lists the pack's map as Name [Pack]", str(labels))
-	_check(not labels.has("Fixture Run [Fixture Pack]"), "a map kind the game does not accept is filtered out")
+	var catalogue := _catalogue(_index(DotContentIndex.SESSION_SOLO))
+	_check(catalogue.playable_courses(PackedStringArray()).has(MAP), "the accepted map is playable")
+	_check(catalogue.label_of(MAP) == "Fixture Hill [Fixture Pack]", "its label names the pack", catalogue.label_of(MAP))
+	_check(not catalogue.courses.has(&"fixture_run"), "a map kind the game does not accept is filtered out")
+	_check(not catalogue.courses.has(&"fixture_arena") and catalogue.refused.size() == 1,
+		"a document that is an arena is refused, not played", str(catalogue.refused))
+	_check((catalogue.courses[MAP].get("pieces", []) as Array).size() > 0, "and it is a whole document, with its pieces")
+	_check("\n".join(catalogue.describe_lines()).contains("Fixture Hill [Fixture Pack]"), "wo_courses lists it as Name [Pack]")
+	var next := catalogue.next_course(PackedStringArray([String(MAP)]), false, null, &"")
+	_check(next.get("id") == String(MAP), "and it can be drawn as the next course")
 	_completed += 1
 
 
@@ -105,11 +125,16 @@ func _test_online() -> void:
 	print("")
 	print("online")
 	var index := _index(DotContentIndex.SESSION_SOLO)
-	_check(_labels(index).has("Fixture Hill [Fixture Pack]"), "listed while the index is solo")
+	var catalogue := _catalogue(index)
+	_check(catalogue.playable_courses(PackedStringArray()).has(MAP), "listed while the index is solo")
 	index.set_session(DotContentIndex.SESSION_ONLINE)
-	var labels := _labels(index)
-	_check(not labels.has("Fixture Hill [Fixture Pack]"), "an online session lists none of it", str(labels))
-	_check(labels.has("First Splash"), "and still lists the game's own courses")
+	_check(not catalogue.playable_courses(PackedStringArray()).has(MAP), "gone from the same catalogue when the session turns online")
+	_check(not catalogue.courses.has(MAP), "and from its documents")
+	index.set_session(DotContentIndex.SESSION_SOLO)
+	_check(catalogue.playable_courses(PackedStringArray()).has(MAP), "back when it turns solo again")
+	var late := _index(DotContentIndex.SESSION_SOLO)
+	late.set_session(DotContentIndex.SESSION_ONLINE)
+	_check(not _catalogue(late).playable_courses(PackedStringArray()).has(MAP), "a catalogue built online never lists it")
 	_completed += 1
 
 
@@ -117,17 +142,60 @@ func _test_ids() -> void:
 	_entered += 1
 	print("")
 	print("the game's own ids win")
-	var labels := _labels(_index(DotContentIndex.SESSION_SOLO))
-	_check(labels.has("First Splash") and not labels.has("Not The Splash [Fixture Pack]"),
-		"a pack map claiming a course's id does not replace it", str(labels))
+	var catalogue := _catalogue(_index(DotContentIndex.SESSION_SOLO))
+	_check(catalogue.courses[OWN].get("name") == "Practice Run" and not catalogue.is_workshop(OWN),
+		"a pack map claiming wo_practice does not replace the built-in")
 	_completed += 1
 
 
-func _check(ok: bool, what: String, detail: String = "") -> void:
-	if ok:
+func _labels(vote: WoVote) -> PackedStringArray:
+	var out := PackedStringArray()
+	for choice in vote.source.choices():
+		out.append(choice.label())
+	return out
+
+
+func _test_vote() -> void:
+	_entered += 1
+	print("")
+	print("the ballot")
+	var index := _index(DotContentIndex.SESSION_SOLO)
+	var catalogue := _catalogue(index)
+	var vote := WoVote.new()
+	vote.config_path = ""
+	vote.content_index = index
+	vote.courses_fn = func() -> Array:
+		var out: Array = []
+		for id in catalogue.playable_courses(PackedStringArray()):
+			if not catalogue.is_workshop(id):
+				out.append([id, str(catalogue.courses[id].get("name", id))])
+		return out
+	add_child(vote)
+	var _set_up := vote.setup()
+	var own := ""
+	for id in catalogue.playable_courses(PackedStringArray()):
+		if not catalogue.is_workshop(id):
+			own = str(catalogue.courses[id].get("name", id))
+			break
+	var labels := _labels(vote)
+	_check(labels.has("Fixture Hill [Fixture Pack]"), "the solo ballot lists the pack map as Name [Pack]", str(labels))
+	_check(labels.count("Fixture Hill [Fixture Pack]") == 1, "once")
+	_check(not labels.has("Fixture Run [Fixture Pack]"), "and not a kind the game does not accept")
+	index.set_session(DotContentIndex.SESSION_ONLINE)
+	labels = _labels(vote)
+	_check(not labels.has("Fixture Hill [Fixture Pack]"), "online the same ballot lists none of it", str(labels))
+	_check(labels.has(own), "and still has the game's own", "%s in %s" % [own, str(labels)])
+	vote.queue_free()
+	await get_tree().process_frame
+	_completed += 1
+
+
+func _check(condition: bool, what: String, detail: String = "") -> bool:
+	if condition:
 		_passed += 1
 		print("  ok    %s" % what)
 	else:
 		_failed += 1
 		_failures.append("%s %s" % [what, detail])
 		print("  FAIL  %s %s" % [what, detail])
+	return condition

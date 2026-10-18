@@ -589,8 +589,11 @@ func _build_vote(world: WoGame) -> void:
 	vote.courses_fn = func() -> Array:
 		var out: Array = []
 
+		# The game's own courses only: the Workshop's come from the source's own follow, which
+		# reads the index on every ballot and so shows none of them online.
 		for id in world.catalogue.playable_courses(world.config.course_ids):
-			out.append([id, str((world.catalogue.courses.get(id, {}) as Dictionary).get("name", id))])
+			if not world.catalogue.is_workshop(id):
+				out.append([id, str((world.catalogue.courses.get(id, {}) as Dictionary).get("name", id))])
 
 		return out
 	vote.apply_fn = func(id: StringName) -> DotResult:

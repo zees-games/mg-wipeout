@@ -15,6 +15,7 @@
 #   tools/shot.sh --view=arena --arena=wo_arena_pit    # an arena, from above
 #   tools/shot.sh --view=finale                        # a real final death, a finisher's eyes
 #   tools/shot.sh --view=course --out=res://screenshots/x.png   # any --wo-* is the game's config
+#   tools/shot.sh --view=maps --seconds=0.5   # M: the solo course list with a Workshop fixture course (Name [Pack])
 #   tools/shot.sh --view=third --board                 # with the Tab scoreboard held open
 #   tools/shot.sh --view=third --ballot                # the course vote's ballot, mid-vote
 #   tools/shot.sh --console="net_stat 3"               # a line typed at the player's console first
