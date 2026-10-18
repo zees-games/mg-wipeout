@@ -98,7 +98,7 @@ func _ready() -> void:
 		elif arg.begins_with("--console="):
 			_console_line = arg.trim_prefix("--console=")
 
-	if _view == "maps":
+	if _view == "maps" or _view == "pack":
 		_subscribe_fixture()
 
 	_client = WoClient.new()
@@ -155,6 +155,15 @@ func _run() -> void:
 						picker.call(&"turn", 99)
 						picker.call(&"turn", i - rows.size() + 1)
 			await _seconds_of(_seconds)
+		"pack":
+			# A subscribed pack's course, chosen the way the M menu does, built and looked at.
+			# Past the load gate's cover, which holds the screen for the first seconds.
+			await _seconds_of(6.0)
+			var chosen := game.change_course_now(&"fixture_hill")
+			print("chosen: %s" % chosen.ok)
+			await _seconds_of(2.0)
+			print("built: %s" % game.stage.id())
+			_overview(game, 1.3)
 		"finale":
 			await _seconds_of(game.config.countdown_seconds + 1.5)
 			# Everybody across, so the course closes into a final death the way a real one does.

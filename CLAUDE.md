@@ -48,7 +48,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 
 ## Rules that bite
 
-- **Workshop courses are `WoCatalogue.follow_content`**: a pack's map entry names a course document in `scene`, read on every `playable_courses()`, so solo plays it as `Name [Pack]` and online lists none. Limits in [docs/not-yet.md](docs/not-yet.md).
+- **Workshop courses are `WoCatalogue.follow_content`**: a pack's map entry names a course document in `scene`, read on every `playable_courses()`, so solo plays it as `Name [Pack]` and online lists none. Limits in [docs/not-yet.md](docs/not-yet.md). **A pack course takes the same path as an own one** (`WoCourseDoc.parse_json`, then `change_course_now`, `build_stage`, the round), never a scene and never a second loader: a torn document or an arena is `refused`, an own id wins, and online none is listed or choosable. `headless_workshop` starts a round on a fixture course; `tools/shot.sh --view=pack` renders it.
 
 - **Everybody steps (padding underfoot) and the courses have an outdoor bed** (dot-audio's stock, `WoAudio`). Levels are measured with `addons/dot_audio/tools/loudness.sh` (−17 LUFS band, `loudness_trim_db`).
 - A dead body falls as dot-player-char's ragdoll: the server picks the fall (`WoGame.decide_death`, on `player.death`), it rides DEATH last and optional, and the client copies it from the figure it draws (`WoClient._fall`). The `sv_ragdoll*` cvars are bound in the module, REPLICATED, and followed by the client. A blow or a blast still knocks the body to pieces (`_break`, this game's own look); anything less leaves a ragdoll. See dot-player-char's [docs/ragdolls.md](../dot-player-char/docs/ragdolls.md).

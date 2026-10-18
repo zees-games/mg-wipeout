@@ -13,9 +13,11 @@ extends Node
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoCourseDoc := preload("../game/wo_course_doc.gd")
+const WoConfig := preload("../game/wo_config.gd")
+const WoGame := preload("../game/wo_game.gd")
 const WoVote := preload("../game/wo_vote.gd")
 
-const SECTIONS := 5
+const SECTIONS := 6
 const MAP := &"fixture_hill"
 const OWN := &"wo_practice"
 const DIR := "user://ws_fixture_wo/"
@@ -40,6 +42,7 @@ func _run() -> void:
 	_test_online()
 	_test_ids()
 	await _test_vote()
+	await _test_round()
 	print("")
 	_check(_completed == _entered and _entered == SECTIONS,
 		"every section ran to its last line (%d of %d, %d expected)" % [_completed, _entered, SECTIONS])
@@ -56,6 +59,7 @@ func _write_fixture() -> void:
 	doc["id"] = String(MAP)
 	doc["name"] = "Fixture Hill"
 	_write("hill.json", WoCourseDoc.to_json(doc))
+	_write("broken.json", "{\"kind\": \"course\", \"pieces\": [")
 	_write("arena.json", WoCourseDoc.to_json(WoCatalogue.practice_arena()))
 
 
@@ -77,6 +81,7 @@ func _index(session: StringName) -> DotContentIndex:
 			{"kind": "map", "id": String(MAP), "name": "Fixture Hill", "scene": "hill.json", "map_kind": "obstacle"},
 			{"kind": "map", "id": "fixture_run", "name": "Fixture Run", "scene": "hill.json", "map_kind": "surf"},
 			{"kind": "map", "id": String(OWN), "name": "Not The Practice", "scene": "hill.json", "map_kind": "obstacle"},
+			{"kind": "map", "id": "fixture_broken", "name": "Fixture Broken", "scene": "broken.json", "map_kind": "obstacle"},
 			{"kind": "map", "id": "fixture_arena", "name": "Fixture Arena", "scene": "arena.json", "map_kind": "race"},
 		]},
 	})
@@ -111,8 +116,8 @@ func _test_solo() -> void:
 	_check(catalogue.playable_courses(PackedStringArray()).has(MAP), "the accepted map is playable")
 	_check(catalogue.label_of(MAP) == "Fixture Hill [Fixture Pack]", "its label names the pack", catalogue.label_of(MAP))
 	_check(not catalogue.courses.has(&"fixture_run"), "a map kind the game does not accept is filtered out")
-	_check(not catalogue.courses.has(&"fixture_arena") and catalogue.refused.size() == 1,
-		"a document that is an arena is refused, not played", str(catalogue.refused))
+	_check(not catalogue.courses.has(&"fixture_arena") and catalogue.refused.size() == 2,
+		"an arena document and a torn one are refused, not played", str(catalogue.refused))
 	_check((catalogue.courses[MAP].get("pieces", []) as Array).size() > 0, "and it is a whole document, with its pieces")
 	_check("\n".join(catalogue.describe_lines()).contains("Fixture Hill [Fixture Pack]"), "wo_courses lists it as Name [Pack]")
 	var next := catalogue.next_course(PackedStringArray([String(MAP)]), false, null, &"")
@@ -186,6 +191,44 @@ func _test_vote() -> void:
 	_check(not labels.has("Fixture Hill [Fixture Pack]"), "online the same ballot lists none of it", str(labels))
 	_check(labels.has(own), "and still has the game's own", "%s in %s" % [own, str(labels)])
 	vote.queue_free()
+	await get_tree().process_frame
+	_completed += 1
+
+
+## A solo world chooses the pack course in the M menu's own call and a round starts on it.
+func _test_round() -> void:
+	_entered += 1
+	print("")
+	print("a round on the pack course")
+	var config := WoConfig.new()
+	config.warmup_seconds = 0.0
+	config.intermission_seconds = 0.0
+	config.minimum_players = 0
+	config.courses_per_round = 1
+	var game := WoGame.new()
+	game.config = config
+	game.tick_rate = 30
+	game.authoritative = true
+	game.register_service = false
+	add_child(game)
+	game.set_physics_process(false)
+	game.catalogue.follow_content(_index(DotContentIndex.SESSION_SOLO), WoCatalogue.accepted_map_kinds())
+	var rows: Array = game.course_rows()
+	_check(rows.any(func(r: Dictionary) -> bool: return str(r["id"]) == String(MAP) and str(r["name"]).contains("[Fixture Pack]")),
+		"the M menu's rows list it as Name [Pack]")
+	var refused := game.change_course_now(&"fixture_broken")
+	_check(not refused.ok, "a refused document cannot be chosen")
+	var chosen := game.change_course_now(MAP)
+	_check(chosen.ok, "the pack course can be chosen", str(chosen.error.message) if not chosen.ok else "")
+	game.start()
+	for _i in range(5):
+		game.simulate(1.0 / 30.0)
+		await get_tree().physics_frame
+	_check(game.stage.id() == MAP, "the round is built on it", str(game.stage.id()))
+	_check(game.stage.pieces.size() > 0, "with its pieces in the world")
+	game.catalogue.content_index.set_session(DotContentIndex.SESSION_ONLINE)
+	_check(not game.change_course_now(MAP).ok, "and online the same choice is refused cleanly")
+	game.queue_free()
 	await get_tree().process_frame
 	_completed += 1
 
