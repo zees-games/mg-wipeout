@@ -1910,6 +1910,14 @@ func _unhandled_input(event: InputEvent) -> void:
 				spectate_step(-1)
 			return
 
+		# The wheel goes through the weapons held, and does nothing with fewer than two:
+		# never a jump some of the time. Spectating returned above, so this is alive only.
+		if button.pressed and _captured:
+			if event.is_action_pressed(&"dot_menu_weapon_next"):
+				_wanted_cycle(1)
+			elif event.is_action_pressed(&"dot_menu_weapon_previous"):
+				_wanted_cycle(-1)
+
 		if button.button_index == MOUSE_BUTTON_LEFT:
 			_firing = button.pressed
 		elif button.button_index == MOUSE_BUTTON_RIGHT:
@@ -1918,11 +1926,29 @@ func _unhandled_input(event: InputEvent) -> void:
 	if player == null:
 		return
 
-	if event is InputEventMouseMotion and _captured:
-		if _offline and player.sampler != null:
-			player.sampler.handle_event(event)
-		elif _sampler != null:
-			_sampler.handle_event(event)
+	# Every event, not only motion: the sampler also reads the wheel (dot-player-controller 5).
+	# Motion still waits for the captured pointer.
+	if event is InputEventMouseMotion and not _captured:
+		return
+
+	if _offline and player.sampler != null:
+		player.sampler.handle_event(event)
+	elif _sampler != null:
+		_sampler.handle_event(event)
+
+
+## Steps the wanted slot through the slots held, skipping empty ones.
+func _wanted_cycle(step: int) -> void:
+	if weapons == null or weapons.arsenal == null:
+		return
+
+	var carried := weapons.arsenal.slots()
+
+	if carried.size() < 2:
+		return
+
+	var at := carried.find(weapons.arsenal.current_slot())
+	_slot = carried[posmod(at + step, carried.size())]
 
 
 func describe() -> Dictionary:

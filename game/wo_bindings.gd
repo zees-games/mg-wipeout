@@ -31,6 +31,7 @@ static func make() -> DotMenuBindings:
 	keys.add(RELOAD, &"bind_reload", "Reload", "R", "Hands")
 	for i in range(SLOTS.size()):
 		keys.add(SLOTS[i], StringName("bind_slot_%d" % (i + 1)), "Weapon slot %d" % (i + 1), str(i + 1), "Hands")
+	keys.add_wheel_weapons()
 	keys.add(CHAT, &"bind_chat", "Chat", "Y", "Communication")
 	keys.add(CHAT_TEAM, &"bind_chat_team", "Chat to your side", "U", "Communication")
 	keys.add(VIEW, &"bind_view", "First or third person", "F5", "General")

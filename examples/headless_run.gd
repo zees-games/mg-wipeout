@@ -26,7 +26,7 @@ const WoSettings := preload("../game/wo_settings.gd")
 
 const SECTIONS := 35
 
-const CHECKS := 176
+const CHECKS := 177
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -1387,6 +1387,10 @@ func _test_help_and_menu() -> void:
 	_check(built.ok and keys != null and keys.key_for(DotMenuBindings.HELP_ACTION) == "H", "help is on H")
 	_check(keys.defaults_on("H").size() == 1, "and nothing else in the table defaults to H",
 		str(keys.defaults_on("H").map(func(r: Dictionary) -> String: return str(r["label"]))))
+	_check(keys.key_for(&"dot_menu_weapon_next") == "Wheel down"
+		and keys.key_for(&"dot_menu_weapon_previous") == "Wheel up",
+		"the wheel is on the Controls page: up previous, down next",
+		"%s / %s" % [keys.key_for(&"dot_menu_weapon_previous"), keys.key_for(&"dot_menu_weapon_next")])
 	var h := InputEventKey.new()
 	h.physical_keycode = KEY_H
 	h.keycode = KEY_H
