@@ -20,6 +20,8 @@ extends Node
 ## (the client shell's [DotBallotPanel]), and never holds a director: a client that applied a
 ## result would be deciding what it plays.
 
+const WoPaths := preload("wo_paths.gd")
+
 const CHANNEL := "wipeout.vote"
 
 ## The key in the running game's descriptor metadata an operator's overrides are read from —
@@ -90,6 +92,11 @@ func setup() -> DotResult:
 	source.label = "courses"
 	source.apply_fn = func(id: StringName) -> DotResult:
 		return apply_fn.call(id) if apply_fn.is_valid() else DotResult.success(id)
+	# The Workshop's maps, solo only (the index is solo or online as its host set it, so a
+	# server lists none). The game's own ids win. A pack's map is listed, not playable: see
+	# docs/not-yet.md.
+	source.entries_fn = _own_choices
+	source.follow_content(DotContentIndex.shared(), accepted_map_kinds())
 	refresh_courses()
 
 	director = DotVoteDirector.new()
@@ -208,13 +215,36 @@ func refresh_courses() -> void:
 		return
 
 	source.entries.clear()
+	for choice in _own_choices():
+		var _added := source.add(choice)
 
+
+## The game's own courses as choices; [member DotVoteListSource.entries_fn].
+func _own_choices() -> Array:
+	var out: Array = []
 	if not courses_fn.is_valid():
-		return
-
+		return out
 	for pair: Variant in courses_fn.call():
 		var row: Array = pair
-		var _added := source.add(DotVoteChoice.of(StringName(str(row[0])), str(row[1])))
+		out.append(DotVoteChoice.of(StringName(str(row[0])), str(row[1])))
+	return out
+
+
+## The `map_kind`s of subscribed maps this game lists: `accepts.map_kinds` in `provides.json`,
+## read from there because the site offers a pack by that same file and a second list drifts.
+static func accepted_map_kinds() -> PackedStringArray:
+	var out := PackedStringArray()
+	var path := WoPaths.rebase("res://provides.json")
+	var parsed: Variant = null
+	if FileAccess.file_exists(path):
+		parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var accepts: Variant = (parsed as Dictionary).get("accepts") if parsed is Dictionary else null
+	var kinds: Variant = (accepts as Dictionary).get("map_kinds") if accepts is Dictionary else null
+	if not (kinds is Array):
+		kinds = ["obstacle", "race"]
+	for kind: Variant in (kinds as Array):
+		out.append(str(kind))
+	return out
 
 
 ## A course was built: the director starts over on it and the ballot timer restarts. Never

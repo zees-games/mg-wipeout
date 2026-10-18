@@ -44,6 +44,7 @@ for arg in "$@"; do
         --grid=*)    config+=("$arg") ;;
         --board)     config+=("$arg") ;;
         --ballot)    config+=("$arg") ;;
+        --workshop)  config+=("$arg") ;;
         --console=*) config+=("$arg") ;;
         *)           echo "unknown argument: $arg" >&2; exit 2 ;;
     esac

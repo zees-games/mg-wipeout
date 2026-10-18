@@ -41,6 +41,10 @@ var _console_line := ""
 ## with a few votes cast.
 var _ballot: bool = false
 
+## `--workshop`: a fixture map pack in the shared content index first (solo), so the ballot
+## lists it as "Name [Pack]".
+var _workshop: bool = false
+
 ## `--grid=N`: which grid of tiles the tiles view looks at, counting from 0 along the course.
 var _grid := 0
 
@@ -57,6 +61,8 @@ func _ready() -> void:
 			_board = true
 		elif arg == "--ballot":
 			_ballot = true
+		elif arg == "--workshop":
+			_workshop = true
 		elif arg.begins_with("--arena="):
 			_arena = arg.trim_prefix("--arena=")
 		elif arg.begins_with("--grid="):
@@ -248,13 +254,24 @@ func _run() -> void:
 func _show_ballot(game: WoGame) -> void:
 	var names := {&"1": "you", &"2": "bo", &"3": "quiet_one", &"4": "ana"}
 	var states: Array = []
+	if _workshop:
+		var index := DotContentIndex.shared()
+		index.set_session(DotContentIndex.SESSION_SOLO)
+		var _added := index.add_pack({
+			"content_id": "fixture/hills", "version": "1.0.0", "prefix": "res://fixture/",
+			"session": DotContentIndex.SESSION_SOLO, "source": &"subscription",
+			"provides": {"schema": 1, "title": "Hilltop Pack", "kinds": ["map"], "entries": [
+				{"kind": "map", "id": "fixture_hill", "name": "Fixture Hill", "scene": "hill.tscn", "map_kind": "obstacle"},
+			]},
+		})
 	var vote := WoVote.new()
 	vote.config_path = ""
 	vote.courses_fn = func() -> Array:
 		var out: Array = []
 		for id in game.catalogue.playable_courses(PackedStringArray()):
 			out.append([id, str((game.catalogue.courses.get(id, {}) as Dictionary).get("name", id))])
-		return out
+		# A ballot shows five at random; with the fixture, three courses leave room for it.
+		return out.slice(0, 3) if _workshop else out
 	vote.voters_fn = func() -> Array: return names.keys()
 	vote.people_fn = func(voter: StringName) -> Dictionary: return {"name": names.get(voter, "?"), "avatar": ""}
 	vote.ballot_fn = func(state: Dictionary) -> void: states.append(state)
