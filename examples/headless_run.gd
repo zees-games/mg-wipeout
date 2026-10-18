@@ -26,7 +26,7 @@ const WoSettings := preload("../game/wo_settings.gd")
 
 const SECTIONS := 35
 
-const CHECKS := 177
+const CHECKS := 178
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -1235,8 +1235,13 @@ func _test_the_client_settings() -> void:
 	client.set(&"config_file", "user://cfg/headless-none.json")
 	add_child(client)
 
-	for i in 6:
-		await get_tree().process_frame
+	# Long enough for the load gate to settle the body and lift its cover: keys are ignored
+	# under it, so Escape and Tab would otherwise go nowhere.
+	for i in 400:
+		await get_tree().physics_frame
+		if client.get("gate") != null and client.get("gate").is_open():
+			break
+	_check(client.get("gate") != null and client.get("gate").is_open(), "the load gate has lifted its cover")
 
 	var settings: Variant = client.get("settings")
 	var camera: Camera3D = client.get("camera")

@@ -143,6 +143,9 @@ var _beeped: int = -1
 
 
 func _ready() -> void:
+	# First, before anything can be drawn: the course arrives after this node is in the tree.
+	_build_gate()
+
 	# [b]zee-dot-weapons' art is this game's copy of it, wherever this game is mounted.[/b]
 	# `ZeeWeaponArtTable` names `res://assets/…`, and in a delivered pack that is the one place
 	# the art is not: every gun and the arms would load invisible, one WARN each.
@@ -176,7 +179,9 @@ func _ready() -> void:
 	)
 	# The sky, the sun and the water: drawn here, never on a server.
 	game.draw_world = true
+	game.covered = _covered
 	add_child(game)
+	_wire_gate_to_stages()
 	_build_ragdolls()
 
 	# The sampler lives HERE and not on the player, because on a connected client the local
@@ -212,6 +217,45 @@ func _ready() -> void:
 	# [DotPlatform] can measure, and there is no capability to ask.
 	if not DotPlatform.is_web():
 		_capture()
+
+
+# --- The load gate ---------------------------------------------------------
+
+## Keeps the screen covered, and the local body, the keys and the clocks still, until the course
+## is built, the local player exists and its camera is current.
+var gate: DotLoadGate = null
+
+
+## [b]Without it the first frames were a half-built world.[/b] Offline the runner stood in a
+## course whose pieces were still being posed and the countdown ran behind nothing; connected,
+## the client drew from its first frame with no stage, no player and a HUD with nobody to read,
+## and a new course (each round) was torn down in front of a body that kept moving. The gate
+## does not stop the simulation by itself: [member WoGame.covered] holds every clock and every
+## obstacle still but the local body, [method WoPlayer.simulate] skips a frozen body, and the
+## keys and the netcode sampling check [method _covered].
+func _build_gate() -> void:
+	gate = DotLoadGate.new()
+	gate.name = "LoadGate"
+	# A headless run draws nothing, so there is nothing to compile; its warm-up would only wait
+	# out its timeout, and every suite that drives a client would wait with it.
+	gate.warm_up_on_open = DisplayServer.get_name() != "headless"
+	add_child(gate)
+	gate.hold(&"map", "Loading the course")
+	gate.require(&"spawned", func() -> bool:
+		return player != null and camera != null and camera.is_inside_tree(),
+		"Joining")
+
+
+## Holds again for each stage rebuild (a new course or the arena) and releases once it stands.
+## Offline the first stage is built by `game.start()`, connected by the server's STAGE.
+func _wire_gate_to_stages() -> void:
+	game.world_clearing.connect(func() -> void: gate.hold(&"map", "Loading the course"))
+	game.world_rebuilt.connect(func() -> void: gate.release(&"map"))
+
+
+## True while the load gate covers the screen: no key, no mouse turn, no clock.
+func _covered() -> bool:
+	return gate != null and not gate.is_open()
 
 
 # --- Dead bodies -----------------------------------------------------------
@@ -445,6 +489,9 @@ func _adopt(candidate: WoPlayer) -> void:
 		return
 
 	player = candidate
+	# No gate on a client built without `_ready` (a suite adopting a player by hand).
+	if gate != null:
+		gate.freeze(player)
 	_build_camera()
 
 	# Offline the world samples this player's movement itself, so the buttons go onto that
@@ -1337,7 +1384,9 @@ func _physics_process(delta: float) -> void:
 	if net == null or not net.is_running() or bridge == null:
 		return
 
-	var move := _sampler.sample(delta) if _sampler != null else DotFpsCommand.new()
+	# Covered: the clock below still advances, only the sampling waits, so the mouse does not
+	# pile up a turn behind the cover and the server sees an idle body until it lifts.
+	var move := _sampler.sample(delta) if _sampler != null and not _covered() else DotFpsCommand.new()
 	_stamp(move)
 
 	# The clock says how many ticks this frame is worth, which on a client whose engine runs
@@ -1843,6 +1892,9 @@ static func drawn_position(body: WoPlayer, remote: bool) -> Vector3:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _covered():
+		return
+
 	# The Tab board, held: shown while the key is down, like every scoreboard in the genre.
 	if event.is_action(WoBindings.SCOREBOARD) and not event.is_echo():
 		_show_board(event.is_pressed())

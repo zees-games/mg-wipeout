@@ -296,7 +296,20 @@ var command_stamp: Callable = Callable()
 
 
 func simulate(tick: int, delta: float) -> void:
+	# A body the load gate froze is not moved by the game's tick either: the gate switches the
+	# node's processing off, which this direct call would walk straight past.
+	if not can_process():
+		return
+
 	if sampler != null:
+		# While the gate settles the body under its cover the keys are off but the body still
+		# falls and lands (a neutral command), and the sampler is left unread so a mouse turn
+		# does not pile up behind the cover.
+		if has_meta(DotLoadGate.SETTLING_META):
+			controller.apply_command(DotFpsCommand.new())
+			controller.simulate_tick(tick, delta)
+			return
+
 		var sampled := sampler.sample(delta)
 
 		if command_stamp.is_valid():
@@ -325,6 +338,11 @@ func _after_tick(tick: int, state: DotFpsState) -> void:
 	global_position = state.position
 
 	if stage == null or not is_instance_valid(stage) or watching:
+		return
+
+	# Settling under the load cover: the body lands, nothing on the course acts on it. Connected
+	# the server did not wait for our cover, so the next snapshot corrects whatever it did.
+	if has_meta(DotLoadGate.SETTLING_META):
 		return
 
 	if state.mode == DotFpsState.Mode.GROUND and state.ground_id != 0:
