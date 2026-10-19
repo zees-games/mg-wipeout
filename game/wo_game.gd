@@ -180,6 +180,10 @@ var next_course_id: StringName = &""
 var props: DotPropSpawner = null
 var prop_damage: DotPropDamage = null
 var combat: DotCombatManager = null
+
+## `func(player_id: StringName) -> bool`: whether a player may be hurt now, assigned by the
+## module from dot-game's `can_peer_be_harmed`. Unset offline, and a bot is never loading.
+var harm_gate: Callable = Callable()
 var match_node: DotMatch = null
 var random: DotRandomManager = null
 var physics: DotPhysicsLayout = null
@@ -504,6 +508,17 @@ func _build_combat() -> void:
 	combat.resolver.hit_groups = DotHitGroup.defaults()
 	combat.resolver.team_of = func(entity_id: int) -> int:
 		return team_of(entities.key_for_id(entity_id))
+
+	# dot-game's "still loading": the one place every hurt passes (a knock, a landing, a blast,
+	# a thrown prop, a shot, the arena's water), so a covered seat is neither hurt nor
+	# eliminated, and the final death counts the living from health. An admin's slay or slap is
+	# the operator's word and passes.
+	combat.resolver.adjust = func(damage: DotDamage) -> void:
+		if damage.context.get("admin", false):
+			return
+
+		if not can_be_harmed(entities.key_for_id(damage.victim)):
+			damage.refuse("still loading")
 
 	# `add_child` IS the setup; calling it again doubled every boot line. See mg-smash-copter.
 	add_child(combat)
@@ -906,6 +921,13 @@ func alive_count() -> int:
 			total += 1
 
 	return total
+
+
+## Whether [param player_id] may be damaged, eliminated or counted as across now: false while
+## their client is behind its loading cover. True for anybody the gate does not know (bots,
+## offline).
+func can_be_harmed(player_id: StringName) -> bool:
+	return not harm_gate.is_valid() or bool(harm_gate.call(player_id))
 
 
 func finished_count() -> int:
@@ -2028,7 +2050,9 @@ func _watch_progress() -> void:
 			if config.checkpoint_heals and authoritative and player.health != null:
 				var _healed := player.health.heal(player.health.max_health)
 
-		if stage.in_finish(feet):
+		# A covered seat is not counted across: its client cannot see or move, so a carrier
+		# that took it over the line would give it a place (and points) it did not race for.
+		if stage.in_finish(feet) and can_be_harmed(player.player_id):
 			_finish(player)
 
 
@@ -2094,6 +2118,16 @@ func _fell(player: WoPlayer) -> void:
 
 	# On a course a fall costs time and nothing else: back to the last checkpoint crossed,
 	# or the start, or — for somebody already finished — the lounge.
+	#
+	# A seat still behind its loading cover is put back all the same (it cannot be left under
+	# the water), but the fall is not counted and the checkpoint is not lost: it did not
+	# choose to be there. The course clock is shared and does not wait for it; a late loader
+	# runs the rest of the course against a clock already going, as it always did.
+	if not can_be_harmed(player.player_id):
+		var home := stage.respawn_point(player.checkpoint, 0)
+		player.place_at(home[0], home[1])
+		return
+
 	player.falls += 1
 	player.remove_meta(&"air_peak")
 

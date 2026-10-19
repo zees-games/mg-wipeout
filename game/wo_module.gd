@@ -204,6 +204,15 @@ func _game_load() -> DotResult:
 		"Automatic stand-ins: 1 keeps as many as bot_quota and bot_quota_mode say, 0 none at all."
 	)
 
+	# dot-game's "still loading": a seat behind its client's cover is neither hurt, eliminated
+	# nor counted across (see WoGame.harm_gate). Asked by player id, resolved to a peer through
+	# the bridge.
+	world.harm_gate = func(player_id: StringName) -> bool:
+		if bridge == null:
+			return true
+		var peer := int((bridge as WoNetBridge).peer_for_player(WoNetBridge.session_of(player_id)))
+		return peer <= 0 or can_peer_be_harmed(peer)
+
 	# [b]How many is dot-server's [DotBotQuota], so `bot_quota` and `bot_quota_mode` mean the
 	# same thing on every server in the family.[/b] The default is this game's own minimum
 	# (`minimum_players`, from the config file) in fill mode, which is the rule it ran before
