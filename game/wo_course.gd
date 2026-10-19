@@ -424,6 +424,15 @@ func _add_box(parent: Node3D, size: Vector3, role: WoTextures.Role, moving: bool
 	return mesh
 
 
+## Marks a drawing as meant to be walked through, for dot-core's [DotCollisionAudit]. Used for
+## the hazards (a spinner's arms, a pendulum, a pusher's ram, a curtain of water: measured by
+## [method _knock_pusher] and its kin, never collided, so a runner is knocked rather than
+## stopped), the water plane (a fall is a height comparison) and the markers (an arch is a
+## volume [method checkpoint_at] measures). A SOLID piece is never marked: it has a shape.
+static func _not_collided(node: Node) -> void:
+	node.set_meta(&"dot_no_collision", true)
+
+
 ## A body the course moves by setting its transform each tick.
 ##
 ## [b]A STATIC body, teleported, and a kinematic one is wrong here in a way only a test with
@@ -622,6 +631,7 @@ func _spinner(spec: Dictionary, role: WoTextures.Role) -> Node3D:
 
 	var arms := Node3D.new()
 	arms.name = "Arms"
+	_not_collided(arms)
 	arms.position = Vector3(0.0, arm_height, 0.0)
 	root.add_child(arms)
 
@@ -658,6 +668,7 @@ func _spinner(spec: Dictionary, role: WoTextures.Role) -> Node3D:
 
 func _pendulum(spec: Dictionary, role: WoTextures.Role) -> Node3D:
 	var root := Node3D.new()
+	_not_collided(root)
 	root.transform = Transform3D(_yaw_basis(float(spec["yaw"])), spec["pivot"])
 
 	var length := float(spec["length"])
@@ -696,6 +707,7 @@ func _pendulum(spec: Dictionary, role: WoTextures.Role) -> Node3D:
 
 func _pusher(spec: Dictionary, role: WoTextures.Role) -> Node3D:
 	var root := Node3D.new()
+	_not_collided(root)
 	var ram := Node3D.new()
 	ram.name = "Ram"
 	root.add_child(ram)
@@ -709,6 +721,7 @@ func _pusher(spec: Dictionary, role: WoTextures.Role) -> Node3D:
 ## outside the curtain's width, so they are never in a runner's way.
 func _fall(spec: Dictionary) -> Node3D:
 	var root := Node3D.new()
+	_not_collided(root)
 	root.transform = Transform3D(_yaw_basis(float(spec.get("yaw", 0.0))), spec["at"])
 	var size: Vector3 = spec["size"]
 	var tint: Color = spec.get("tint", FALL_WATER)
@@ -868,6 +881,7 @@ func _arch(at: Vector3, size: Vector3, yaw: float, role: WoTextures.Role, thickn
 	var basis := _yaw_basis(yaw)
 	var arch := Node3D.new()
 	arch.name = "Arch"
+	_not_collided(arch)
 	arch.transform = Transform3D(basis, at)
 	add_child(arch)
 
@@ -978,6 +992,7 @@ func _build_world() -> void:
 	# stepped over between two ticks by something falling fast enough.
 	var water := MeshInstance3D.new()
 	water.name = "Water"
+	_not_collided(water)
 	var plane := PlaneMesh.new()
 	# Big, and under the middle of the course: a course is three hundred metres long now, and
 	# the overview camera above its far end saw the edge of a 1.6 km sheet as a grey band.
@@ -1148,6 +1163,7 @@ func _box_at(parent: Node3D, size: Vector3, at: Vector3, colour: Color, glow: fl
 func _stands(item: Dictionary, bodies: Array) -> void:
 	var root := Node3D.new()
 	root.name = "Stands"
+	_not_collided(root)
 	root.transform = Transform3D(_yaw_basis(float(item["yaw"])), item["at"])
 	add_child(root)
 
@@ -1258,6 +1274,7 @@ static func _crowd_head() -> SphereMesh:
 func _banner(item: Dictionary) -> void:
 	var root := Node3D.new()
 	root.name = "Banner"
+	_not_collided(root)
 	root.transform = Transform3D(_yaw_basis(float(item["yaw"])), item["at"])
 	add_child(root)
 	var size: Vector3 = item["size"]
@@ -1284,6 +1301,7 @@ func _banner(item: Dictionary) -> void:
 func _light_tower(item: Dictionary) -> void:
 	var root := Node3D.new()
 	root.name = "Lights"
+	_not_collided(root)
 	root.transform = Transform3D(_yaw_basis(float(item["yaw"])), item["at"])
 	add_child(root)
 	var height := maxf((item["size"] as Vector3).y, 6.0)
@@ -1302,6 +1320,7 @@ func _light_tower(item: Dictionary) -> void:
 func _screen(item: Dictionary) -> void:
 	var root := Node3D.new()
 	root.name = "Screen"
+	_not_collided(root)
 	root.transform = Transform3D(_yaw_basis(float(item["yaw"])), item["at"])
 	add_child(root)
 	var size: Vector3 = item["size"]
@@ -1333,6 +1352,7 @@ func _screen(item: Dictionary) -> void:
 func _flag_row(item: Dictionary) -> void:
 	var root := Node3D.new()
 	root.name = "Flags"
+	_not_collided(root)
 	root.transform = Transform3D(_yaw_basis(float(item["yaw"])), item["at"])
 	add_child(root)
 	var length := (item["size"] as Vector3).x
