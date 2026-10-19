@@ -65,12 +65,11 @@ var voice_sent: int = 0
 var voice_received: int = 0
 
 
-static func attached_to(parent: Node, p_bridge: Node, server: bool) -> WoNetLink:
+## Makes the link; the caller places it (see [DotGameLink]).
+static func attached_to(_parent: Node, p_bridge: Node, server: bool) -> WoNetLink:
 	var link := WoNetLink.new()
-	link.name = NODE_NAME
 	link.bridge = p_bridge
 	link.is_server = server
-	parent.add_child(link)
 	return link
 
 
