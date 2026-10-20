@@ -12,6 +12,7 @@ extends Node
 ##   tools/shot.sh --view=falls --seconds=3 --wo-course-ids=wo_punch_alley   # the first water/slime fall
 ##   tools/shot.sh --view=tiles --wo-course-ids=wo_trapdoor_run   # drop-tiles, warning in red
 ##   tools/shot.sh --view=tiles --grid=2 --wo-course-ids=wo_trapdoor_run   # the third grid
+##   tools/shot.sh --view=tour --wo-course-ids=wo_dans_course   # <out>_overview.png and _1 to _3 along the route
 ##   tools/shot.sh --view=third                     # third person, mid-course
 ##   tools/shot.sh --view=cover                     # the loading cover, before it lifts
 ##   tools/shot.sh --view=arena --arena=wo_arena_pit   # an arena, from above
@@ -180,6 +181,27 @@ func _run() -> void:
 			# Further out than the straight courses needed: a course that turns is as wide as it
 			# is long, and at 1.0 the overview of a switchback or a spiral was half of it.
 			_overview(game, 1.3)
+		"tour":
+			# An overview and three frames along the course, written beside `--out` as
+			# `<out>_overview.png`, `_1`, `_2`, `_3`. Past the load gate's cover first: the
+			# overview of a course used to show nothing but the cover, because it was taken six
+			# frames in and the cover holds the screen for the first seconds.
+			await _seconds_of(maxf(_seconds, 7.0))
+			var base := _out.trim_suffix(".png")
+			_overview(game, 1.0)
+			await _frames(4)
+			_save("%s_overview.png" % base)
+			var route: Array = game.stage.route()
+			for n in range(1, 4):
+				var index := clampi(int(float(route.size()) * float(n) / 4.0), 0, route.size() - 2)
+				var here: Vector3 = (route[index] as Dictionary)["at"]
+				var ahead: Vector3 = (route[index + 1] as Dictionary)["at"]
+				var way := Vector3(ahead.x - here.x, 0.0, ahead.z - here.z)
+				way = way.normalized() if way.length() > 0.01 else Vector3(0.0, 0.0, -1.0)
+				var camera := _free_camera()
+				camera.look_at_from_position(here - way * 8.0 + Vector3(0.0, 5.0, 0.0), here + way * 9.0)
+				await _frames(4)
+				_save("%s_%d.png" % [base, n])
 		"start":
 			await _seconds_of(0.6)
 			var camera := _free_camera()
@@ -311,12 +333,16 @@ func _run() -> void:
 		# The voters' discs slide to the row they chose; a frame too soon catches one between.
 		await _seconds_of(1.0)
 	await _frames(3)
-	var image := get_viewport().get_texture().get_image()
-	var path := ProjectSettings.globalize_path(_out)
-	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
-	var saved := image.save_png(path)
+	var saved := _save(_out)
 	print("saved %s (%s): %s" % [_out, _view, error_string(saved)])
 	get_tree().quit(0 if saved == OK else 1)
+
+
+func _save(out: String) -> int:
+	var image := get_viewport().get_texture().get_image()
+	var path := ProjectSettings.globalize_path(out)
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	return image.save_png(path)
 
 
 ## A real ballot from this game's vote: every course the client has, four voters, three of
