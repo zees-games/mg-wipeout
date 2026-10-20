@@ -326,8 +326,11 @@ func apply_rotation(allowed: PackedStringArray = PackedStringArray()) -> void:
 
 	if has_rotation_file():
 		# A file that names rotations leaves the tutorial out unless it is all there is.
+		# Captures the mirror, never self: a lambda on self held by a member is a reference cycle,
+		# and a RefCounted cycle is a leak the exit check reports.
+		var mirror := _defs
 		rotation_file.fallback_in = func(def: DotMapDef) -> bool:
-			return def.id != &"wo_practice" or _defs.size() == 1
+			return def.id != &"wo_practice" or mirror.size() == 1
 		var _applied := rotation_file.apply(_rotation)
 		return
 

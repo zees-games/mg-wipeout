@@ -16,8 +16,8 @@ const WoNetLink := preload("../game/net/wo_net_link.gd")
 ## [DotGameModule]'s order runs, a cvar is typed at a console and a round is played by
 ## nothing but the stand-ins the module seats itself.
 
-const SECTIONS := 12
-const CHECKS := 89
+const SECTIONS := 13
+const CHECKS := 92
 
 const SERVER_DIR := "user://wo_dedicated"
 const PORT := 28931
@@ -55,6 +55,7 @@ func _run() -> void:
 		await _test_a_reload_keeps_delivered_courses()
 		_test_the_course_vote()
 		_test_rotation_file()
+		_test_rotation_file_frees()
 		_test_finish_round_waits_for_a_live_round()
 		await _test_a_module_reload()
 		await _test_a_covered_seat_is_not_harmed()
@@ -492,6 +493,38 @@ class CommandHost extends Node:
 	func add_command(full: String, fn: Callable, _help: String, _permission: String) -> Object:
 		added[full] = fn
 		return null
+
+
+## A catalogue that has a real maps.yml applied must free when the last reference goes. The
+## rotation file's `fallback_in` lambda once read the catalogue's own `_defs`, which captured the
+## catalogue itself: a RefCounted cycle that nothing frees, reported only at exit as leaked objects
+## (mg-deathrun had 29), where no assertion reaches. A WeakRef is the in-process proof.
+func _test_rotation_file_frees() -> void:
+	_section("rotation file frees")
+	var path := SERVER_DIR.path_join("leak_maps.yml")
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	_check(file != null, "a maps.yml is written")
+
+	if file == null:
+		_finished()
+		return
+
+	file.store_string("defaults:\n  rotations:\n    short:\n      mode: cycle\n      maps: [\"*\"]\n")
+	file.close()
+
+	var read := DotMapRotationFile.load_files(PackedStringArray([path]), "mg-wipeout")
+	_check(read.ok, "and read by dot-map", str(read.error))
+	var probe := _apply_and_drop(read.value)
+	_check(probe.get_ref() == null, "the catalogue it was applied to is freed with its last reference")
+	_finished()
+
+
+## Own function so no local keeps the catalogue alive when the WeakRef is read.
+func _apply_and_drop(rotation_file: DotMapRotationFile) -> WeakRef:
+	var catalogue = load("res://game/wo_catalogue.gd").new()
+	catalogue.rotation_file = rotation_file
+	catalogue.apply_rotation()
+	return weakref(catalogue)
 
 
 ## `cfg/maps.yml`: which courses rotate. The format is dot-map's selftest's; this is what the GAME
