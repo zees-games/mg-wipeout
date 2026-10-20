@@ -2056,6 +2056,20 @@ func _watch_progress() -> void:
 		if not stage.is_course() or player.finished or phase != Phase.COURSE:
 			continue
 
+		# A teleport pad moves whoever is on it, course in play only. The destination is not on
+		# a pad, so nobody is sent twice.
+		var sent := stage.teleport_at(feet)
+
+		if not sent.is_empty():
+			player.place_at(sent[0] as Vector3, float(sent[1]))
+
+			# A stand-in carries on from the route point nearest where it was sent, not the pad's
+			# own point (which is a long way behind it now).
+			if player.is_bot:
+				_bot_route[player.player_id] = _route_after(sent[0] as Vector3)
+
+			continue
+
 		var crossed := stage.checkpoint_at(feet)
 
 		if crossed > player.checkpoint:

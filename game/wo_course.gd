@@ -239,7 +239,7 @@ func _make_piece(index: int, spec: Dictionary) -> void:
 			piece["node"] = _conveyor(spec, role)
 			piece["moving"] = true
 			piece["carrier"] = true
-		"bouncer":
+		"bouncer", "teleport":
 			piece["node"] = _static_box(spec["at"], spec["size"], spec["yaw"], 0.0, role)
 		"tiles":
 			piece["node"] = _tiles(spec, role)
@@ -1798,6 +1798,26 @@ func ground_kind(ground_id: int) -> String:
 	return str(pieces[int((found as Array)[0])]["kind"]) if found != null else ""
 
 
+## Where a teleport pad under [param feet] sends whoever stands on it, as `[position, heading]`,
+## or an empty array when they are on none. Feet within the pad's footprint and between a
+## little under its top and a metre over it: a runner jumping across the pad's corner is
+## still sent, one a long way under it (falling past) is not.
+func teleport_at(feet: Vector3) -> Array:
+	for piece in pieces:
+		if str(piece["kind"]) != "teleport":
+			continue
+
+		var spec: Dictionary = piece["spec"]
+		var size: Vector3 = spec["size"]
+		var local := _yaw_basis(float(spec["yaw"])).inverse() * (feet - (spec["at"] as Vector3))
+
+		if absf(local.x) <= size.x * 0.5 and absf(local.z) <= size.z * 0.5 \
+				and local.y >= size.y * 0.5 - 0.3 and local.y <= size.y * 0.5 + 1.0:
+			return [spec["to"], float(spec.get("heading", 0.0))]
+
+	return []
+
+
 ## The upward speed a bouncer under [param ground_id] gives, or 0.
 func bounce(ground_id: int) -> float:
 	var found: Variant = _by_collider.get(ground_id)
@@ -2088,7 +2108,7 @@ func supported(point: Vector3, tick: int) -> bool:
 		var spec: Dictionary = piece["spec"]
 
 		match str(piece["kind"]):
-			"box", "ramp", "bouncer", "conveyor", "mover", "seesaw":
+			"box", "ramp", "bouncer", "teleport", "conveyor", "mover", "seesaw":
 				var frame: Transform3D = transform_of(piece, t) if bool(piece["moving"]) else (piece["node"] as Node3D).transform
 				var local := frame.affine_inverse() * point
 				var half := (spec["size"] as Vector3) * 0.5

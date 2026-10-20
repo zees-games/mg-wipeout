@@ -70,6 +70,9 @@ const PIECES := {
 	"tiles": ["at", "cols", "rows", "tile", "period", "down"],
 	"conveyor": ["at", "size", "speed"],
 	"bouncer": ["at", "size", "power"],
+	# A pad that moves whoever steps on it to `to` (their feet), facing `heading` degrees. Solid,
+	# and still: it is a place, not a machine.
+	"teleport": ["at", "size", "to"],
 	# Things that move, and throw whoever they touch.
 	"spinner": ["at", "arm_length", "speed"],
 	"pendulum": ["pivot", "length", "radius", "swing", "period"],
@@ -415,7 +418,7 @@ static func _piece(source: Variant, index: int) -> DotResult:
 				out[key] = _colour(piece[key], Color.WHITE)
 			"phase", "radius", "height", "length", "arm_length", "arm_height", "arm_thickness", \
 					"hub_radius", "hub_height", "speed", "pitch", "amplitude", "period", \
-					"swing", "reach", "duty", "tile", "gap", "thickness", "down", "power", "push":
+					"swing", "reach", "duty", "tile", "gap", "thickness", "down", "power", "push", "heading":
 				out[key] = float(piece[key])
 			_:
 				pass
@@ -441,7 +444,7 @@ static func _default_role(kind: String) -> String:
 	match kind:
 		"spinner", "pendulum", "pusher", "fall":
 			return "hazard"
-		"bouncer":
+		"bouncer", "teleport":
 			return "safe"
 		"mover", "turntable", "roller", "seesaw", "tiles", "conveyor":
 			return "cannon"

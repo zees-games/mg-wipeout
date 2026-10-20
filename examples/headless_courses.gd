@@ -71,6 +71,8 @@ func _run() -> void:
 	for id: StringName in arenas:
 		await _stand_in_arena(catalogue.arenas[id])
 
+	await _teleport_pad(catalogue.courses[&"wo_dans_course"])
+
 	# One audit per document, over the stage as a client draws it (sky and water included).
 	for id: StringName in courses:
 		await _audit_collision(catalogue.courses[id])
@@ -85,8 +87,8 @@ func _run() -> void:
 		remove_child(_world)
 		_world.free()
 
-	var sections := 2 + courses.size() + forked + arenas.size() + courses.size() + arenas.size()
-	var checks := 3 + (courses.size() + forked) * 3 + courses.size() * 2 + arenas.size() * (4 + 2) + courses.size() + arenas.size()
+	var sections := 3 + courses.size() + forked + arenas.size() + courses.size() + arenas.size()
+	var checks := 8 + (courses.size() + forked) * 3 + courses.size() * 2 + arenas.size() * (4 + 2) + courses.size() + arenas.size()
 
 	print("")
 	print("%d sections entered, %d finished" % [_sections_entered, _sections_finished])
@@ -106,6 +108,33 @@ func _run() -> void:
 		code = 1
 
 	get_tree().quit(code)
+
+
+## A teleport pad sends whoever stands on it to its `to`, facing its `heading`, and nobody who
+## is beside it, above it by a jump's height more or under it. Dan's Course ends on one, so a
+## stand-in finishing it (above) also proves the whole path through a round: the pad, the
+## stand-in carrying on from the nearest route point, and the finish beyond it.
+func _teleport_pad(doc: Dictionary) -> void:
+	_section("a teleport pad")
+	var game := await _fresh_world(doc)
+	var pad := {}
+
+	for piece: Dictionary in doc["pieces"]:
+		if str(piece["kind"]) == "teleport":
+			pad = piece
+
+	_check(not pad.is_empty(), "the course has a pad")
+
+	var at: Vector3 = pad["at"]
+	var top := at + Vector3(0.0, (pad["size"] as Vector3).y * 0.5, 0.0)
+	var sent := game.stage.teleport_at(top)
+	_check(sent.size() == 2 and (sent[0] as Vector3).is_equal_approx(pad["to"]) \
+		and is_equal_approx(float(sent[1]), float(pad["heading"])), "on it, a runner is sent to its destination",
+		str(sent))
+	_check(game.stage.teleport_at(top + Vector3(0.0, 2.5, 0.0)).is_empty(), "two and a half metres above it, nobody is")
+	_check(game.stage.teleport_at(top + Vector3(0.0, -3.0, 0.0)).is_empty(), "three metres under it, nobody is")
+	_check(game.stage.teleport_at(top + Vector3(3.0, 0.0, 0.0)).is_empty(), "three metres beside it, nobody is")
+	_finished()
 
 
 func _has_fork(doc: Dictionary) -> bool:
