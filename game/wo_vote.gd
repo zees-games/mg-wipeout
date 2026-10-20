@@ -82,6 +82,10 @@ var commands: DotVoteCommands = null
 
 ## `() -> Dictionary`: maps.yml's `commands:` block. Unset renames nothing.
 var commands_spec_fn: Callable = Callable()
+
+## `(id) -> bool`: maps.yml's active rotation, handed to the source so the pack maps dot-vote merges
+## are filtered like the game's own (dot-vote API level 12). Unset, every merged map is offered.
+var in_rotation_fn: Callable = Callable()
 var feed: DotVoteBallotFeed = null
 
 ## Seconds since the course in play was built.
@@ -103,6 +107,9 @@ func setup() -> DotResult:
 	source.entries_fn = _own_choices
 	source.follow_content(
 		content_index if content_index != null else DotContentIndex.shared(), accepted_map_kinds())
+	# By name, only where it exists: a delivered pack may run on an older shell dot-vote.
+	if "in_rotation_fn" in source:
+		source.set(&"in_rotation_fn", in_rotation_fn)
 	refresh_courses()
 
 	director = DotVoteDirector.new()

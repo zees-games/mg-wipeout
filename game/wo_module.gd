@@ -619,6 +619,7 @@ func _build_vote(world: WoGame) -> void:
 	vote = WoVote.new()
 	vote.name = "CourseVote"
 	vote.commands_spec_fn = world.rotation_commands
+	vote.in_rotation_fn = func(id: StringName) -> bool: return world.catalogue.in_rotation(id)
 	vote.courses_fn = func() -> Array:
 		var out: Array = []
 
