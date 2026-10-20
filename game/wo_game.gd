@@ -977,6 +977,10 @@ func _on_round_started(number: int) -> void:
 	_round_seed = config.seed_value + number * 7919
 	random.reseed(_round_seed)
 
+	# Everybody is back in: instant death lasts until the round is over, not longer.
+	for id: StringName in players:
+		(players[id] as WoPlayer).out_for_round = false
+
 	# The course the warmup showed, for the first round; the next one after that. Drawing a new
 	# course here every time put a player who had spent the warmup reading one course on a
 	# different one the moment the round began.
@@ -1173,6 +1177,16 @@ func _place_on_start() -> void:
 		var player: WoPlayer = players[ids[seat]]
 		player.reset_progress()
 		_disarm(player)
+
+		if player.out_for_round:
+			# Out until the round is over: the next course of it is watched from the lounge.
+			if player.health != null:
+				player.health.health = config.player_health
+				player.health.alive = true
+				player.health.invulnerable = true
+			var lounge := stage.lounge_spot(20 + ids.size() + seat)
+			player.place_at(lounge[0], lounge[1])
+			continue
 
 		if player.health != null:
 			player.health.health = config.player_health
@@ -2126,6 +2140,19 @@ func _fell(player: WoPlayer) -> void:
 	if not can_be_harmed(player.player_id):
 		var home := stage.respawn_point(player.checkpoint, 0)
 		player.place_at(home[0], home[1])
+		return
+
+	# Instant death: the water is fatal and the round is over for them. Through the damage
+	# path, so the body falls, the kill is counted and `_on_player_died` seats them in the lounge.
+	if config.instant_death and authoritative and not player.finished and combat != null \
+			and player.health != null and player.is_alive():
+		player.remove_meta(&"air_peak")
+		var lethal := DotDamage.make(0, player.entity_id, player.health.max_health * 4.0, null)
+		lethal.point = player.controller.state.position
+		lethal.direction = Vector3.DOWN
+		lethal.tick = _tick
+		lethal.context = {"why": DIED_FELL}
+		var _killed := combat.apply_damage(lethal)
 		return
 
 	player.falls += 1
@@ -3560,8 +3587,9 @@ func _on_player_died(player: WoPlayer, damage: DotDamage) -> void:
 		if player.health != null:
 			player.health.health = config.player_health
 			player.health.alive = true
-		if config.course_deaths_eliminate:
+		if config.course_deaths_eliminate or config.instant_death:
 			player.watching = true
+			player.out_for_round = config.instant_death
 			if player.health != null:
 				player.health.invulnerable = true
 			var seat := stage.lounge_spot(20 + players.size())

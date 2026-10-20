@@ -50,6 +50,9 @@
 # course built into game/wo_catalogue.gd, which is a supported state, not a broken one.
 # bootstrap-link: mg-wipeout-maps/courses ci
 /courses
+# The courses' own cvar files (cfg/<course id>.cfg), the same repository.
+# bootstrap-link: mg-wipeout-maps/cfg ci
+/cfg
 
 # Exports
 build/

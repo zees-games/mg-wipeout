@@ -4,6 +4,7 @@ const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoConfig := preload("../game/wo_config.gd")
 const WoContent := preload("../game/wo_content.gd")
 const WoCourse := preload("../game/wo_course.gd")
+const WoCourseCfg := preload("../game/wo_course_cfg.gd")
 const WoCourseDoc := preload("../game/wo_course_doc.gd")
 const WoAnnouncer := preload("../game/wo_announcer.gd")
 const WoAudio := preload("../game/wo_audio.gd")
@@ -24,9 +25,9 @@ const WoSettings := preload("../game/wo_settings.gd")
 ## because the section announced itself on the way in. mg-smash-copter and dot-settings both
 ## have the story; every total here was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 35
+const SECTIONS := 37
 
-const CHECKS := 178
+const CHECKS := 190
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -63,6 +64,8 @@ func _run() -> void:
 	await _test_the_knock()
 	await _test_ducking()
 	await _test_a_fall()
+	await _test_instant_death()
+	_test_course_cfg()
 	await _test_a_bot_runs_the_course()
 	await _test_the_racers()
 	await _test_stand_ins_pass_through_each_other()
@@ -474,6 +477,83 @@ func _test_a_fall() -> void:
 	_check(runner.is_alive(), "and nobody died")
 	_check(runner.controller.state.position.distance_to(checkpoint["at"]) < 4.0,
 		"they are back at the checkpoint", str(runner.controller.state.position))
+	_finished()
+
+
+func _test_instant_death() -> void:
+	_section("instant death: the water is fatal, and out lasts until the round is over")
+	var game := await _world(func(c: WoConfig) -> void:
+		c.instant_death = true
+		c.courses_per_round = 2
+		c.countdown_seconds = 0.2
+		c.wind_chance = 0.0
+		c.storm_chance = 0.0)
+	var a := game.add_player(&"u1", "Ada")
+	var b := game.add_player(&"u2", "Bo")
+	var c := game.add_player(&"u3", "Cy")
+	game.start()
+	await _step(game, int(1.0 * TICK_RATE))
+	a.place_at(Vector3(30.0, 2.0, -10.0), 0.0)
+	await _step(game, TICK_RATE * 2)
+	_check(a.watching and a.out_for_round and a.falls == 0,
+		"into the water is out, not a restart", "falls %d watching %s" % [a.falls, a.watching])
+	_check(not game._course_is_over(), "the others are still on the course")
+
+	var finish: Dictionary = game.course_doc["finish"]
+	b.place_at(finish["at"], 0.0)
+	await _step(game, 2)
+	c.place_at(finish["at"], 0.0)
+	await _step(game, 2)
+	_check(game.phase == WoGame.Phase.COUNTDOWN and a.watching and a.out_for_round,
+		"the next course of the round: still out", str(game.phase))
+	_check(not b.watching and not c.watching, "and the finishers are back to run it")
+
+	game._on_round_started(game.round_number + 1)
+	_check(not a.watching and not a.out_for_round, "a new round brings everybody back")
+	_finished()
+
+
+func _test_course_cfg() -> void:
+	_section("a course's cfg: set when it loads, put back when the next one does")
+	var parsed := WoCourseCfg.parse("// one life\nwo_instant_death 1\n# c\n\nWO_COURSES_PER_ROUND \"2\"\nlonely\n")
+	_check(parsed.size() == 2 and parsed[0] == ["wo_instant_death", "1"] and parsed[1] == ["wo_courses_per_round", "2"],
+		"a file is a cvar and a value a line, comments and strays dropped", str(parsed))
+
+	var console := DotConsole.new()
+	add_child(console)
+	var death := console.cvar("wo_instant_death", "0")
+	var rounds := console.cvar("wo_courses_per_round", "3")
+	var other := console.cvar("sv_other", "5")
+	var cfg := WoCourseCfg.new()
+	var text := "wo_instant_death 1\nwo_courses_per_round 2\nsv_other 9\nwo_nothing 1\n"
+	_check(cfg.apply(console, text) == 2 and death.get_string() == "1" and rounds.get_string() == "2",
+		"the course's lines are applied")
+	_check(other.get_string() == "5", "and only wo_ cvars: a pack never sets anything else")
+	var _set := rounds.set_value("4")
+	_check(cfg.apply(console, "") == 0 and death.get_string() == "0",
+		"the next course puts back what it changed")
+	_check(rounds.get_string() == "4", "unless the operator changed it since")
+
+	# The catalogue finds `<root>/../cfg/<id>.cfg` beside the courses directory.
+	var base := "user://wo_cfg_fixture"
+	DirAccess.make_dir_recursive_absolute(base + "/courses")
+	DirAccess.make_dir_recursive_absolute(base + "/cfg")
+	var doc := WoCatalogue.practice().duplicate(true)
+	doc["id"] = "wo_cfg_fixture"
+	var f := FileAccess.open(base + "/courses/wo_cfg_fixture.json", FileAccess.WRITE)
+	f.store_string(WoCourseDoc.to_json(doc))
+	f.close()
+	f = FileAccess.open(base + "/cfg/wo_cfg_fixture.cfg", FileAccess.WRITE)
+	f.store_string("wo_instant_death 1\n")
+	f.close()
+	var catalogue := WoCatalogue.new()
+	var read := catalogue.add_directory(base + "/courses")
+	_check(read == 1 and catalogue.course_cfg.has(&"wo_cfg_fixture"),
+		"the catalogue finds a course's cfg beside its directory", str(catalogue.course_cfg))
+	_check(catalogue.course_cfg.size() == 1, "and a course without one has none")
+	DirAccess.remove_absolute(base + "/courses/wo_cfg_fixture.json")
+	DirAccess.remove_absolute(base + "/cfg/wo_cfg_fixture.cfg")
+	console.queue_free()
 	_finished()
 
 

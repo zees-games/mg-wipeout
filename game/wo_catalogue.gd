@@ -21,6 +21,11 @@ const CHANNEL := "wo.catalogue"
 var courses: Dictionary = {}
 var arenas: Dictionary = {}
 
+## id -> path of the course's `cfg/<id>.cfg`, for the courses that have one. Looked for beside
+## the directory the document was read from (`<root>/../cfg`), so a checkout's link and a
+## delivered pack's mount both find it. See [WoCourseCfg].
+var course_cfg: Dictionary = {}
+
 ## Files that were refused, with why. What `wo_courses` prints, so a mapper can see it.
 var refused: Dictionary = {}
 
@@ -45,6 +50,7 @@ func load_from(directory: String) -> int:
 	arenas.clear()
 	refused.clear()
 	workshop.clear()
+	course_cfg.clear()
 
 	_add(practice(), "built-in")
 	_add(practice_arena(), "built-in")
@@ -115,6 +121,11 @@ func _read_directory(root: String) -> int:
 
 		if _add(parsed.value, file):
 			loaded += 1
+			var cfg_path := root.path_join("..").path_join("cfg").path_join("%s.cfg" % parsed.value["id"])
+			cfg_path = cfg_path.simplify_path()
+
+			if FileAccess.file_exists(cfg_path):
+				course_cfg[StringName(str(parsed.value["id"]))] = cfg_path
 
 	return loaded
 

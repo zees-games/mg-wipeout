@@ -99,6 +99,10 @@ var falls: int = 0
 ## did not reach. Not dead — nothing can hurt them — and not counted on any side.
 var watching: bool = false
 
+## Out until the round is over ([member WoConfig.instant_death]): [method reset_progress] for the
+## next course of the round leaves them watching. Cleared when a round begins.
+var out_for_round: bool = false
+
 ## Which weapon slot they have asked for, from this game's own input message.
 var wanted_slot: int = 0
 
@@ -459,7 +463,7 @@ func reset_progress() -> void:
 	finish_seconds = 0.0
 	falls = 0
 	knocks = 0
-	watching = false
+	watching = out_for_round
 	_knocked_tick = -1000
 
 

@@ -154,6 +154,13 @@ extends DotConfig
 ## from the gallery) rather than put back at the last checkpoint. The brief's "fatal".
 @export var course_deaths_eliminate: bool = true
 
+## Instant death: a fall into the water, or any death on the course, puts the player out for
+## the rest of the ROUND (watching from the lounge, across every course of it) instead of back
+## at a checkpoint. Off by default: it is how the classic one-life obstacle courses play, and
+## those courses switch it on with their own `cfg/<course id>.cfg` in mg-wipeout-maps
+## (`wo_instant_death 1`), which mg-wipeout reverts when the next course loads.
+@export var instant_death: bool = false
+
 ## Whether crossing a checkpoint restores health, so one bad stretch is not a slow death.
 @export var checkpoint_heals: bool = true
 

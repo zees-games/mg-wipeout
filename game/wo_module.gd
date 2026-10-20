@@ -7,6 +7,7 @@ const WoGame := preload("wo_game.gd")
 const WoPlayer := preload("wo_player.gd")
 const WoAvatars := preload("wo_avatars.gd")
 const WoVote := preload("wo_vote.gd")
+const WoCourseCfg := preload("wo_course_cfg.gd")
 
 ## This game, as a module a dedicated server loads.
 ##
@@ -61,6 +62,9 @@ var _bot_ids: Array[StringName] = []
 
 ## The players' vote for the next course; null when it could not be built.
 var vote: WoVote = null
+
+## The last course's own settings, put back when the next course is laid out.
+var _course_cfg: WoCourseCfg = null
 
 ## The drawn ballot's notice topic. The client shell draws one menu per topic.
 const COURSE_BALLOT_TOPIC := &"map_ballot"
@@ -384,6 +388,9 @@ func _add_tunables(world: WoGame) -> void:
 		func(value: float) -> void: config.finale_weapons_per_side = clampi(int(value), 0, 20))
 	_tunable("wo_knock_min", config.knock_min_speed, "The least an obstacle throws a player, m/s",
 		func(value: float) -> void: config.knock_min_speed = clampf(value, 0.0, config.knock_max_speed))
+	_tunable("wo_instant_death", 1.0 if config.instant_death else 0.0,
+		"1: a fall into the water, or any death on a course, is out until the round is over (no checkpoint restart)",
+		func(value: float) -> void: config.instant_death = value > 0.5)
 	_tunable("wo_progress_decides", 1.0 if config.progress_decides else 0.0,
 		"Whether whoever got furthest wins a round nobody finished",
 		func(value: float) -> void: config.progress_decides = value > 0.5)
@@ -457,6 +464,9 @@ func _tunable(
 ## the map going away, which is what `module reload` is for.
 func _game_unload() -> void:
 	_bot_ids.clear()
+
+	if _course_cfg != null:
+		_course_cfg.revert(console)
 
 	if vote != null:
 		vote.queue_free()
@@ -711,7 +721,25 @@ func _wire_map(world: WoGame) -> void:
 
 	world.world_rebuilt.connect(func() -> void:
 		report_map(String(world.stage.id()))
+		apply_course_cfg(world)
 	)
+
+
+## The course's own `cfg/<id>.cfg`, if it has one, over the settings in force; the last
+## course's put back first, so a course that wants one life does not leave it on for the next.
+func apply_course_cfg(world: WoGame) -> int:
+	var text := ""
+
+	if world.catalogue != null and world.stage != null:
+		var path := str(world.catalogue.course_cfg.get(world.stage.id(), ""))
+
+		if path != "":
+			text = FileAccess.get_file_as_string(path)
+
+	if _course_cfg == null:
+		_course_cfg = WoCourseCfg.new()
+
+	return _course_cfg.apply(console, text)
 
 
 ## And the one game event the bridge cannot see for itself.
