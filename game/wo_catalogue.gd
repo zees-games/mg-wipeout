@@ -40,6 +40,13 @@ var content_kinds: PackedStringArray = PackedStringArray()
 ## The order courses come up in when they are not shuffled.
 var _order: Array[StringName] = []
 var _next: int = 0
+
+## The server's maps.yml, or null when there is none (every course rotates, as it always did).
+## dot-map's rotation file speaks DotMapDef; this catalogue holds course documents, so [member _defs]
+## mirrors the ids and the file marks `in_rotation` on the mirror. See [method rotating].
+var rotation_file: DotMapRotationFile = null
+var _defs: DotMapCatalogue = DotMapCatalogue.new()
+var _rotation: DotMapRotation = DotMapRotation.of(_defs)
 var _workshop_docs: Dictionary = {}
 
 
@@ -289,6 +296,96 @@ func playable_courses(allowed: PackedStringArray) -> Array[StringName]:
 	return out
 
 
+## Whether maps.yml names rotations, so that it (not `shuffle_courses`) orders the courses.
+func has_rotation_file() -> bool:
+	return rotation_file != null and rotation_file.has_rotations()
+
+
+## Brings the mirror up to date with [member courses] and lets the file mark who rotates.
+## Without a file every course is in, which is what [method playable_courses] always did.
+func apply_rotation(allowed: PackedStringArray = PackedStringArray()) -> void:
+	sync_content()
+	var seen := {}
+
+	for id: StringName in _order:
+		seen[id] = true
+		var def := _defs.get_map(id)
+
+		if def == null:
+			def = DotMapDef.new()
+			def.id = id
+			def.scene_path = "wo:%s" % id
+			def.display_name = str((courses.get(id, {}) as Dictionary).get("name", id))
+			var _added := _defs.add(def)
+
+		def.enabled = allowed.is_empty() or allowed.has(String(id))
+
+	for def: DotMapDef in _defs.maps.duplicate():
+		if not seen.has(def.id):
+			var _gone := _defs.remove(def.id)
+
+	if has_rotation_file():
+		# A file that names rotations leaves the tutorial out unless it is all there is.
+		rotation_file.fallback_in = func(def: DotMapDef) -> bool:
+			return def.id != &"wo_practice" or _defs.size() == 1
+		var _applied := rotation_file.apply(_rotation)
+		return
+
+	_rotation.order = []
+
+	for def: DotMapDef in _defs.maps:
+		def.in_rotation = true
+
+
+## `wo_rotation <name>`: the live switch to another named rotation in the file.
+func switch_rotation(rotation_name: String) -> DotResult:
+	if not has_rotation_file():
+		return DotResult.fail(DotError.CODE_STATE, "There is no maps.yml to switch rotations in.")
+
+	apply_rotation()
+	return rotation_file.switch(_rotation, rotation_name)
+
+
+## Whether [param id] is in the active rotation. A course the catalogue does not hold is not.
+func in_rotation(id: StringName) -> bool:
+	if not courses.has(id):
+		return false
+
+	if not has_rotation_file():
+		return true
+
+	apply_rotation()
+	var def := _defs.get_map(id)
+	return def != null and def.in_rotation
+
+
+## What the ballot, a nomination and the next-course draw may offer: [method playable_courses]
+## less the courses maps.yml leaves out. A course left out stays [i]playable[/i] (the map menu
+## loads it). With no file, or a file that leaves nothing, it is [method playable_courses].
+func rotating(allowed: PackedStringArray) -> Array[StringName]:
+	var every := playable_courses(allowed)
+
+	if not has_rotation_file():
+		return every
+
+	apply_rotation(allowed)
+	var out: Array[StringName] = []
+
+	for id in every:
+		var def := _defs.get_map(id)
+
+		if def != null and def.in_rotation:
+			out.append(id)
+
+	return out if not out.is_empty() else every
+
+
+## Records that [param id] was built, for the file's cooldown and cycle. Nothing without a file.
+func note_played(id: StringName) -> void:
+	if has_rotation_file() and courses.has(id):
+		_rotation.note_played(id)
+
+
 func playable_arenas(allowed: PackedStringArray) -> Array[StringName]:
 	var out: Array[StringName] = []
 
@@ -304,13 +401,26 @@ func playable_arenas(allowed: PackedStringArray) -> Array[StringName]:
 	return out
 
 
-## The next course: drawn from [param stream] when shuffling, in order otherwise.
+## The next course: drawn from [param stream] when shuffling, in order otherwise. A maps.yml with
+## rotations replaces both: its rotation's mode (`random` with a cooldown, or `cycle`) and
+## written order decide.
 ##
 ## [b]Never the same course twice running when there is a choice[/b], because a shuffle that
 ## repeats is the thing every player notices first and reports as the rotation being broken.
 func next_course(allowed: PackedStringArray, shuffle: bool, stream: DotRandomStream,
 		previous: StringName) -> Dictionary:
-	var ids := playable_courses(allowed)
+	if has_rotation_file():
+		apply_rotation(allowed)
+
+		if _rotation.seed_value == 0 and stream != null:
+			_rotation.seed_value = stream.next_range_i(1, 0x3fffffff)
+
+		var chosen := _rotation.choose(0)
+
+		if chosen != null and courses.has(chosen.id):
+			return courses[chosen.id]
+
+	var ids := rotating(allowed)
 
 	if ids.is_empty():
 		DotLog.warn(CHANNEL, "no course matches the allowed list; playing practice", {
@@ -346,8 +456,9 @@ func describe_lines() -> PackedStringArray:
 
 	for id in _order:
 		var doc: Dictionary = courses[id]
-		lines.append("  %-22s %-24s %d pieces  %s" % [
+		lines.append("  %-22s %-24s %d pieces  %s%s" % [
 			id, label_of(id), (doc["pieces"] as Array).size(), str(doc["author"]),
+			"" if in_rotation(id) else "  (not in rotation)",
 		])
 
 	lines.append("arenas (%d)" % arenas.size())

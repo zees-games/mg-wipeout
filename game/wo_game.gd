@@ -320,6 +320,7 @@ func _ready() -> void:
 			var _added := catalogue.add_directory(root)
 		# The Workshop's courses, solo only by the index's own session (an online session lists none).
 		catalogue.follow_content(DotContentIndex.shared(), WoCatalogue.accepted_map_kinds())
+		var _rotation := load_rotation()
 		# Laid out now, not on the first round: dot-match runs a warmup first, and an empty
 		# world through the warmup is indistinguishable from a map that failed to load.
 		_lay_out_course()
@@ -1048,6 +1049,7 @@ func _lay_out_course() -> void:
 		doc = doc.duplicate(true)
 		doc["weather"] = draw_weather(doc, random.stream(&"weather"), _tick)
 
+	catalogue.note_played(StringName(str(doc.get("id", ""))))
 	build_stage(doc)
 	_place_on_start()
 	_course_unplayed = true
@@ -1065,7 +1067,10 @@ func course_rows() -> Array:
 		var doc: Dictionary = catalogue.courses.get(id, {})
 		# The blurb under the name ("Everything once, and gently"): a course has no mode, and its
 		# `theme` is the sky's colours, not a word.
-		var row := {"id": String(id), "name": catalogue.label_of(id), "current": id == now,
+		var rotates := catalogue.in_rotation(id)
+		var row := {"id": String(id),
+			"name": catalogue.label_of(id) + ("" if rotates else " (not in rotation)"),
+			"in_rotation": rotates, "current": id == now,
 			"detail": str(doc.get("blurb", ""))}
 		if doc.has("thumbnail"):
 			row["thumbnail"] = str(doc["thumbnail"])
@@ -1088,6 +1093,70 @@ func change_course_now(id: StringName) -> DotResult:
 		_lay_out_course()
 	DotLog.info(CHANNEL, "course changed from the map menu", {"course": String(id)})
 	return DotResult.success(id)
+
+
+## Reads maps.yml (the `--config` directory first) and applies it. Called at boot and by
+## `sv_map_rotation_file`. A file that is present and unreadable is an ERROR and changes nothing:
+## rotating every course is a better failure than rotating none.
+func load_rotation() -> DotResult:
+	if catalogue == null:
+		return DotResult.fail(DotError.CODE_STATE, "There is no catalogue to rotate.")
+
+	var stem := config.map_rotation_file
+	var dir := DotMapRotationFile.config_dir_arg()
+	var found := DotMapRotationFile.find(stem, dir)
+
+	if found == "" and stem != "" and (dir != "" or stem != WoConfig.new().map_rotation_file):
+		# The default name being absent is an install with no maps.yml; a name or a directory
+		# somebody chose that finds nothing is a typo they would otherwise never hear about.
+		DotLog.warn(CHANNEL, "the map rotation file was not found; every course rotates", {
+			"file": stem, "config_dir": dir,
+		})
+
+	var paths := PackedStringArray()
+
+	if found != "":
+		paths.append(found)
+
+	var read := DotMapRotationFile.load_files(paths, "mg-wipeout")
+
+	if not read.ok:
+		DotLog.error(CHANNEL, "the map rotation file could not be read; every course rotates", {
+			"why": read.error.message,
+		})
+		catalogue.rotation_file = null
+		catalogue.apply_rotation(config.course_ids)
+		return read
+
+	catalogue.rotation_file = read.value
+	catalogue.apply_rotation(config.course_ids)
+
+	if catalogue.has_rotation_file():
+		DotLog.info(CHANNEL, "the map rotation file", {
+			"paths": ", ".join(catalogue.rotation_file.sources),
+			"active": catalogue.rotation_file.active_name(),
+		})
+
+	return read
+
+
+## maps.yml's `commands:` block (prefix and names), or empty with no file.
+func rotation_commands() -> Dictionary:
+	if catalogue == null or catalogue.rotation_file == null:
+		return {}
+
+	return catalogue.rotation_file.commands()
+
+
+## Every name a role of this game's own answers to (the first is the one help shows), from
+## maps.yml's `commands:` block; the role's own name with no file.
+func command_names(role: String) -> PackedStringArray:
+	var names: Dictionary = rotation_commands().get("names", {})
+
+	if not names.has(role):
+		return PackedStringArray([role])
+
+	return DotCommandNames.all_of("", names, {}, role)
 
 
 ## Gusts and lightning for one course, from the round's own stream. Ticks are game ticks

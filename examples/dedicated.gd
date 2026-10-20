@@ -16,8 +16,8 @@ const WoNetLink := preload("../game/net/wo_net_link.gd")
 ## [DotGameModule]'s order runs, a cvar is typed at a console and a round is played by
 ## nothing but the stand-ins the module seats itself.
 
-const SECTIONS := 11
-const CHECKS := 73
+const SECTIONS := 12
+const CHECKS := 89
 
 const SERVER_DIR := "user://wo_dedicated"
 const PORT := 28931
@@ -54,6 +54,7 @@ func _run() -> void:
 		await _test_a_round_runs()
 		await _test_a_reload_keeps_delivered_courses()
 		_test_the_course_vote()
+		_test_rotation_file()
 		_test_finish_round_waits_for_a_live_round()
 		await _test_a_module_reload()
 		await _test_a_covered_seat_is_not_harmed()
@@ -483,6 +484,132 @@ func _test_the_course_vote() -> void:
 	_check(opened_count[0] == 1, "and opens exactly one rtv ballot, not a second from the game", str(opened_count[0]))
 	director.vote_opened.disconnect(counter)
 	_finished()
+
+## Stands in for the module a vote's commands are registered on, recording the names.
+class CommandHost extends Node:
+	var added: Dictionary = {}
+
+	func add_command(full: String, fn: Callable, _help: String, _permission: String) -> Object:
+		added[full] = fn
+		return null
+
+
+## `cfg/maps.yml`: which courses rotate. The format is dot-map's selftest's; this is what the GAME
+## does with it: a course left out is installed and loadable and is never drawn, never on a
+## ballot, never nominated, marked in the map list; a switch of rotation takes effect; a renamed
+## command is registered; no file means every course.
+func _test_rotation_file() -> void:
+	_section("rotation file")
+	var module := _module()
+	var vote: Node = module.get("vote") if module != null else null
+	var catalogue = game.catalogue
+	var made: Array[StringName] = []
+	var kept_ids: PackedStringArray = game.config.course_ids
+	game.config.course_ids = PackedStringArray()
+
+	for n in 4:
+		var doc: Dictionary = catalogue.practice().duplicate(true)
+		doc["id"] = "rot_%d" % n
+		doc["name"] = "Rotation %d" % n
+		var _added: bool = catalogue._add(doc, "rotation test")
+		made.append(StringName("rot_%d" % n))
+
+	catalogue._rebuild_order()
+	var keep_a: Array = ["rot_0", "rot_1"]
+	var keep_b: Array = ["rot_2", "rot_3"]
+
+	var parsed := DotMapRotationFile.from_trees([{"defaults": {
+		"rotation": "a",
+		"rotations": {"a": {"maps": keep_a, "mode": "random"}, "b": {"maps": keep_b, "mode": "cycle"}},
+		"commands": {"names": {"rtv": "rockit", "wo_courses": "courselist"}},
+	}}], "mg-wipeout")
+	_check(parsed.ok, "a rotation file parses", str(parsed.error))
+	var kept = catalogue.rotation_file
+	catalogue.rotation_file = parsed.value
+	catalogue.apply_rotation(game.config.course_ids)
+
+	var drawn := {}
+	for _i in 30:
+		var doc: Dictionary = catalogue.next_course(game.config.course_ids, true, game.random.stream(&"course"), &"")
+		drawn[String(doc["id"])] = true
+		catalogue.note_played(StringName(str(doc["id"])))
+	var strays := drawn.keys().filter(func(id: String) -> bool: return not keep_a.has(id))
+	_check(not drawn.is_empty() and strays.is_empty(), "a course outside the rotation is never drawn", str(strays))
+	_check(catalogue.courses.has(&"rot_2") and catalogue.playable_courses(game.config.course_ids).has(&"rot_2"),
+		"and stays installed and loadable")
+	_check(not catalogue.rotating(game.config.course_ids).has(&"rot_2"), "but is not what the rotation offers")
+
+	if vote != null:
+		vote.call("refresh_courses")
+		var ballot: Array = []
+		for choice in (vote.get("source") as DotVoteListSource).entries:
+			ballot.append(String(choice.id))
+		_check(ballot.has("rot_0") and not ballot.has("rot_2"), "never on a ballot", str(ballot))
+		var refused := _run_command("nominate rot_2")
+		_check(not _said(refused, "Nominated"), "refused by nominate", ", ".join(refused))
+		var accepted := _run_command("nominate rot_0")
+		# A ballot may be running from the section before, which refuses any nomination; what
+		# matters is that a course in the rotation is known to nominate, an unlisted one is not.
+		_check(not _said(accepted, "nothing called"), "while one in the rotation is known to it", ", ".join(accepted))
+	else:
+		_check(false, "never on a ballot", "no vote")
+		_check(false, "refused by nominate", "no vote")
+		_check(false, "while one in the rotation is known to it", "no vote")
+
+	var out_row: Dictionary = {}
+	var in_row: Dictionary = {}
+	for row: Dictionary in game.course_rows():
+		if row["id"] == "rot_2":
+			out_row = row
+		elif row["id"] == "rot_0":
+			in_row = row
+	_check(not out_row.is_empty() and not bool(out_row["in_rotation"])
+			and str(out_row["name"]).contains("not in rotation"), "the course list marks it")
+	_check(not in_row.is_empty() and bool(in_row["in_rotation"])
+			and not str(in_row["name"]).contains("not in rotation"), "and leaves the rotating ones alone")
+	_check(game.change_course_now(&"rot_2").ok, "while an admin's course change still loads it",
+		str(game.stage.id()))
+
+	_check(catalogue.switch_rotation("b").ok
+			and catalogue.rotating(game.config.course_ids) == ([&"rot_2", &"rot_3"] as Array[StringName]),
+		"a rotation switch takes effect")
+	_check(not catalogue.switch_rotation("nowhere").ok, "and an unknown rotation changes nothing")
+
+	var seen: Array = []
+	for _i in 4:
+		var doc: Dictionary = catalogue.next_course(game.config.course_ids, true, null, &"")
+		seen.append(String(doc["id"]))
+		catalogue.note_played(StringName(str(doc["id"])))
+	_check(seen[0] != seen[1] and seen[0] == seen[2] and seen[1] == seen[3]
+			and keep_b.has(seen[0]) and keep_b.has(seen[1]), "a cycle walks the rotation in turn", str(seen))
+
+	_check(game.command_names("wo_courses") == PackedStringArray(["courselist"])
+			and game.command_names("wo_reload") == PackedStringArray(["wo_reload"]),
+		"the game's own map command is renameable from the file")
+
+	var host := CommandHost.new()
+	var bound: DotResult = vote.call("install_commands", host) if vote != null else null
+	_check(bound != null and bound.ok and host.added.has("rockit") and not host.added.has("rtv"),
+		"and a renamed rtv is registered under its new name", ", ".join(host.added.keys().slice(0, 6)))
+	host.free()
+
+	# No file: every course rotates, as it always did.
+	catalogue.rotation_file = null
+	catalogue.apply_rotation(game.config.course_ids)
+	_check(catalogue.rotating(game.config.course_ids) == catalogue.playable_courses(game.config.course_ids)
+			and catalogue.in_rotation(&"rot_2"), "with no file every course is in the rotation")
+
+	# Put the world back: the other suites share this catalogue.
+	for id in made:
+		var _gone: bool = catalogue.courses.erase(id)
+	catalogue._rebuild_order()
+	catalogue.rotation_file = kept
+	catalogue.apply_rotation(game.config.course_ids)
+	game.config.course_ids = kept_ids
+	if vote != null:
+		vote.call("refresh_courses")
+	_finished()
+
 
 ## [b]`time_up: finish_round` waits for a round being played, never for warmup.[/b] The game
 ## hands dot-vote its match's answer (`round_in_progress_fn`); without it a limit that ran out
