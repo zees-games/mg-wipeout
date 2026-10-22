@@ -31,7 +31,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 | `game/net/` | the codec (`STAGE`, `PROGRESS`, `PICKUP`…), the link, two behaviours, the bridge |
 | `courses` | a dot-bootstrap link to `../mg-wipeout-maps/courses` (gitignored) |
 | `examples/` | `headless_run`, `headless_courses`, `headless_net`, `headless_workshop` (subscribed packs' courses: solo, online, kinds, own ids, the ballot), `dedicated` |
-| `tools/` | `shot.sh`/`shot.gd` (render a view), `trace_course` (where one stand-in falls and why), `race_times` (a field per preset, finish times), `make_sounds.py` (writes `audio/`) |
+| `tools/` | `soak.tscn` (`./game.sh soak`, [docs/soak.md](docs/soak.md)), `shot.sh`/`shot.gd` (render a view), `trace_course` (where one stand-in falls and why), `race_times` (a field per preset, finish times), `make_sounds.py` (writes `audio/`) |
 | `audio/` | the crowd, the horn and the water (synthesised by `tools/make_sounds.py`), the announcer (Kenney, CC0) |
 
 ## Running and testing
