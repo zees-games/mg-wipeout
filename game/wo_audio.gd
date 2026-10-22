@@ -379,12 +379,28 @@ func setup() -> DotResult:
 	if godot_sink != null:
 		godot_sink.bank = DotAudioSynth.bank(manager.catalogue, sound_recipes())
 		_bake_machinery(godot_sink.bank, manager.catalogue)
-		# INFO, once: the answer to "why does it sound like that" is in this line.
-		DotLog.info(CHANNEL, "no audio files; synthesised stand-ins are in use", {
-			"ids": sound_recipes().size(), "dir": SOUND_DIR,
-		})
+		var standins := standin_ids(manager.catalogue)
+
+		# INFO, once, and only when a stand-in really is what plays: files win over the bank.
+		if not standins.is_empty():
+			DotLog.info(CHANNEL, "no audio file for some ids; synthesised stand-ins are in use", {
+				"ids": standins, "dir": SOUND_DIR,
+			})
 
 	return DotResult.success(null)
+
+
+## The recipe ids whose file is missing, so the synthesised stand-in is what plays.
+static func standin_ids(catalogue: DotAudioCatalogue) -> Array[String]:
+	var out: Array[String] = []
+
+	for id in sound_recipes().keys():
+		var def := catalogue.find(StringName(id))
+
+		if def != null and not ResourceLoader.exists(def.path):
+			out.append(String(id))
+
+	return out
 
 
 ## Everybody this client knows steps, once a frame: players and bots alike.

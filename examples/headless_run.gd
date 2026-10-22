@@ -29,7 +29,7 @@ const WoSettings := preload("../game/wo_settings.gd")
 
 const SECTIONS := 39
 
-const CHECKS := 206
+const CHECKS := 207
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -1333,6 +1333,11 @@ func _test_the_machinery_is_heard() -> void:
 		audio.queue_free()
 
 	_check(jumped == 0, "and a jump in time plays nothing", "%d" % jumped)
+
+	# The shipped .ogg files win over the synthesised bank, so only an id without one is a stand-in.
+	var standins := WoAudio.standin_ids(WoAudio.sound_catalogue())
+	_check(not standins.has("air_horn") and not standins.has("crowd_cheer"),
+		"ids with a packed file are not reported as stand-ins", str(standins))
 
 	# A frame landing exactly on the bottom of a hammer's swing (angle 0, phase 0 at t = 0)
 	# is one crossing, not two: into 0 and out of it. Armed by putting `signf` back.
