@@ -216,7 +216,7 @@ extends DotConfig
 ## `cycle`, wildcards, command names); the game ships none. Empty, or no such file, rotates every course. A course it
 ## leaves out stays installed (the map menu loads it); it is only never drawn, balloted or
 ## nominated. A rotation in the file replaces [member shuffle_courses]. `sv_map_rotation_file`.
-@export var map_rotation_file: String = "cfg/maps.yml"
+@export var map_rotation_file: String = DotMapRotationFile.DEFAULT_STEM
 
 ## Where course and arena documents are read from, beside the one built into this game.
 ##

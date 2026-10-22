@@ -527,7 +527,7 @@ func _apply_and_drop(rotation_file: DotMapRotationFile) -> WeakRef:
 	return weakref(catalogue)
 
 
-## `cfg/maps.yml`: which courses rotate. The format is dot-map's selftest's; this is what the GAME
+## `maps.yml` (dot_map tiers): which courses rotate. The format is dot-map's selftest's; this is what the GAME
 ## does with it: a course left out is installed and loadable and is never drawn, never on a
 ## ballot, never nominated, marked in the map list; a switch of rotation takes effect; a renamed
 ## command is registered; no file means every course.
