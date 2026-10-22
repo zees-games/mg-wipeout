@@ -6,9 +6,9 @@ const WoPaths := preload("wo_paths.gd")
 ## `.bin` beside the courses) that dot-map's converter wrote, and this builds it: the faces
 ## drawn, one convex hull per player-solid brush as a single static body.
 ##
-## The mesh is never in the document (a megabyte against the wire's 64 KB), so a server and a
-## solo player read it from the pack's `worlds/`; a connected client without that directory
-## draws and collides with nothing of it.
+## The mesh is never in the document (a megabyte against the wire's 64 KB). A server and a solo
+## player read it from the pack's `worlds/`; a connected client reads it from the courses pack
+## its server names, which `maps_delivery: client` (game.yml) mounts under `res://dot_cloud/`.
 
 const CHANNEL := "wo.world"
 
@@ -37,14 +37,32 @@ static func add_dir(path: String) -> void:
 		dirs.append(path)
 
 
-## Where [param mesh]'s files are, without extension, or "".
+## Where [param mesh]'s files are, without extension, or "". A client never read the courses
+## directory, so it also looks in every mounted pack's `worlds/`.
 static func prefix_of(mesh: String) -> String:
 	for dir in dirs:
 		var prefix := dir.path_join(mesh)
 		if FileAccess.file_exists(prefix + ".json"):
 			return prefix
 
+	for dir in _mounted_dirs():
+		var prefix := dir.path_join(mesh)
+		if FileAccess.file_exists(prefix + ".json"):
+			return prefix
+
 	return ""
+
+
+static func _mounted_dirs() -> PackedStringArray:
+	var out := PackedStringArray()
+	var root := "res://dot_cloud"
+
+	for owner in DirAccess.get_directories_at(root):
+		for pack in DirAccess.get_directories_at(root.path_join(owner)):
+			for version in DirAccess.get_directories_at(root.path_join(owner).path_join(pack)):
+				out.append(root.path_join(owner).path_join(pack).path_join(version).path_join("worlds"))
+
+	return out
 
 
 ## The built world for a piece, or null (with a line) when its files are not here.

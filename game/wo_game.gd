@@ -1111,6 +1111,7 @@ func load_rotation() -> DotResult:
 
 	var stem := config.map_rotation_file
 	var dir := DotMapRotationFile.config_dir_arg()
+	DotAddonConfig.game = "mg-wipeout"
 	var found := DotMapRotationFile.find(stem, dir)
 
 	if found == "" and stem != "" and (dir != "" or stem != WoConfig.new().map_rotation_file):
@@ -1123,8 +1124,8 @@ func load_rotation() -> DotResult:
 	var paths := PackedStringArray()
 
 	if found != "":
-		# Every layer of the new layout merges (shipped, then operator); a named file or the legacy file stands alone.
-		var layers := DotMapRotationFile.find_layers(dir)
+		# The layers that apply (an operator file replaces the shipped one unless it says merge: true); a named file or the legacy file stands alone.
+		var layers := DotMapRotationFile.find_layers(dir, "mg-wipeout")
 		paths = layers if layers.has(found) else PackedStringArray([found])
 
 	var read := DotMapRotationFile.load_files(paths, "mg-wipeout")

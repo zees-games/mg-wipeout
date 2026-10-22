@@ -3,6 +3,7 @@ extends Node
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoConfig := preload("../game/wo_config.gd")
 const WoCourseDoc := preload("../game/wo_course_doc.gd")
+const WoWorld := preload("../game/wo_world.gd")
 const WoEvents := preload("../game/net/wo_events.gd")
 const WoGame := preload("../game/wo_game.gd")
 const WoNetBridge := preload("../game/net/wo_net_bridge.gd")
@@ -24,8 +25,8 @@ const WoRequest := preload("../game/net/wo_request.gd")
 ##
 ## Sections and checks are both counted; mg-smash-copter's notes say why the second matters.
 
-const SECTIONS := 14
-const CHECKS := 73
+const SECTIONS := 15
+const CHECKS := 79
 
 const CLIENT_PEER := 7
 const SESSION := 42
@@ -86,6 +87,7 @@ func _run() -> void:
 		await _test_progress_crosses()
 		await _test_free_roam_crosses()
 		await _test_the_final_death_crosses()
+		await _test_an_imported_mesh_arrives()
 		await _test_leaving()
 
 	OS.remove_logger(errors)
@@ -298,6 +300,67 @@ func _test_the_course_arrives() -> void:
 	_check(_client_game.stage.pieces.size() == _server_game.stage.pieces.size(), "every piece", "%d" % _client_game.stage.pieces.size())
 	_check(_heard.has("stage") and not bool(_heard["stage"][1]), "and the client said so, as a course")
 	_finished()
+
+
+## An imported course: the document crosses, the mesh does not. The client reads it from a pack
+## mounted under `res://dot_cloud/` (what `maps_delivery: client` leaves on a real client), not
+## from any directory the catalogue added, so `WoWorld.dirs` is emptied before the client builds.
+func _test_an_imported_mesh_arrives() -> void:
+	_section("an imported course's mesh is the same on the client, found in a mounted pack")
+	var mount := "res://dot_cloud/test/maps/1.0.0/worlds"
+	DirAccess.make_dir_recursive_absolute(mount)
+
+	for file in DirAccess.get_files_at("res://worlds"):
+		var _copied := DirAccess.copy_absolute("res://worlds".path_join(file), mount.path_join(file))
+
+	var kept := WoWorld.dirs.duplicate()
+	var added := _server_game.catalogue.add_directory("res://courses")
+	var kept_ids := _server_game.config.course_ids
+	_server_game.config.course_ids = PackedStringArray(["wo_practice", "wo_office_course"])
+	var chosen := _server_game.change_course_now(&"wo_office_course")
+	_check(added >= 0 and chosen.ok, "the server changes to the Office Course", str(chosen.error) if not chosen.ok else "")
+	WoWorld.dirs = PackedStringArray()
+	_exchange()
+	await _steps(6)
+
+	_check(String(_client_game.stage.doc.get("id", "")) == "wo_office_course", "the client was sent it",
+		str(_client_game.stage.doc.get("id", "")))
+	var server_world := _world_node(_server_game)
+	var client_world := _world_node(_client_game)
+	_check(server_world != null and client_world != null, "both ends built the mesh")
+
+	if server_world != null and client_world != null:
+		_check(client_world.get_child_count() == server_world.get_child_count(), "with the same hulls",
+			"%d / %d" % [client_world.get_child_count(), server_world.get_child_count()])
+		_check((client_world.get_node("Drawn") as Node3D).get_child_count() == (server_world.get_node("Drawn") as Node3D).get_child_count(),
+			"and the same drawn faces")
+
+	var back := _server_game.change_course_now(&"wo_practice")
+	_exchange()
+	await _steps(6)
+	_check(back.ok and String(_client_game.stage.doc.get("id", "")) == "wo_practice", "then both go back to the practice course")
+	WoWorld.dirs = kept
+	_server_game.config.course_ids = kept_ids
+
+	for file in DirAccess.get_files_at(mount):
+		DirAccess.remove_absolute(mount.path_join(file))
+
+	var path := mount
+
+	while path != "res://dot_cloud":
+		DirAccess.remove_absolute(path)
+		path = path.get_base_dir()
+
+	DirAccess.remove_absolute("res://dot_cloud")
+	_finished()
+
+
+func _world_node(game: WoGame) -> Node3D:
+	for piece: Dictionary in game.stage.pieces:
+		if str(piece["kind"]) == "world":
+			return piece["node"] as Node3D
+
+	return null
 
 
 ## The start pen's toys over the wire: paired by index on both ends, frozen copies, a ball kicked on

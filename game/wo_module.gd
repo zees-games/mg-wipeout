@@ -277,8 +277,9 @@ func _game_load() -> DotResult:
 ## `courses/` directory. A server that still names one under `server_dependencies` keeps working,
 ## because DotGameContent reads those too.
 ##
-## [b]Still server-only.[/b] The server sends the course it is playing in STAGE, so a client never
-## needs a course file and none of these is in a client's content sync. With nothing named, this
+## [b]Documents on the wire, meshes in the pack.[/b] The server sends the course it is playing in
+## STAGE, so a client needs no course file; `maps_delivery: client` still mounts the pack on it for
+## an imported course's `worlds/` mesh. With nothing named, this
 ## game plays its built-in course.
 ##
 ## [b]Called after EVERY catalogue load[/b], not only the first: `load_from` forgets everything

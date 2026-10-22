@@ -211,9 +211,9 @@ extends DotConfig
 ## Whether the next course is drawn at random (seeded) rather than taken in order.
 @export var shuffle_courses: bool = true
 
-## The file that says which courses this server ROTATES: `cfg/maps.yml` (dot-map's
-## `DotMapRotationFile`: named rotations, `random` or `cycle`, wildcards, command names), looked
-## for in the `--config` directory. Empty, or no such file, rotates every course. A course it
+## The file that says which courses this server ROTATES: `maps.yml` in `cfg/server/addons/dot_map/`
+## of the `--config` directory (dot-map's `DotMapRotationFile`: named rotations, `random` or
+## `cycle`, wildcards, command names); the game ships none. Empty, or no such file, rotates every course. A course it
 ## leaves out stays installed (the map menu loads it); it is only never drawn, balloted or
 ## nominated. A rotation in the file replaces [member shuffle_courses]. `sv_map_rotation_file`.
 @export var map_rotation_file: String = "cfg/maps.yml"

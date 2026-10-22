@@ -4,6 +4,7 @@ const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoConfig := preload("../game/wo_config.gd")
 const WoContent := preload("../game/wo_content.gd")
 const WoCourse := preload("../game/wo_course.gd")
+const WoWorld := preload("../game/wo_world.gd")
 const WoCourseCfg := preload("../game/wo_course_cfg.gd")
 const WoCourseDoc := preload("../game/wo_course_doc.gd")
 const WoAnnouncer := preload("../game/wo_announcer.gd")
@@ -26,9 +27,9 @@ const WoSettings := preload("../game/wo_settings.gd")
 ## because the section announced itself on the way in. mg-smash-copter and dot-settings both
 ## have the story; every total here was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 38
+const SECTIONS := 39
 
-const CHECKS := 203
+const CHECKS := 206
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -59,6 +60,7 @@ func _run() -> void:
 	_test_the_weapon_art_is_vendored()
 	_test_formulas()
 	await _test_world_builds()
+	_test_client_finds_the_mesh()
 	await _test_the_gate()
 	await _test_the_carry()
 	await _test_the_turntable()
@@ -336,6 +338,43 @@ func _test_world_builds() -> void:
 		"a joiner stands on the start pad", str(a.controller.state.position))
 	_check(a.controller.state.position.distance_to(b.controller.state.position) > 1.0,
 		"two joiners are not put inside each other")
+	_finished()
+
+
+func _test_client_finds_the_mesh() -> void:
+	_section("a client with no courses directory finds an imported mesh in a mounted pack")
+	var mount := "res://dot_cloud/test/maps/1.0.0/worlds"
+	var kept := WoWorld.dirs.duplicate()
+	var src := "res://worlds"
+	var copied := 0
+	DirAccess.make_dir_recursive_absolute(mount)
+
+	for file in DirAccess.get_files_at(src):
+		if DirAccess.copy_absolute(src.path_join(file), mount.path_join(file)) == OK:
+			copied += 1
+
+	_check(copied >= 2, "the worlds directory is here to copy from", str(copied))
+	WoWorld.dirs = PackedStringArray()
+	var prefix := WoWorld.prefix_of("wo_office_course")
+	_check(prefix == mount.path_join("wo_office_course"), "the mounted pack's worlds/ is found", prefix)
+	var body := WoWorld.build({"mesh": "wo_office_course"}, null)
+	_check(body != null and body.get_child_count() > 1, "and builds the faces and hulls", str(body))
+
+	if body != null:
+		body.free()
+
+	WoWorld.dirs = kept
+
+	for file in DirAccess.get_files_at(mount):
+		DirAccess.remove_absolute(mount.path_join(file))
+
+	var path := mount
+
+	while path != "res://dot_cloud":
+		DirAccess.remove_absolute(path)
+		path = path.get_base_dir()
+
+	DirAccess.remove_absolute("res://dot_cloud")
 	_finished()
 
 
