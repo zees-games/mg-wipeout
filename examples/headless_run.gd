@@ -28,7 +28,7 @@ const WoSettings := preload("../game/wo_settings.gd")
 
 const SECTIONS := 38
 
-const CHECKS := 201
+const CHECKS := 203
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -457,6 +457,8 @@ func _test_ducking() -> void:
 
 	_check(standing.knocks > 0, "standing, it hit them", "%d" % standing.knocks)
 	_check(crouching.knocks == 0, "crouched, it did not", "%d" % crouching.knocks)
+	_check(crouching.controller.state.crouch_fraction > 0.9 and standing.controller.state.crouch_fraction < 0.1,
+		"the crouch fraction rises for the one ducking only", "%.2f" % crouching.controller.state.crouch_fraction)
 	_finished()
 
 
@@ -802,6 +804,8 @@ func _test_free_roam() -> void:
 	var keys := WoBindings.make()
 	_check(keys.defaults_on("G").size() == 1 and str(keys.row_for_action(WoBindings.ROAM).get("default", "")) == "G",
 		"the free camera is on G, and nothing else defaults to G")
+	_check(keys.defaults_on("C").size() == 1 and keys.defaults_on("Ctrl").size() == 1,
+		"crouch is on Ctrl and on C (Ctrl+W closes a browser tab), and nothing else takes C")
 	_finished()
 
 

@@ -574,8 +574,17 @@ func _on_stage(stage_id: StringName, is_arena: bool) -> void:
 
 	if chat != null and name_of != "":
 		var author := str(game.stage.doc.get("author", ""))
-		chat.say_locally("%s%s — %s" % [name_of, " by %s" % author if author != "" else "", blurb],
+		chat.say_locally("%s%s — %s" % [name_of, " by %s" % author if author != "" else "", _short(blurb, 90)],
 			Color(0.80, 0.90, 1.0))
+
+
+## [param text] cut at a word to at most [param limit] characters, with an ellipsis; the chat box does not wrap.
+static func _short(text: String, limit: int) -> String:
+	if text.length() <= limit:
+		return text
+	var cut := text.substr(0, limit - 1)
+	var space := cut.rfind(" ")
+	return (cut.substr(0, space) if space > limit / 2 else cut) + "…"
 
 
 ## Somebody fell in, crossed a checkpoint, or finished. What the feed and the speakers say.

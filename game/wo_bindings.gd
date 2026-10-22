@@ -28,6 +28,8 @@ const SLOTS: Array[StringName] = [&"wo_slot_1", &"wo_slot_2", &"wo_slot_3", &"wo
 static func make() -> DotMenuBindings:
 	var keys := DotMenuBindings.new()
 	keys.add_movement("Movement", "Ctrl", "Crouch, under a high arm")
+	# Ctrl+W closes a browser tab: forward with Ctrl held is the web build's most common chord.
+	keys.add_extra(&"dot_fps_crouch", &"bind_duck_c", "Crouch, second key", "C", "Movement")
 	keys.add(&"dot_fps_walk", &"bind_walk", "Walk, for beams and the tops of balls", "Shift", "Movement")
 	keys.add(GRAB, &"bind_grab", "Pick up or put down a prop (hold)", "E", "Hands")
 	keys.add(RELOAD, &"bind_reload", "Reload", "R", "Hands")
