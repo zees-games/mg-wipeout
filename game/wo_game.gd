@@ -268,6 +268,11 @@ var _thrown: Dictionary = {}
 ## player id -> the last tick a thrown prop hurt them, so one prop is one hit.
 var _thrown_hit: Dictionary = {}
 
+## A hop from stone to stone covers about this many metres a second, landing to landing.
+const SPAN_HOP_SPEED := 4.8
+## How early or late a runner may be against the timing of [method _span_clear], in seconds.
+const SPAN_SLACK := 0.25
+
 ## Bots: player id -> the route point they are heading for.
 var _bot_route: Dictionary = {}
 var _bot_wait: Dictionary = {}
@@ -2306,6 +2311,33 @@ func _finish(player: WoPlayer) -> void:
 
 # --- Bots -------------------------------------------------------------------
 
+## Whether the run from [param from] through the next [param span] route points meets no hazard,
+## timed at a run to a jump point and at a hop's pace from one, early and late by [constant SPAN_SLACK].
+func _span_clear(from: Vector3, index: int, span: int) -> bool:
+	var route := stage.route()
+
+	if span <= 1 and index + 1 < route.size():
+		return stage.path_clear(from, (route[index + 1] as Dictionary)["at"], _tick, config.run_speed)
+
+	for slack in [-SPAN_SLACK, 0.0, SPAN_SLACK]:
+		var offset: float = slack
+		var here := from
+
+		for i in range(index + 1, mini(index + 1 + span, route.size())):
+			var there: Vector3 = (route[i] as Dictionary)["at"]
+			var from_jump := i - 1 >= 0 and bool((route[i - 1] as Dictionary)["jump"])
+			var speed := SPAN_HOP_SPEED if from_jump else config.run_speed
+			var length := Vector2(there.x - here.x, there.z - here.z).length()
+
+			if not stage.path_clear(here, there, _tick + int(maxf(offset, 0.0) * float(tick_rate)), speed / 0.8, 0.0):
+				return false
+
+			offset += length / speed
+			here = there
+
+	return true
+
+
 ## What a stand-in does. On a course: follow the document's route, jump where it says, and
 ## sometimes get it wrong. In a final death: get something in its hands and use it.
 func _drive_bots() -> void:
@@ -2501,7 +2533,7 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 				and stage.supported(point["at"], _tick):
 			may = true
 
-		if waited < tick_rate * 6 and not may:
+		if waited < tick_rate * (6 if int(point["span"]) <= 1 else 24) and not may:
 			# [b]Another column, from the deck only, once its own has kept it waiting.[/b] A
 			# person watches the column in front and takes the next one if it opens first,
 			# timed from where they will be once they have stepped across to it; never
@@ -2583,7 +2615,12 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 		return
 
 	var running := command.move != Vector2.ZERO
-	_bot_hop(player, command)
+	# Landed on a top, the yaw is still at its point, behind the runner: the hop looks the way the run will go.
+	var hop_yaw := NAN
+	if bool(point["jump"]) and float(point["reach"]) > 0.6 and grounded and not next.is_empty() and toward.length() < 1.5:
+		var onward := (next["at"] as Vector3) - at
+		hop_yaw = rad_to_deg(atan2(-onward.x, -onward.z))
+	_bot_hop(player, command, hop_yaw)
 
 	# [b]Stopped to let an arm go by, it does not take off.[/b] The hop stops a runner whose
 	# landing the arm would be on, and the take-off below then jumped anyway, from a tick of
@@ -2701,8 +2738,8 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 		# `bot_reaction`): a person does not set off on the tick a ram starts home, and one
 		# who reacts slowly goes into a window as it closes. Committed once seen, so a slow
 		# reaction is a late start, never a second wait.
-		if int(racing["window"]) < 0 and waited < tick_rate * 6 \
-				and not stage.path_clear(at, next["at"], _tick, config.run_speed):
+		if int(racing["window"]) < 0 and waited < tick_rate * (6 if int(point["span"]) <= 1 else 24) \
+				and not _span_clear(at, index, int(point["span"])):
 			_bot_wait[player.player_id] = waited + 1
 			command.move = Vector2.ZERO
 			command.set_button(DotFpsCommand.BUTTON_JUMP, false)
@@ -3248,11 +3285,12 @@ func _bot_unstick(player: WoPlayer, command: DotFpsCommand) -> void:
 ## so "wait until the way is clear" waits for ever. This asks the course about the next
 ## half second along the bot's own heading, and jumps when an arm is due between a fifth and
 ## a half of a second from now — the part of a jump when the feet are above a low arm.
-func _bot_hop(player: WoPlayer, command: DotFpsCommand) -> void:
+func _bot_hop(player: WoPlayer, command: DotFpsCommand, yaw: float = NAN) -> void:
 	if player.controller.state.mode != DotFpsState.Mode.GROUND or command.move == Vector2.ZERO:
 		return
 
-	var heading := Vector3(-sin(deg_to_rad(command.yaw)), 0.0, -cos(deg_to_rad(command.yaw)))
+	var heading_yaw := command.yaw if is_nan(yaw) else yaw
+	var heading := Vector3(-sin(deg_to_rad(heading_yaw)), 0.0, -cos(deg_to_rad(heading_yaw)))
 	var at := player.controller.state.position
 	var limits := Vector3(1.0, 1.0, 1.0)
 	var duck := false

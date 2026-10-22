@@ -256,6 +256,8 @@ static func _course(doc: Dictionary) -> DotResult:
 			# Hold here until the way to the next point is clear of every hazard for as long as
 			# it takes to run it. See [method WoCourse.path_clear].
 			"wait": bool((entry as Dictionary).get("wait", false)),
+			# With `wait`: how many further points the whole run must be clear for, not just the next.
+			"span": clampi(int((entry as Dictionary).get("span", 1)), 1, 16),
 			# And until something will be under the next point when a jump lands there — a
 			# mover, a turntable, a tile. See [method WoCourse.supported].
 			"board": bool((entry as Dictionary).get("board", false)),
