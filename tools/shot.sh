@@ -4,6 +4,7 @@
 #   tools/shot.sh                                      # a player's own eyes, a few seconds in
 #   tools/shot.sh --view=course --wo-course-ids=wo_spin_cycle   # a course, from above
 #   tools/shot.sh --view=tour --wo-course-ids=wo_spin_cycle   # an overview and three frames along the route (--out=res://screenshots/x.png writes x_overview.png, x_1..3)
+#   tools/shot.sh --view=look --look=x,y,z,tx,ty,tz   # a free camera at the first point, facing the second
 #   tools/shot.sh --view=start                         # the start pad, from behind the runners
 #   tools/shot.sh --view=cover                         # the loading cover, before it lifts
 #   tools/shot.sh --view=hazard --seconds=2            # the first thing that throws you, close
@@ -45,6 +46,7 @@ for arg in "$@"; do
         --wo-*)      config+=("$arg") ;;
         --arena=*)   config+=("$arg") ;;
         --grid=*)    config+=("$arg") ;;
+        --look=*)    config+=("$arg") ;;
         --board)     config+=("$arg") ;;
         --ballot)    config+=("$arg") ;;
         --workshop)  config+=("$arg") ;;

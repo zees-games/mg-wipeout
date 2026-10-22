@@ -80,6 +80,10 @@ const PIECES := {
 	# A curtain of water (or slime, by `tint`) across the way, falling for `duty` of every
 	# `period` and pushing whoever is in it off the side (`push`, along the piece's own +X).
 	"fall": ["at", "size", "period"],
+	# Imported geometry: dot-map's mesh `mesh` (see [WoWorld]), its brush models in `skip` left out.
+	"world": ["mesh"],
+	# A volume that drowns whoever is in it, as the water does: a pit's floor in imported geometry.
+	"kill": ["at", "size"],
 }
 
 ## The roles a surface can be drawn as. See [WoTextures.Role].
@@ -416,6 +420,13 @@ static func _piece(source: Variant, index: int) -> DotResult:
 				out[key] = int(piece[key])
 			"tint":
 				out[key] = _colour(piece[key], Color.WHITE)
+			"mesh":
+				out[key] = str(piece[key])
+			"skip":
+				var skipped: Array = []
+				for model: Variant in (piece[key] if piece[key] is Array else []):
+					skipped.append(int(model))
+				out[key] = skipped
 			"phase", "radius", "height", "length", "arm_length", "arm_height", "arm_thickness", \
 					"hub_radius", "hub_height", "speed", "pitch", "amplitude", "period", \
 					"swing", "reach", "duty", "tile", "gap", "thickness", "down", "power", "push", "heading":

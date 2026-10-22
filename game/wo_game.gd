@@ -2127,7 +2127,7 @@ func _watch_progress() -> void:
 
 		_watch_landing(player, feet)
 
-		if feet.y < stage.water_height():
+		if feet.y < stage.water_height() or stage.in_kill(feet):
 			_fell(player)
 			continue
 

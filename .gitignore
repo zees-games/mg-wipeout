@@ -55,6 +55,9 @@
 # The courses' own cvar files (cfg/<course id>.cfg), the same repository.
 # bootstrap-link: mg-wipeout-maps/cfg ci
 /cfg
+# Imported course geometry (dot-bsp-mesh files), the same repository.
+# bootstrap-link: mg-wipeout-maps/worlds ci
+/worlds
 
 # Exports
 build/

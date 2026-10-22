@@ -93,3 +93,5 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 - The crowd and announcer have not been heard in a browser build.
 - Most checks are not armed one by one yet.
 - The carrying pose is checked by `headless_run` but not rendered: staging a stand-in mid-carry in the shot tool is its own job.
+
+- **Imported courses use the `world` and `kill` piece kinds.** `world` (`game/wo_world.gd`) builds a dot-map mesh from `<root>/../worlds/<mesh>.json` (the `worlds` bootstrap link beside `courses`) with hull collisions; `kill` is a box that counts as a fall (`WoCourse.in_kill`). `mg-wipeout-maps/tools/import_world.py` writes them; its spec's `hidden` and `attached` list brush models to skip. Online clients do not receive the mesh yet. Plan: mg-wipeout-maps `docs/import-plan.md`.

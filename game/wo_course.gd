@@ -2,6 +2,7 @@ extends Node3D
 
 const WoCourseDoc := preload("wo_course_doc.gd")
 const WoTextures := preload("wo_textures.gd")
+const WoWorld := preload("wo_world.gd")
 
 ## A course, or an arena, built from its document: the pieces, where each one is at a given
 ## tick, and the four questions a player's movement asks of them.
@@ -239,6 +240,13 @@ func _make_piece(index: int, spec: Dictionary) -> void:
 			piece["node"] = _conveyor(spec, role)
 			piece["moving"] = true
 			piece["carrier"] = true
+		"world":
+			piece["node"] = WoWorld.build(spec, physics)
+		"kill":
+			var volume := Node3D.new()
+			_not_collided(volume)
+			volume.transform = Transform3D(_yaw_basis(float(spec["yaw"])), spec["at"])
+			piece["node"] = volume
 		"bouncer", "teleport":
 			piece["node"] = _static_box(spec["at"], spec["size"], spec["yaw"], 0.0, role)
 		"tiles":
@@ -2528,6 +2536,22 @@ func strike_at(tick: int) -> Dictionary:
 
 
 # --- The course's own facts -----------------------------------------------------
+
+## Whether [param feet] are in a `kill` piece: a drowning as the water's, for a pit with a floor.
+func in_kill(feet: Vector3) -> bool:
+	for piece in pieces:
+		if str(piece["kind"]) != "kill":
+			continue
+
+		var spec: Dictionary = piece["spec"]
+		var size: Vector3 = spec["size"]
+		var local := _yaw_basis(float(spec["yaw"])).inverse() * (feet - (spec["at"] as Vector3))
+
+		if absf(local.x) <= size.x * 0.5 and absf(local.y) <= size.y * 0.5 and absf(local.z) <= size.z * 0.5:
+			return true
+
+	return false
+
 
 func water_height() -> float:
 	if is_arena():

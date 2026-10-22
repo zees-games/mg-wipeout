@@ -52,6 +52,9 @@ var _workshop: bool = false
 ## `--grid=N`: which grid of tiles the tiles view looks at, counting from 0 along the course.
 var _grid := 0
 
+## `--look=x,y,z,tx,ty,tz`: the look view puts a free camera at the first point, facing the second.
+var _look := PackedFloat64Array()
+
 
 ## --view=maps: a fixture course pack in the shared [DotContentIndex], as the solo shell leaves
 ## one after a subscribed pack mounts, so the M menu shows what a player would see. The pack's
@@ -94,6 +97,8 @@ func _ready() -> void:
 			_workshop = true
 		elif arg.begins_with("--arena="):
 			_arena = arg.trim_prefix("--arena=")
+		elif arg.begins_with("--look="):
+			_look = PackedFloat64Array(Array(arg.trim_prefix("--look=").split(",")).map(func(n): return float(n)))
 		elif arg.begins_with("--grid="):
 			_grid = arg.trim_prefix("--grid=").to_int()
 		elif arg.begins_with("--console="):
@@ -177,7 +182,7 @@ func _run() -> void:
 				runner.place = game._finish_count
 			await _seconds_of(game.config.handover_seconds + 1.5)
 		"course":
-			await _frames(6)
+			await _seconds_of(7.0)
 			# Further out than the straight courses needed: a course that turns is as wide as it
 			# is long, and at 1.0 the overview of a switchback or a spiral was half of it.
 			_overview(game, 1.3)
@@ -202,6 +207,11 @@ func _run() -> void:
 				camera.look_at_from_position(here - way * 8.0 + Vector3(0.0, 5.0, 0.0), here + way * 9.0)
 				await _frames(4)
 				_save("%s_%d.png" % [base, n])
+		"look":
+			await _seconds_of(maxf(_seconds, 7.0))
+			var camera := _free_camera()
+			if _look.size() == 6:
+				camera.look_at_from_position(Vector3(_look[0], _look[1], _look[2]), Vector3(_look[3], _look[4], _look[5]))
 		"start":
 			await _seconds_of(0.6)
 			var camera := _free_camera()
