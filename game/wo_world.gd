@@ -12,6 +12,8 @@ const WoPaths := preload("wo_paths.gd")
 
 const CHANNEL := "wo.world"
 
+const CLOUD_SERVICE := &"dot_cloud_client"
+
 ## Hull kinds a player is stopped by. A piece's `skip` lists model numbers the course replaces
 ## with its own scripted pieces.
 const SOLID_KINDS := ["solid", "clip", "glass"]
@@ -51,6 +53,47 @@ static func prefix_of(mesh: String) -> String:
 			return prefix
 
 	return ""
+
+
+## Mesh ids the document's world pieces name that no mounted pack holds yet.
+static func missing(doc: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+
+	for piece: Dictionary in doc.get("pieces", []):
+		if str(piece.get("kind", "")) != "world":
+			continue
+
+		var mesh := str(piece.get("mesh", ""))
+
+		if mesh != "" and not out.has(mesh) and prefix_of(mesh).is_empty():
+			out.append(mesh)
+
+	return out
+
+
+## Fetches [param mesh]'s files: a maps pack whose manifest puts them in a group named after the
+## mesh id is widened to include it, so a join downloads the courses played, not every mesh.
+## OK with nothing done when no mounted pack groups it (an ungrouped pack arrived whole).
+static func fetch(mesh: String) -> DotResult:
+	var cloud := DotRegistry.get_service(CLOUD_SERVICE)
+
+	if cloud == null:
+		return DotResult.success(false)
+
+	for key: String in cloud.call("acquired_keys"):
+		var manifest: Object = cloud.call("manifest_for", key)
+
+		if manifest == null:
+			continue
+
+		for file: Object in manifest.get("files"):
+			if (file.get("groups") as PackedStringArray).has(mesh):
+				var got: DotResult = await cloud.call(
+					"ensure", StringName(manifest.get("content_id")), str(manifest.get("version")),
+					PackedStringArray([mesh]))
+				return got.wrap("fetching mesh %s" % mesh) if not got.ok else DotResult.success(true)
+
+	return DotResult.success(false)
 
 
 static func _mounted_dirs() -> PackedStringArray:

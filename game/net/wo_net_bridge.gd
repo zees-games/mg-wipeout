@@ -11,6 +11,7 @@ const WoToyNet := preload("wo_toy_net.gd")
 
 const WoContent := preload("../wo_content.gd")
 const WoGame := preload("../wo_game.gd")
+const WoWorld := preload("../wo_world.gd")
 const WoCourseDoc := preload("../wo_course_doc.gd")
 const WoPlayer := preload("../wo_player.gd")
 
@@ -1661,6 +1662,13 @@ func _apply_stage(reader: DotNetReader) -> void:
 			"why": decoded.error.message, "detail": decoded.error.detail,
 		})
 		return
+
+	# Awaits only when a mesh is not mounted and a pack groups it; otherwise this runs straight through.
+	for mesh in WoWorld.missing(decoded.value):
+		var got: DotResult = await WoWorld.fetch(mesh)
+
+		if not got.ok:
+			DotLog.warn(CHANNEL, "a course mesh would not download", {"mesh": mesh, "why": got.error.message})
 
 	var built := game.build_stage(decoded.value)
 
