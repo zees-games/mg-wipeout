@@ -4,7 +4,7 @@ extends Node
 ## route point it was heading for. The tool for "a stand-in cannot finish this course" — the
 ## suite says that it happened, this says where.
 ##
-##   godot --headless --path . res://tools/trace_course.tscn -- --course=wo_big_balls [--seconds=120] [--every=0.5]
+##   godot --headless --path . res://tools/trace_course.tscn -- --course=wo_big_balls [--seconds=120] [--every=0.5] [--heights=x0,x1,z0,z1]
 
 const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
@@ -15,12 +15,16 @@ func _ready() -> void:
 	var course := "wo_practice"
 	var seconds := 120.0
 	var every := 0.0
+	var heights := PackedFloat64Array()
 
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--course="):
 			course = arg.trim_prefix("--course=")
 		elif arg.begins_with("--every="):
 			every = arg.trim_prefix("--every=").to_float()
+		elif arg.begins_with("--heights="):
+			for t in arg.trim_prefix("--heights=").split(","):
+				heights.append(t.to_float())
 		elif arg.begins_with("--seconds="):
 			seconds = arg.trim_prefix("--seconds=").to_float()
 
@@ -40,6 +44,11 @@ func _ready() -> void:
 	game.set_physics_process(false)
 	await get_tree().physics_frame
 	await get_tree().physics_frame
+
+	if heights.size() == 4:
+		_print_heights(game, heights)
+		get_tree().quit()
+		return
 
 	var bot := game.add_player(&"u900001", "Runner")
 	bot.is_bot = true
@@ -93,3 +102,19 @@ func _ready() -> void:
 		print("did not finish: %d falls, %d knocks, at %s" % [bot.falls, bot.knocks, bot.controller.state.position])
 
 	get_tree().quit()
+
+
+## `--heights=x0,x1,z0,z1`: the floor under every half metre of a box, one row per z and one digit per x:
+## the top surface's height in quarter metres plus 4 (0 to 9), "." where a ray hits nothing.
+func _print_heights(game: Node3D, box: PackedFloat64Array) -> void:
+	var space: PhysicsDirectSpaceState3D = game.get_world_3d().direct_space_state
+	var z := box[2]
+	while z <= box[3]:
+		var row := "z=%6.1f " % z
+		var x := box[0]
+		while x <= box[1]:
+			var hit: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(x, 2.0, z), Vector3(x, -12, z)))
+			row += "." if hit.is_empty() else str(clampi(int(round(hit["position"].y / 0.25)) + 4, 0, 9))
+			x += 0.5
+		print(row)
+		z += 0.5
