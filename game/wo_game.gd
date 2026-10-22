@@ -208,6 +208,11 @@ var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
 var _weapon_defs: Dictionary = {}
 var effects: DotFxManager = null
 var spectate: WoSpectate = null
+## Who a spectator may watch and whether they may fly a free camera: dot-spectate's
+## `mp_forcecamera`, `mp_freeroam` and `mp_freeroam_speed`. One object for the life of the
+## game, shared with [WoSpectate]'s manager, so a cvar change reaches the rules in use. Bound
+## by the module (REPLICATED) and followed by a client, which is the end that flies the camera.
+var spectate_rules: DotSpectatorRules = DotSpectatorRules.new()
 var progress: WoProgress = null
 
 ## player id -> WoPlayer.
@@ -618,7 +623,9 @@ func _build_spectate() -> void:
 		return p == Phase.HANDOVER or p == Phase.FINALE
 	add_child(spectate)
 
-	var ready_now := spectate.setup(authoritative, tick_rate, config.spectate_camera)
+	# The config's number is only the starting point: from here `mp_forcecamera` is the rule.
+	spectate_rules.force_camera = clampi(config.spectate_camera, 0, 2)
+	var ready_now := spectate.setup(authoritative, tick_rate, spectate_rules)
 
 	if not ready_now.ok:
 		DotLog.warn(CHANNEL, "spectating is off", {"why": ready_now.error.message})

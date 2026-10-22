@@ -82,14 +82,18 @@ var _stepping: bool = false
 var _preferring: bool = false
 
 
-## Builds the manager. [param force_camera] is [member WoConfig.spectate_camera].
-func setup(p_authoritative: bool, tick_rate: int, force_camera: int) -> DotResult:
+## The key the HUD names for the free camera; the client sets it from the bindings.
+var roam_key: String = "G"
+
+
+## Builds the manager on [param rules], the world's own [member WoGame.spectate_rules].
+func setup(p_authoritative: bool, tick_rate: int, rules: DotSpectatorRules) -> DotResult:
 	authoritative = p_authoritative
 
 	manager = DotSpectatorManager.new()
 	manager.name = "SpectatorManager"
 	manager.authoritative = authoritative
-	manager.rules = rules_for(tick_rate, force_camera)
+	manager.rules = configure_rules(rules, tick_rate)
 	manager.participants_fn = _participants
 	manager.team_fn = func(key: String) -> int: return int(sides.get(StringName(key), 0))
 	manager.alive_fn = _alive
@@ -109,20 +113,18 @@ func setup(p_authoritative: bool, tick_rate: int, force_camera: int) -> DotResul
 	DotLog.debug(CHANNEL, "spectating is set up", {
 		"authoritative": authoritative,
 		"force_camera": manager.rules.force_camera,
+		"roaming": manager.rules.roaming_permitted(),
 	})
 	return DotResult.success(null)
 
 
-## The policy, as a document.
+## The policy this game adds to the operator's: how long the cameras hold and where they stand.
 ##
-## Static so a suite can read the numbers without a world.
-static func rules_for(tick_rate: int, force_camera: int) -> DotSpectatorRules:
-	var rules := DotSpectatorRules.new()
-	rules.force_camera = clampi(force_camera, 0, 2)
-	# Off whatever the policy. A roaming camera over an open arena sees
-	# the whole map from anywhere, which with "own side" on is the one thing that setting
-	# forbids — and with "anybody" is a camera no better than following somebody.
-	rules.allow_roaming = false
+## Static so a suite can read the numbers without a world. [b]`force_camera` and
+## `allow_roaming` are not set here[/b]: they are the operator's (`mp_forcecamera`,
+## `mp_freeroam`) and default to anybody-may-watch with free roam on. Until 2026-10-21 this
+## forced roaming off whatever the operator said.
+static func configure_rules(rules: DotSpectatorRules, tick_rate: int) -> DotSpectatorRules:
 	# Dead players stay dead until the next round, so a list that included them would be
 	# a list of bodies at the kill height.
 	rules.cycle_includes_dead = false
@@ -135,7 +137,7 @@ static func rules_for(tick_rate: int, force_camera: int) -> DotSpectatorRules:
 	return rules
 
 
-## Changes who may watch whom, from the next decision on. What `wo_spectate_camera` writes.
+## Changes who may watch whom, from the next decision on. What the deprecated `wo_spectate_camera` writes (`mp_forcecamera` is the rule now).
 func set_force_camera(force_camera: int) -> void:
 	if manager == null or manager.rules == null:
 		return
@@ -238,6 +240,41 @@ func step(player_id: StringName, direction: int) -> DotResult:
 	var moved := manager.next_target(key) if direction > 0 else manager.previous_target(key)
 	_stepping = false
 	return moved
+
+
+## The free-roam key, asked of the server like every other camera change: into a free camera
+## from a player, and back onto one from it. Refused with a line to show when roaming is off
+## (`mp_freeroam 0`) or a restricted camera is set (`mp_forcecamera`).
+##
+## [b]The server owns the mode; the client flies the camera.[/b] The view event carries
+## ROAMING, and each frame's pose is the client's own ([DotSpectatorFreeCam]), because a
+## camera position per frame is the wire cost this game's one small event avoids.
+func toggle_roam(player_id: StringName) -> DotResult:
+	if manager == null:
+		return DotResult.fail(DotError.CODE_STATE, "Spectating is not set up.")
+
+	if not authoritative:
+		return DotResult.fail(DotError.CODE_STATE, "A mirror is told, not asked.")
+
+	var key := String(player_id)
+
+	if not manager.is_spectating(key):
+		return DotResult.fail(DotError.CODE_STATE, "You are playing, not watching.")
+
+	if not manager.can_roam(key):
+		return DotResult.fail(DotError.CODE_FORBIDDEN, "Free roam is off on this server.")
+
+	return manager.toggle_roam(key)
+
+
+func can_roam(player_id: StringName) -> bool:
+	return manager != null and manager.is_spectating(String(player_id)) \
+		and manager.can_roam(String(player_id))
+
+
+func is_roaming(player_id: StringName) -> bool:
+	return manager != null and manager.is_spectating(String(player_id)) \
+		and manager.view(String(player_id)).mode == DotSpectatorView.Mode.ROAMING
 
 
 ## First person, then behind them, when the policy allows it.
@@ -343,15 +380,22 @@ func line_for(player_id: StringName) -> String:
 		DotSpectatorView.Mode.FREEZE_CAM:
 			return "shot by %s" % _name_of(StringName(view.target))
 		DotSpectatorView.Mode.FIXED:
-			return "nobody left to watch"
+			return "nobody left to watch%s" % _roam_suffix(player_id)
+		DotSpectatorView.Mode.ROAMING:
+			return "free camera   %s back to players" % roam_key
 		DotSpectatorView.Mode.CHASE:
-			return "watching %s  (behind)   click: next   F5: their eyes" % _name_of(
-				StringName(view.target)
-			)
+			return "watching %s  (behind)   click: next   F5: their eyes%s" % [
+				_name_of(StringName(view.target)), _roam_suffix(player_id)
+			]
 		_:
-			return "watching %s   click: next   F5: behind them" % _name_of(
-				StringName(view.target)
-			)
+			return "watching %s   click: next   F5: behind them%s" % [
+				_name_of(StringName(view.target)), _roam_suffix(player_id)
+			]
+
+
+## The hint for the free camera, only while the server allows it.
+func _roam_suffix(player_id: StringName) -> String:
+	return "   %s: free camera" % roam_key if can_roam(player_id) else ""
 
 
 func _name_of(player_id: StringName) -> String:

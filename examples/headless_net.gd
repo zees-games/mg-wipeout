@@ -24,8 +24,8 @@ const WoRequest := preload("../game/net/wo_request.gd")
 ##
 ## Sections and checks are both counted; mg-smash-copter's notes say why the second matters.
 
-const SECTIONS := 13
-const CHECKS := 65
+const SECTIONS := 14
+const CHECKS := 73
 
 const CLIENT_PEER := 7
 const SESSION := 42
@@ -84,6 +84,7 @@ func _run() -> void:
 		await _test_a_knock_is_predicted()
 		await _test_the_local_player_is_predicted()
 		await _test_progress_crosses()
+		await _test_free_roam_crosses()
 		await _test_the_final_death_crosses()
 		await _test_leaving()
 
@@ -472,6 +473,59 @@ func _test_progress_crosses() -> void:
 	# Seven metres down to the water is most of a second.
 	await _steps(SERVER_TICK_RATE * 2)
 	_check(_heard.has("progress_%d" % WoEvents.Progress.FELL), "a fall is announced")
+	_finished()
+
+
+func _test_free_roam_crosses() -> void:
+	_section("free roam is asked for, the server decides, and the mode crosses the wire")
+	var spectate := _server_game.spectate
+	var rules := _server_game.spectate_rules
+	var key := WoNetBridge.player_key(SESSION)
+	var stand_key := _stand_in.player_id
+	# Out: not alive to the manager (a watcher is in the gallery), then the death camera, which
+	# hands over to the stand-in after its second or so.
+	var me: WoPlayer = _server_game.players[key]
+	me.watching = true
+	spectate.on_died(key, stand_key, false, Vector3(0, 2, 0), 0.0, _tick)
+	await _steps(SERVER_TICK_RATE * 4)
+	_check(spectate.is_spectating(key) and not spectate.is_roaming(key),
+		"a watcher starts on a player, not in a free camera", str(spectate.mode_of(key)))
+	_check(_client_game.spectate.is_spectating(key), "and the client's mirror is watching too")
+
+	_client_bridge.ask_roam()
+	await _steps(6)
+	_check(spectate.is_roaming(key), "the server puts a watcher who asks into the free camera")
+	_check(_client_game.spectate.is_roaming(key), "and the client's mirror is told ROAMING")
+
+	_client_bridge.ask_roam()
+	await _steps(6)
+	_check(not spectate.is_roaming(key) and not _client_game.spectate.is_roaming(key),
+		"the same key hands the camera back to a player on both ends")
+
+	rules.allow_roaming = false
+	_client_bridge.ask_roam()
+	await _steps(6)
+	_check(not spectate.is_roaming(key) and not _client_game.spectate.is_roaming(key),
+		"mp_freeroam 0 refuses the request")
+	rules.allow_roaming = true
+
+	rules.force_camera = 1
+	_client_bridge.ask_roam()
+	await _steps(6)
+	_check(not spectate.is_roaming(key), "mp_forcecamera 1 refuses it too")
+	rules.force_camera = 0
+
+	_client_bridge.ask_roam()
+	await _steps(6)
+	rules.allow_roaming = false
+	await _steps(6)
+	_check(not spectate.is_roaming(key) and not _client_game.spectate.is_roaming(key),
+		"switching mp_freeroam off mid-roam puts the roamer back on a player on both ends")
+	rules.allow_roaming = true
+	# Back in play, as the next section expects.
+	me.watching = false
+	spectate.on_spawned(key)
+	await _steps(6)
 	_finished()
 
 

@@ -20,7 +20,7 @@ The course closes when everybody is across or the clock runs out. Then:
 
 - **Nobody finished:** whoever got furthest wins (or it's a draw, with `wo_progress_decides 0`).
 - **One player or team finished:** they win.
-- **Two or more finished:** the **final death**. The finishers are dropped into a random arena while props and weapons land on its floor. Pick props up with **E** and throw them, or walk over a weapon to take it. Fall out of the arena and you're out. Everybody else watches from the gallery.
+- **Two or more finished:** the **final death**. The finishers are dropped into a random arena while props and weapons land on its floor. Pick props up with **E** and throw them, or walk over a weapon to take it. Fall out of the arena and you're out. Everybody else watches from the gallery. Out of the final death, **G** hands you a free camera (move keys fly, Sprint fast, Walk slow) and takes you back to the players; operators switch it off with `mp_freeroam 0`, and `mp_forcecamera` 1 or 2 (or the older `wo_spectate_camera`) restricts the camera, which turns roaming off.
 
 There are beach balls to bat about in the start pen while the gate is up, and balls on most arenas' floors to shoot about and knock into the water. You walk through them and push them, so they never slow you down or hide anybody.
 

@@ -1184,6 +1184,8 @@ func _on_request(message: DotNetMessage) -> void:
 
 			if bool(step["ok"]):
 				_spectate_step(peer_id, int(step["direction"]))
+		WoEvents.Ask.ROAM:
+			_spectate_roam(peer_id)
 
 
 ## Somebody who is out asked to look at somebody else. The server's list, the server's rule.
@@ -1201,6 +1203,20 @@ func _spectate_step(peer_id: int, direction: int) -> void:
 
 	if not moved.ok:
 		notice(peer_id, moved.error.message)
+
+
+## Somebody who is out pressed the free-roam key. The mode is the server's; the refusal
+## ("Free roam is off on this server") goes back as a notice, like a refused step.
+func _spectate_roam(peer_id: int) -> void:
+	var session_id := player_for_peer(peer_id)
+
+	if session_id == 0 or game.spectate == null:
+		return
+
+	var toggled: DotResult = game.spectate.toggle_roam(player_key(session_id))
+
+	if not toggled.ok:
+		notice(peer_id, toggled.error.message)
 
 
 func _switch_team(peer_id: int, team: int) -> void:
@@ -1389,6 +1405,10 @@ func ask_team(team: int) -> void:
 
 
 ## Out, and asking to watch somebody else: +1 next, -1 previous, 0 the other camera.
+func ask_roam() -> void:
+	_ask(WoEvents.Ask.ROAM, WoEvents.write_ask_roam())
+
+
 func ask_spectate(direction: int) -> void:
 	_ask(WoEvents.Ask.SPECTATE, WoEvents.write_ask_spectate(direction))
 

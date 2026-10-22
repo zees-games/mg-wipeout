@@ -51,6 +51,9 @@ static var punishments_file: String = ""
 ## The `wo_bots` cvar, held so the tick does not look it up sixty times a second.
 var _bots: DotConVar = null
 
+## `mp_forcecamera`, kept so the deprecated `wo_spectate_camera` writes through it.
+var _force_camera_cvar: Object = null
+
 ## How many stand-ins, from how many people: dot-server's one rule for every game. See
 ## [method _keep_the_round_full].
 var _quota: DotBotQuota = null
@@ -196,6 +199,15 @@ func _game_load() -> DotResult:
 	var _ragdolls := world.ragdoll_rules.bind_cvars(
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
+
+	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: dot-spectate's rules, so spectators
+	# free-roam unless an operator says otherwise. REPLICATED, because each client flies its
+	# own spectator camera under them (WoClient.toggle_roam).
+	for made: Object in world.spectate_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	):
+		if str(made.get(&"name")) == DotSpectatorRules.CVAR_FORCE_CAMERA:
+			_force_camera_cvar = made
 
 	# dot-player-controller's mp_forceview (first or third person: the player's choice, or one
 	# held) and mp_solidplayers (players and stand-ins block each other, 1 by default).
@@ -422,10 +434,13 @@ func _add_tunables(world: WoGame) -> void:
 	_tunable("wo_gravity", config.gravity, "Metres per second squared, for everything",
 		func(value: float) -> void: config.gravity = value)
 	_tunable("wo_spectate_camera", float(config.spectate_camera),
-		"Who somebody who is out may watch: 0 anybody, 1 their own side, 2 nobody",
+		"Deprecated, sets mp_forcecamera. Who somebody who is out may watch: 0 anybody, 1 their own side, 2 nobody",
 		func(value: float) -> void:
 			config.spectate_camera = clampi(int(value), 0, 2)
-			if world.spectate != null:
+			# Through the cvar, so what `mp_forcecamera` reports is what is in force.
+			if _force_camera_cvar != null:
+				var _set: Variant = _force_camera_cvar.set_value(str(config.spectate_camera))
+			elif world.spectate != null:
 				world.spectate.set_force_camera(config.spectate_camera))
 	# [b]Deprecated: the count is `bot_quota` now[/b], and this forwards to it. Kept rather than
 	# removed because every shipped server config sets it; left as its own number it would be
