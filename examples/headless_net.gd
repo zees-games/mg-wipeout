@@ -332,8 +332,11 @@ func _test_an_imported_mesh_arrives() -> void:
 	if server_world != null and client_world != null:
 		_check(client_world.get_child_count() == server_world.get_child_count(), "with the same hulls",
 			"%d / %d" % [client_world.get_child_count(), server_world.get_child_count()])
-		_check((client_world.get_node("Drawn") as Node3D).get_child_count() == (server_world.get_node("Drawn") as Node3D).get_child_count(),
-			"and the same drawn faces")
+		if server_world.has_node("Drawn") and client_world.has_node("Drawn"):
+			_check((client_world.get_node("Drawn") as Node3D).get_child_count() == (server_world.get_node("Drawn") as Node3D).get_child_count(),
+				"and the same drawn faces")
+		else:
+			_check(client_world is DotMapWorld and server_world is DotMapWorld, "both are dot-map worlds (an io course)")
 
 	var back := _server_game.change_course_now(&"wo_practice")
 	_exchange()

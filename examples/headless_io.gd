@@ -15,7 +15,12 @@ const WoGame := preload("../game/wo_game.gd")
 ## a button through the use key, a trigger that starts a mover), the movers move, a mover carries
 ## a runner standing on it, and the state reaches a client over the wire format.
 
-const COURSE_ID := &"wo_oaks_course"
+## Each course and what it must run: [sections, checks, lava room (a hurt that a trigger enables after a delay), ladder].
+const COURSES := {
+	&"wo_oaks_course": [8, 28, false, false],
+	&"wo_office_course": [10, 33, true, true],
+	&"wo_dans_course": [9, 30, false, true],
+}
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
 
@@ -25,6 +30,8 @@ var _sections_entered := 0
 var _sections_finished := 0
 var _failures := PackedStringArray()
 var _world: WoGame = null
+var _expect_sections := 0
+var _expect_checks := 0
 
 
 func _ready() -> void:
@@ -33,18 +40,28 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("wipeout: a course run by its map's own entities")
+	print("wipeout: courses run by their map's own entities")
 	print("")
 
 	var catalogue := WoCatalogue.new()
 	var _loaded := catalogue.load_from("courses")
 
-	if not catalogue.courses.has(COURSE_ID):
-		print("(%s is not installed: no mg-wipeout-maps link, nothing to check)" % COURSE_ID)
-		get_tree().quit(0)
-		return
+	for id: StringName in COURSES:
+		if not catalogue.courses.has(id):
+			print("(%s is not installed: no mg-wipeout-maps link, nothing to check)" % id)
+			continue
 
-	var doc: Dictionary = catalogue.courses[COURSE_ID]
+		var plan: Array = COURSES[id]
+		_expect_sections += int(plan[0])
+		_expect_checks += int(plan[1])
+		print("== %s" % id)
+		await _play(catalogue, id, bool(plan[2]), bool(plan[3]))
+
+	_report(_expect_sections, _expect_checks)
+
+
+func _play(catalogue: WoCatalogue, id: StringName, lava: bool, ladders: bool) -> void:
+	var doc: Dictionary = catalogue.courses[id]
 
 	_section("the document")
 	_check(catalogue.refused.is_empty(), "none was refused", str(catalogue.refused))
@@ -125,22 +142,44 @@ func _run() -> void:
 
 	world = game.stage.io.world
 	_section("a button")
-	var button := _button(world)
-	_check(button != null, "the map has a button")
+	var buttons := _buttons(world)
+	_check(not buttons.is_empty(), "the map has a button")
 
-	if button != null:
+	if not buttons.is_empty():
+		# A fresh body: the runner may have been carried over the finish line by the push check.
+		var presser := game.add_player(&"u7", "Presser")
+		await _steps(game, 2)
 		var seen := int(game.io_log["uses"])
 		var pressed := world.io.delivered
-		var box := _centre_of(button)
 
-		# From each side in turn, eyes on its middle, the grab key pressed for one tick.
-		for side in [Vector2(0, 1), Vector2(1, 0), Vector2(0, -1), Vector2(-1, 0)]:
-			var feet := Vector3(box.x + side.x * 1.2, box.y - 1.6, box.z + side.y * 1.2)
-			runner.place_at(feet, rad_to_deg(atan2(side.x, side.y)))
-			runner.wants_grab = true
-			await _steps(game, 1)
-			runner.wants_grab = false
-			await _steps(game, 1)
+		# Each button in turn, from each side, eyes on its middle, the grab key pressed for one tick: the first
+		# that answers is the one checked (some start locked or sit behind a door).
+		for button in buttons:
+			var box := _centre_of(button)
+			for side in [Vector2(0, 1), Vector2(1, 0), Vector2(0, -1), Vector2(-1, 0)]:
+				# At the height the button's own eyes would be, and at floor level with the head tipped down
+				# to it (a button low on a wall is pressed looking down).
+				for drop in [1.6, 1.1, 0.6]:
+					var feet := Vector3(box.x + side.x * 1.2, box.y - drop, box.z + side.y * 1.2)
+					var yaw := rad_to_deg(atan2(side.x, side.y))
+					presser.place_at(feet, yaw)
+					var to := box - presser.eye_position()
+					var pitch := rad_to_deg(atan2(to.y, Vector2(to.x, to.z).length()))
+					var look := DotFpsCommand.new()
+					look.yaw = yaw
+					look.pitch = pitch
+					presser.controller.apply_command(look)
+					presser.wants_grab = true
+					await _steps(game, 1)
+					presser.wants_grab = false
+					presser.controller.apply_command(look)
+					await _steps(game, 1)
+
+					if int(game.io_log["uses"]) > seen:
+						break
+
+				if int(game.io_log["uses"]) > seen:
+					break
 
 			if int(game.io_log["uses"]) > seen:
 				break
@@ -150,11 +189,20 @@ func _run() -> void:
 		_check(world.io.delivered > pressed, "and its OnPressed outputs are delivered", "%d before, %d after" % [pressed, world.io.delivered])
 	_finished()
 
+	if lava:
+		await _lava_room(game, world)
+
+	if ladders:
+		await _ladder(game, world)
+
 	_section("the finish")
+	var finisher := game.add_player(&"u6", "Finisher")
+	await _steps(game, 2)
+	_check(not finisher.finished, "a body on the spawn has not finished")
 	var finish: Vector3 = (doc["finish"] as Dictionary)["at"]
-	runner.place_at(finish + Vector3(0.0, 0.1, 0.0), 0.0)
+	finisher.place_at(finish + Vector3(0.0, 0.1, 0.0), 0.0)
 	await _steps(game, 4)
-	_check(runner.finished, "standing in the last room ends the course for the runner")
+	_check(finisher.finished, "standing in the last room ends the course for the runner")
 	_finished()
 
 	_section("the state reaches a client")
@@ -173,22 +221,23 @@ func _run() -> void:
 		if str(candidate["kind"]) == "world":
 			piece = candidate
 
-	var client_world := client.build(piece, COURSE_ID, {}, false, false, TICK_RATE)
+	var client_world := client.build(piece, id, {}, false, false, TICK_RATE)
 	add_child(client_world)
 	_check(client_world != null, "a client builds the same world without its logic")
 
 	for entry: Array in inbox:
 		var back := WoEvents.read_world_io(DotNetReader.new(WoEvents.write_world_io(entry[1])))
-		wired = wired and bool(back["ok"]) and str((back["msg"] as Dictionary).get("stage")) == String(COURSE_ID)
+		wired = wired and bool(back["ok"]) and str((back["msg"] as Dictionary).get("stage")) == String(id)
 		client.apply(back["msg"])
 		tick = maxi(tick, int((back["msg"] as Dictionary).get("tick", 0)))
 
 	_check(wired, "every message survives the wire format", str(inbox.size()))
 	_check(client.base == io.base and client_world.io.now >= tick, "and sets the client's clock to the server's",
 		"base %d, now %d, tick %d" % [client.base, client_world.io.now, tick])
+	# Its colliders sit in the one physics space the next course is built in.
+	remove_child(client_world)
+	client_world.free()
 	_finished()
-
-	_report(8, 27)
 
 
 func _report(sections: int, checks: int) -> void:
@@ -209,6 +258,85 @@ func _report(sections: int, checks: int) -> void:
 		code = 1
 
 	get_tree().quit(code)
+
+
+## The hurt that a trigger enables three seconds after somebody steps in (the lava room's own links): quiet
+## at two seconds, striking at three and a half.
+func _lava_room(game: WoGame, world: DotMapWorld) -> void:
+	_section("the lava room heats up three seconds after entry")
+	var room := _named_volume(world.mesh.manifest, "hurt", "Obstacle2_Hurt")
+	_check(not room.is_empty(), "the map has the room's hurt volume, disabled until triggered")
+
+	if not room.is_empty():
+		var victim := game.add_player(&"u9", "Lava")
+		await _steps(game, 2)
+		var struck := int(game.io_log["hurts"])
+		var centre: Vector3 = room["centre"]
+		victim.place_at(Vector3(centre.x, room["floor"], centre.z), 0.0)
+		await _steps(game, 2 * TICK_RATE)
+		_check(int(game.io_log["hurts"]) == struck and not victim.out_for_round, "two seconds in, nothing has happened")
+		await _steps(game, int(1.5 * TICK_RATE))
+		_check(int(game.io_log["hurts"]) > struck and victim.out_for_round, "at three and a half the floor has hurt him out of the round",
+			str(game.io_log))
+	_finished()
+
+
+## Walks into the first ladder box looking up, from each side in turn: a ladder is climbed when any side gains height.
+func _ladder(game: WoGame, world: DotMapWorld) -> void:
+	_section("a ladder climbs")
+	var boxes := world.ladder_boxes()
+	_check(not boxes.is_empty(), "the map has ladders", str(boxes.size()))
+	var best := -INF
+	var tried := AABB()
+
+	if not boxes.is_empty():
+		var climber := game.add_player(&"u8", "Climber")
+		await _steps(game, 2)
+
+		# At the middle of each ladder, a hand's breadth off its face on each side in turn, looking up and
+		# pushing forward (a body that touches one and falls past it is on it): it must go up.
+		for box in boxes:
+			if best > 1.5:
+				break
+			tried = box
+			var normal_x := box.size.x < box.size.z
+			var centre := box.get_center()
+
+			for sign in [1.0, -1.0]:
+				var face := Vector3(sign, 0.0, 0.0) if normal_x else Vector3(0.0, 0.0, sign)
+				var half := (box.size.x if normal_x else box.size.z) * 0.5
+				var yaw := 0.0
+				for candidate in [0.0, 90.0, 180.0, 270.0]:
+					if DotFpsMotor._view_basis(candidate, 0.0).forward.dot(-face) > 0.9:
+						yaw = candidate
+				climber.place_at(Vector3(centre.x, centre.y - 0.5, centre.z) + face * (half + 0.3), yaw)
+				await _steps(game, 3)
+				var start_y := climber.controller.state.position.y
+				var top := start_y
+
+				for _i in range(60):
+					var command := DotFpsCommand.new()
+					command.move = Vector2(0.0, 1.0)
+					command.yaw = yaw
+					command.pitch = 50.0
+					climber.controller.apply_command(command)
+					await _steps(game, 1)
+					top = maxf(top, climber.controller.state.position.y)
+
+				best = maxf(best, top - start_y)
+				if best > 1.5:
+					break
+
+		_check(best > 1.5, "walking into it and looking up climbs it", "%.2f m gained, ladder %s" % [best, tried])
+	_finished()
+
+
+func _named_volume(manifest: Dictionary, kind: String, target: String) -> Dictionary:
+	for v: Dictionary in manifest["volumes"]:
+		if str(v["kind"]) == kind and str(v.get("targetname", "")) == target:
+			var extent := _brush_extent(v)
+			return {"centre": extent.get_center(), "floor": extent.position.y}
+	return {}
 
 
 func _io_piece(doc: Dictionary) -> bool:
@@ -265,11 +393,12 @@ func _brush_extent(v: Dictionary) -> AABB:
 	return AABB(lo, hi - lo) if lo.is_finite() and hi.is_finite() else AABB(Vector3.ZERO, Vector3(INF, INF, INF))
 
 
-func _button(world: DotMapWorld) -> DotMapMoverNode:
+func _buttons(world: DotMapWorld) -> Array[DotMapMoverNode]:
+	var out: Array[DotMapMoverNode] = []
 	for e: DotMapEntity in world.io.entities:
 		if e.classname == "func_button" and e is DotMapMoverNode and (e as DotMapMoverNode).node != null:
-			return e as DotMapMoverNode
-	return null
+			out.append(e as DotMapMoverNode)
+	return out
 
 
 func _centre_of(mover: DotMapMoverNode) -> Vector3:
