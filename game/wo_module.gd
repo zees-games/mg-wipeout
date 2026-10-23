@@ -206,8 +206,8 @@ func _game_load() -> DotResult:
 		"Seconds the final killcam plays at a round's end, added to the intermission (0 for none)",
 		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)
 	if killcam_cvar != null:
-		killcam_cvar.changed.connect(func(_old: String, _new: String) -> void:
-			world.set_killcam_seconds(killcam_cvar.get_float()))
+		killcam_cvar.changed.connect(func(_old: String, new_value: String) -> void:
+			world.set_killcam_seconds(new_value.to_float()))
 		world.set_killcam_seconds(killcam_cvar.get_float())
 
 	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: dot-spectate's rules, so spectators
@@ -490,9 +490,10 @@ func _tunable(
 	if cvar == null:
 		return
 
-	cvar.changed.connect(func(_old: String, _new: String) -> void:
-		apply.call(cvar.get_float())
-		log_info("a tunable changed", {"cvar": cvar_name, "now": cvar.get_string()})
+	# The handler must not capture `cvar`: it would be a reference cycle the engine never frees.
+	cvar.changed.connect(func(_old: String, new_value: String) -> void:
+		apply.call(new_value.to_float())
+		log_info("a tunable changed", {"cvar": cvar_name, "now": new_value})
 	)
 
 
