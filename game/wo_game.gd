@@ -2098,6 +2098,9 @@ var io_events: Array = []
 ## What the map's own logic did to people, for the suites: teleports, pushes, hurts.
 var io_log: Dictionary = {"teleports": 0, "pushes": 0, "hurts": 0, "uses": 0}
 
+## Where the map teleported whom, in order: `{"body": WoPlayer, "to": Vector3}`. Capped.
+var io_teleported: Array = []
+
 
 ## Once a tick, after everybody moved: the map's entity logic and volumes see who is where.
 func _step_io() -> void:
@@ -2111,17 +2114,22 @@ func _step_io() -> void:
 			var player: WoPlayer = players[id]
 
 			if player.is_alive() and not player.watching and not player.finished:
-				var tunables := player.controller.tunables
-				bodies.append({
-					"id": String(id), "body": player, "position": player.controller.state.position,
-					"height": tunables.stand_height if tunables != null else 1.8,
-					"radius": tunables.radius if tunables != null else 0.35,
-					# On no Source team: a map's team filter then passes only what it names the other way round
-					# (Pauls' knife-round teleports are for terrorists, and sit on its start line).
-					"kind": "player", "name": String(id), "class": "player", "team": 0,
-				})
+				bodies.append(io_body(player))
 
 	stage.io.step(_tick, bodies)
+
+
+## The body a map's volumes and filters see for [param player]. On no Source team (0): a map's team filter then
+## passes only what it names the other way round (Pauls' knife-round teleports are for terrorists, and sit on its
+## start line); headless_io reports which filters turn a runner away.
+func io_body(player: WoPlayer) -> Dictionary:
+	var tunables := player.controller.tunables
+	return {
+		"id": String(player.player_id), "body": player, "position": player.controller.state.position,
+		"height": tunables.stand_height if tunables != null else 1.8,
+		"radius": tunables.radius if tunables != null else 0.35,
+		"kind": "player", "name": String(player.player_id), "class": "player", "team": 0,
+	}
 
 
 ## The grab key as "use" on a course that runs its map's entities: an edge, and the first mover
@@ -2184,6 +2192,11 @@ func _io_move(body: Variant, motion: Variant) -> void:
 
 	if motion is Transform3D:
 		io_log["teleports"] = int(io_log["teleports"]) + 1
+		io_teleported.append({"body": player, "to": (motion as Transform3D).origin})
+
+		if io_teleported.size() > 64:
+			io_teleported.pop_front()
+
 		var heading := rad_to_deg((motion as Transform3D).basis.get_euler().y)
 		player.place_at((motion as Transform3D).origin, heading)
 		return
