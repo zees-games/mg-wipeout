@@ -5,6 +5,7 @@ const WoConfig := preload("wo_config.gd")
 const WoContent := preload("wo_content.gd")
 const WoCourse := preload("wo_course.gd")
 const WoCourseDoc := preload("wo_course_doc.gd")
+const WoCourseCfg := preload("wo_course_cfg.gd")
 const WoPlayer := preload("wo_player.gd")
 const WoProgress := preload("wo_progress.gd")
 const WoRacer := preload("wo_racer.gd")
@@ -1025,7 +1026,6 @@ func _on_round_started(number: int) -> void:
 	})
 
 
-func _on_round_ended(number: int, winner: int, _outcome: int) -> void:
 ## The intermission plus the final killcam, which plays inside it.
 func intermission_with_killcam() -> float:
 	return config.intermission_seconds + config.killcam_seconds
@@ -1038,6 +1038,7 @@ func set_killcam_seconds(seconds: float) -> void:
 		match_node.rules.intermission_sec = intermission_with_killcam()
 
 
+func _on_round_ended(number: int, winner: int, _outcome: int) -> void:
 	_set_phase(Phase.IDLE)
 
 	if progress != null:
@@ -1237,13 +1238,44 @@ static func _vec(value: Variant) -> Vector3:
 	return Vector3.ZERO
 
 
+## [param doc] marked `instant` when the course's `cfg/<id>.cfg` asks for one life, so the stage
+## is built without a start pen and a client, sent the document, builds the same. Solo has no
+## console to apply the cfg, so this reads it itself.
+func _with_course_rules(doc: Dictionary) -> Dictionary:
+	if catalogue == null or str(doc.get("kind", "")) != "course" or doc.has("instant"):
+		return doc
+
+	var path := str(catalogue.course_cfg.get(StringName(str(doc.get("id", ""))), ""))
+
+	if path == "":
+		return doc
+
+	for pair: Array in WoCourseCfg.parse(FileAccess.get_file_as_string(path)):
+		if pair[0] == "wo_instant_death" and str(pair[1]).to_float() > 0.5:
+			var marked := doc.duplicate()
+			marked["instant"] = true
+			return marked
+
+	return doc
+
+
+## One life, from the cvar or from the course's own cfg.
+func is_instant() -> bool:
+	return config.instant_death or (stage != null and stage.instant)
+
+
+## How long the countdown is: none on a one-life course.
+func countdown_length() -> float:
+	return 0.0 if is_instant() else config.countdown_seconds
+
+
 ## Builds [param doc] as the stage. What the server does at a round start and a handover,
 ## and what a client does when it is sent one.
 func build_stage(doc: Dictionary) -> DotResult:
 	world_clearing.emit()
 	_clear_props()
 
-	var built := stage.build(doc)
+	var built := stage.build(_with_course_rules(doc))
 
 	if not built.ok:
 		DotLog.error(CHANNEL, "a stage would not build", {
@@ -1306,7 +1338,7 @@ func _set_phase(to: int) -> void:
 	phase_elapsed = 0.0
 
 	if stage != null and stage.is_course():
-		stage.gate_closed = to == Phase.COUNTDOWN or to == Phase.IDLE
+		stage.gate_closed = (to == Phase.COUNTDOWN or to == Phase.IDLE) and not stage.instant
 
 	phase_changed.emit(to)
 	DotLog.debug(CHANNEL, "the round changed phase", {"phase": Phase.keys()[to]})
@@ -1321,7 +1353,7 @@ func _advance_phase(delta: float) -> void:
 
 	match phase:
 		Phase.COUNTDOWN:
-			if phase_elapsed >= config.countdown_seconds:
+			if phase_elapsed >= countdown_length():
 				course_elapsed = 0.0
 				_set_phase(Phase.COURSE)
 		Phase.COURSE:
@@ -3751,7 +3783,7 @@ func _on_player_died(player: WoPlayer, damage: DotDamage) -> void:
 func seconds_left() -> float:
 	match phase:
 		Phase.COUNTDOWN:
-			return maxf(config.countdown_seconds - phase_elapsed, 0.0)
+			return maxf(countdown_length() - phase_elapsed, 0.0)
 		Phase.COURSE:
 			return maxf(course_limit() - course_elapsed, 0.0)
 		Phase.HANDOVER:

@@ -194,6 +194,10 @@ var player_key: String:
 		return String(player_id)
 
 
+## Climbing, on the course's `ladder` pieces.
+var ladder := DotFpsLadderMode.new()
+
+
 func _ready() -> void:
 	controller = WoController.new()
 	controller.name = "Controller"
@@ -205,6 +209,7 @@ func _ready() -> void:
 	controller.admin_abilities = true
 	controller.before_fn = _before_tick
 	controller.after_fn = _after_tick
+	controller.extra_modes = [ladder]
 	add_child(controller)
 
 	if config != null:
@@ -221,7 +226,7 @@ func _ready() -> void:
 ## builds a sampler before it has a player, and a sampler built from different tunables than
 ## the controller it feeds is input clamped differently from the simulation that consumes it.
 static func tunables_for(config: WoConfig) -> DotFpsTunables:
-	var t := DotFpsTunables.new()
+	var t := DotFpsTunables.with_profile("legacy")    # the courses are tuned against it
 	t.max_speed = config.run_speed if config != null else 7.0
 	t.gravity = config.gravity if config != null else 20.0
 	t.jump_height = config.jump_height if config != null else 1.25
@@ -348,6 +353,17 @@ func _after_tick(tick: int, state: DotFpsState) -> void:
 	# the server did not wait for our cover, so the next snapshot corrects whatever it did.
 	if has_meta(DotLoadGate.SETTLING_META):
 		return
+
+	ladder.volumes = stage.ladder_boxes()
+	if not ladder.volumes.is_empty():
+		ladder.update(controller.motor, state)
+
+	# The countdown is spent in the pen: a jump over its wall is put back.
+	var held := stage.confine_to_start(state.position)
+	if not held.is_equal_approx(state.position):
+		state.position = held
+		state.velocity.x = 0.0
+		state.velocity.z = 0.0
 
 	if state.mode == DotFpsState.Mode.GROUND and state.ground_id != 0:
 		var moved := stage.carry(state.ground_id, state.position, tick)

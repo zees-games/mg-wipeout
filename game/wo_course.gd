@@ -83,6 +83,11 @@ var gate_closed: bool = false:
 		gate_closed = value
 		_place_gate()
 
+var _ladders: Array[AABB] = []
+
+## A one-life course (`doc["instant"]`): no start pen and no finish arch, the round starts at once.
+var instant: bool = false
+
 ## One per piece, in document order. See [method _make_piece].
 var pieces: Array[Dictionary] = []
 
@@ -137,12 +142,15 @@ func build(p_doc: Dictionary) -> DotResult:
 		return checked
 
 	doc = checked.value
+	instant = bool(doc.get("instant", false))
 	_pen_boxes = []
 
 	_read_weather()
 
 	for index in range((doc["pieces"] as Array).size()):
 		_make_piece(index, doc["pieces"][index])
+
+	_read_ladders()
 
 	if is_course():
 		_build_start()
@@ -174,6 +182,7 @@ func clear() -> void:
 		child.queue_free()
 
 	pieces.clear()
+	_ladders = []
 	_by_collider.clear()
 	_screens.clear()
 	_flags.clear()
@@ -242,6 +251,12 @@ func _make_piece(index: int, spec: Dictionary) -> void:
 			piece["carrier"] = true
 		"world":
 			piece["node"] = WoWorld.build(spec, physics)
+		"ladder":
+			var rungs := Node3D.new()
+			_not_collided(rungs)
+			rungs.transform = Transform3D(Basis.IDENTITY, spec["at"])
+			_add_box(rungs, spec["size"], role, false, false)
+			piece["node"] = rungs
 		"kill":
 			var volume := Node3D.new()
 			_not_collided(volume)
@@ -822,6 +837,11 @@ func _build_start() -> void:
 	var size: Vector2 = start["size"]
 	var basis := _yaw_basis(float(start["yaw"]))
 
+	# A one-life course has no start zone: its own floor (an imported map's room) is the start.
+	# A hand-built one has no floor but the pad, so the pad stays and the pen goes.
+	if instant and _has_world_piece():
+		return
+
 	var pad := StaticBody3D.new()
 	pad.name = "Start"
 	pad.transform = Transform3D(basis, at - Vector3(0.0, 0.5, 0.0))
@@ -832,6 +852,9 @@ func _build_start() -> void:
 	_pen_boxes.append({"transform": pad.transform.translated_local(Vector3(0.0, 0.0, 0.175)),
 		"size": Vector3(size.x + 0.7, 1.0, size.y + 0.35)})
 	_put_on_world_layer(pad)
+
+	if instant:
+		return
 
 	# Across the front edge, which is -Z in the pad's own frame: yaw 0 faces -Z, and the
 	# course runs the way the players are facing.
@@ -881,8 +904,55 @@ func _build_markers() -> void:
 		var checkpoint: Dictionary = doc["checkpoints"][index]
 		_arch(checkpoint["at"], checkpoint["size"], float(checkpoint["yaw"]), WoTextures.Role.SAFE, 0.25)
 
+	if instant:
+		return
+
 	var finish: Dictionary = doc["finish"]
 	_arch(finish["at"], finish["size"], float(finish["yaw"]), WoTextures.Role.CANNON, 0.5)
+
+
+## The ladders' boxes in world space, for [DotFpsLadderMode].
+func ladder_boxes() -> Array[AABB]:
+	return _ladders
+
+
+func _read_ladders() -> void:
+	var out: Array[AABB] = []
+
+	for piece: Dictionary in pieces:
+		if str(piece["kind"]) == "ladder":
+			var spec: Dictionary = piece["spec"]
+			var size: Vector3 = spec["size"]
+			out.append(AABB((spec["at"] as Vector3) - size * 0.5, size))
+
+	_ladders = out
+
+
+func _has_world_piece() -> bool:
+	for piece: Dictionary in doc["pieces"]:
+		if str(piece.get("kind", "")) == "world":
+			return true
+	return false
+
+
+## [param at] held inside the start pen while the gate is shut, else unchanged. Only a body
+## already within a metre of the pen is held, so somebody watching from the lounge is not.
+func confine_to_start(at: Vector3) -> Vector3:
+	if instant or not gate_closed or not is_course():
+		return at
+
+	var start: Dictionary = doc["start"]
+	var size: Vector2 = start["size"]
+	var basis := _yaw_basis(float(start["yaw"]))
+	var local := basis.inverse() * (at - (start["at"] as Vector3))
+	var half := Vector2(size.x * 0.5, size.y * 0.5)
+
+	if absf(local.x) > half.x + 1.0 or absf(local.z) > half.y + 1.0 or absf(local.y) > 6.0:
+		return at
+
+	local.x = clampf(local.x, -half.x + 0.3, half.x - 0.3)
+	local.z = clampf(local.z, -half.y + 0.3, half.y - 0.3)
+	return (start["at"] as Vector3) + basis * local
 
 
 func _arch(at: Vector3, size: Vector3, yaw: float, role: WoTextures.Role, thickness: float) -> void:

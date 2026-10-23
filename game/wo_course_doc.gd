@@ -70,6 +70,9 @@ const PIECES := {
 	"tiles": ["at", "cols", "rows", "tile", "period", "down"],
 	"conveyor": ["at", "size", "speed"],
 	"bouncer": ["at", "size", "power"],
+	# A ladder: a thin box against a wall (`at` its middle), climbed through dot-player-controller's
+	# DotFpsLadderMode. Not solid.
+	"ladder": ["at", "size"],
 	# A pad that moves whoever steps on it to `to` (their feet), facing `heading` degrees. Solid,
 	# and still: it is a place, not a machine.
 	"teleport": ["at", "size", "to"],
@@ -188,6 +191,12 @@ static func validate(source: Dictionary) -> DotResult:
 static func _course(doc: Dictionary) -> DotResult:
 	doc["water_height"] = float(doc.get("water_height", -8.0))
 	doc["course_seconds"] = float(doc.get("course_seconds", 0.0))
+
+	# Only when true, so a document without it is byte for byte what it was.
+	if bool(doc.get("instant", false)):
+		doc["instant"] = true
+	else:
+		doc.erase("instant")
 
 	var start: Variant = doc.get("start")
 
@@ -457,7 +466,7 @@ static func _default_role(kind: String) -> String:
 	match kind:
 		"spinner", "pendulum", "pusher", "fall":
 			return "hazard"
-		"bouncer", "teleport":
+		"bouncer", "teleport", "ladder":
 			return "safe"
 		"mover", "turntable", "roller", "seesaw", "tiles", "conveyor":
 			return "cannon"

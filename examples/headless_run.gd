@@ -27,9 +27,9 @@ const WoSettings := preload("../game/wo_settings.gd")
 ## because the section announced itself on the way in. mg-smash-copter and dot-settings both
 ## have the story; every total here was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 39
+const SECTIONS := 42
 
-const CHECKS := 207
+const CHECKS := 219
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -62,6 +62,9 @@ func _run() -> void:
 	await _test_world_builds()
 	_test_client_finds_the_mesh()
 	await _test_the_gate()
+	await _test_the_start_box()
+	await _test_a_one_life_course_has_no_start()
+	await _test_a_ladder_climbs()
 	await _test_the_carry()
 	await _test_the_turntable()
 	await _test_the_knock()
@@ -397,6 +400,119 @@ func _test_the_gate() -> void:
 	_check(game.phase == WoGame.Phase.COURSE and not game.stage.gate_closed, "then it drops")
 	_check(runner.controller.state.position.z < start.z - 5.0, "and the runner is through",
 		"z %.2f" % runner.controller.state.position.z)
+	_finished()
+
+
+func _in_pen(game: WoGame, at: Vector3, slack: float) -> bool:
+	var start: Dictionary = game.course_doc["start"]
+	var size: Vector2 = start["size"]
+	var local := _yaw_inverse(float(start["yaw"])) * (at - (start["at"] as Vector3))
+	return absf(local.x) <= size.x * 0.5 + slack and absf(local.z) <= size.y * 0.5 + slack
+
+
+func _yaw_inverse(yaw: float) -> Basis:
+	return Basis(Vector3.UP, deg_to_rad(yaw)).inverse()
+
+
+func _test_the_start_box() -> void:
+	_section("nobody leaves the start box before the round begins")
+	var game := await _world(func(c: WoConfig) -> void: c.countdown_seconds = 3.0)
+	var runner := game.add_player(&"u1", "Ada")
+	var _other := game.add_player(&"u2", "Bo")
+	game.start()
+	await _step(game, 2)
+	_check(game.phase == WoGame.Phase.COUNTDOWN and game.stage.gate_closed, "the countdown holds the pen shut")
+	var inside := true
+	for yaw in [0.0, 90.0, 180.0, 270.0]:
+		for _i in range(40):
+			var command := DotFpsCommand.new()
+			command.move = Vector2(0, 1)
+			command.yaw = yaw
+			command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+			runner.controller.apply_command(command)
+			await _step(game, 1)
+			inside = inside and _in_pen(game, runner.controller.state.position, 0.0)
+	_check(inside, "running and jumping at every side keeps them in the box",
+		str(runner.controller.state.position))
+	# What clearing a wall looks like to the motor: a body just outside the pen's edge.
+	var start: Dictionary = game.course_doc["start"]
+	var basis := Basis(Vector3.UP, deg_to_rad(float(start["yaw"])))
+	var size: Vector2 = start["size"]
+	runner.place_at((start["at"] as Vector3) + basis * Vector3(size.x * 0.5 + 0.5, 1.6, 0.0), 0.0)
+	await _step(game, 2)
+	_check(_in_pen(game, runner.controller.state.position, 0.0) and game.phase == WoGame.Phase.COUNTDOWN,
+		"one that clears a wall is put back", str(runner.controller.state.position))
+	_finished()
+
+
+func _test_a_one_life_course_has_no_start() -> void:
+	_section("a one-life course has no start box, no finish arch and no countdown")
+	var base := "user://wo_instant_fixture"
+	DirAccess.make_dir_recursive_absolute(base + "/courses")
+	DirAccess.make_dir_recursive_absolute(base + "/cfg")
+	var doc := WoCatalogue.practice().duplicate(true)
+	doc["id"] = "wo_instant_fixture"
+	var f := FileAccess.open(base + "/courses/wo_instant_fixture.json", FileAccess.WRITE)
+	f.store_string(WoCourseDoc.to_json(doc))
+	f.close()
+	f = FileAccess.open(base + "/cfg/wo_instant_fixture.cfg", FileAccess.WRITE)
+	f.store_string("wo_instant_death 1\n")
+	f.close()
+	var game := await _world(func(c: WoConfig) -> void:
+		c.countdown_seconds = 3.0
+		c.course_ids = PackedStringArray(["wo_instant_fixture"]))
+	_check(not game.stage.instant, "a course with no cfg keeps its box")
+	_check(game.catalogue.add_directory(base + "/courses") == 1, "the fixture course is found")
+	var runner := game.add_player(&"u1", "Ada")
+	var _other := game.add_player(&"u2", "Bo")
+	game.start()
+	await _step(game, 3)
+	_check(game.stage.id() == &"wo_instant_fixture" and game.stage.instant
+			and bool(game.course_doc.get("instant", false)),
+		"its cfg makes it one life, and the document says so (a client builds the same)")
+	var arches := 0
+	for child in game.stage.get_children():
+		if child.name == "Arch":
+			arches += 1
+	_check(game.stage.get_node_or_null("Gate") == null and not game.stage.gate_closed, "no gate")
+	_check(arches == (game.course_doc["checkpoints"] as Array).size(), "no finish arch (checkpoint flags only)",
+		"%d arches" % arches)
+	_check(game.phase == WoGame.Phase.COURSE, "the round starts at once", str(game.phase))
+	var start: Dictionary = game.course_doc["start"]
+	var basis := Basis(Vector3.UP, deg_to_rad(float(start["yaw"])))
+	var size: Vector2 = start["size"]
+	runner.place_at((start["at"] as Vector3) + basis * Vector3(size.x * 0.5 + 0.5, 1.0, 0.0), 0.0)
+	await _step(game, 2)
+	_check(not _in_pen(game, runner.controller.state.position, 0.1), "and nothing holds them where the box was")
+	DirAccess.remove_absolute(base + "/courses/wo_instant_fixture.json")
+	DirAccess.remove_absolute(base + "/cfg/wo_instant_fixture.cfg")
+	_finished()
+
+
+func _test_a_ladder_climbs() -> void:
+	_section("a ladder piece can be climbed")
+	var doc := WoCatalogue.practice().duplicate(true)
+	doc["id"] = "test_ladder"
+	(doc["pieces"] as Array).append({"kind": "ladder", "at": [12.0, 4.0, -20.0], "size": [0.1, 8.0, 1.6]})
+	(doc["pieces"] as Array).append({"kind": "box", "at": [12.0, 8.2, -20.0], "size": [4.0, 0.4, 4.0]})
+	var game := await _world(Callable(), doc)
+	_check(game.stage.ladder_boxes().size() == 1, "the stage has the ladder's box")
+	var runner := game.add_player(&"u1", "Ada")
+	var yaw := 0.0
+	for candidate in [0.0, 90.0, 180.0, 270.0]:
+		if DotFpsMotor._view_basis(candidate, 0.0).forward.x > 0.9:
+			yaw = candidate
+	runner.place_at(Vector3(11.5, 3.0, -20.0), yaw)
+	await _step(game, 20)
+	for _i in range(150):
+		var command := DotFpsCommand.new()
+		command.move = Vector2(0.0, 1.0)
+		command.yaw = yaw
+		command.pitch = 50.0
+		runner.controller.apply_command(command)
+		await _step(game, 1)
+	_check(runner.controller.state.position.y > 6.0, "walking into it and looking up climbs it",
+		str(runner.controller.state.position))
 	_finished()
 
 
