@@ -4,6 +4,7 @@ const WoAnnouncer := preload("wo_announcer.gd")
 const WoAudio := preload("wo_audio.gd")
 const WoBindings := preload("wo_bindings.gd")
 const WoFigure := preload("wo_figure.gd")
+const WoKillcam := preload("wo_killcam.gd")
 const WoSettings := preload("wo_settings.gd")
 const WoServices := preload("wo_services.gd")
 const WoPlayerNet := preload("net/wo_player_net.gd")
@@ -97,6 +98,10 @@ var bridge: WoNetBridge = null
 var link: Node = null
 
 var _offline: bool = true
+## The final killcam ([WoKillcam]) and the winner reveal, which play in the intermission.
+var killcam: WoKillcam = null
+var winner_reveal: DotWinnerReveal = null
+var _reveal_hid: Dictionary = {}
 var _sampler: DotFpsSampler = null
 
 ## The spectator's free camera while roaming, and the mouse motion not yet turned into a look.
@@ -201,6 +206,7 @@ func _ready() -> void:
 	_build_audio()
 	announcer = WoAnnouncer.new(game, audio, hud)
 	_build_settings()
+	_build_killcam()
 
 	if _offline:
 		_start_offline()
@@ -368,6 +374,7 @@ func _build_netcode() -> DotResult:
 		var _toys := game.toy_rules.follow_cvars(link)
 		# And mp_forcecamera / mp_freeroam*: this end flies the spectator's free camera.
 		var _spectate := game.spectate_rules.follow_cvars(link)
+		_follow_killcam_cvar()
 
 	net = DotNetManager.new()
 	net.name = "Net"
@@ -623,6 +630,8 @@ func _on_round(number: int, began: bool, winner: int, why: String = "") -> void:
 
 	if began:
 		hud.shout("ROUND %d" % number, 2.4)
+		if killcam != null:
+			killcam.new_round()
 		return
 
 	if announcer != null and player != null:
@@ -633,9 +642,13 @@ func _on_round(number: int, began: bool, winner: int, why: String = "") -> void:
 	if chat != null and why != "":
 		chat.say_locally(why, Color(0.98, 0.86, 0.40))
 
+	_begin_round_end()
 
-func _on_death(session_id: int, _by: int, why: StringName) -> void:
+
+func _on_death(session_id: int, by: int, why: StringName) -> void:
 	var id := WoNetBridge.player_key(session_id)
+	if killcam != null and by != 0:
+		killcam.note_kill(String(WoNetBridge.player_key(by)), String(id), String(why))
 	var who: WoPlayer = game.players.get(id)
 
 	_hear_death(who, why)
@@ -708,8 +721,84 @@ func _build_settings() -> void:
 	_bind_bot_console()
 	if hud != null and settings.menu != null:
 		hud.follow_menu(settings.menu)
+		_add_motion_row(settings.menu)
 	board = platform.board as DotMenuScoreboard
 	_dress_board()
+
+
+## The Reduce motion toggle, in General beside the other comfort rows.
+func _add_motion_row(menu: DotMenu) -> void:
+	var general := menu.page(&"general")
+	if general == null:
+		return
+	var calm: DotSettingsDef = menu.settings.schema.find(&"reduce_motion") if menu.settings != null else null
+	general.section("Comfort").add(DotMenuRow.toggle(&"reduce_motion", "Reduce motion", calm.description if calm != null else ""))
+
+
+func _build_killcam() -> void:
+	killcam = WoKillcam.new()
+	killcam.name = "FinalKillcam"
+	killcam.players_fn = func() -> Dictionary: return game.players if game != null else {}
+	killcam.seconds_fn = func() -> float: return game.config.killcam_seconds if game != null else 0.0
+	killcam.over.connect(func(_skipped: bool) -> void: _reveal_winner())
+	add_child(killcam)
+	winner_reveal = DotWinnerReveal.new()
+	winner_reveal.name = "WinnerReveal"
+	winner_reveal.skip_actions = WoKillcam.SKIP_ACTIONS
+	winner_reveal.finished.connect(_on_reveal_finished)
+	add_child(winner_reveal)
+
+
+## Follows the server's `mp_killcam_time`, which it added to the intermission.
+func _follow_killcam_cvar() -> void:
+	if link == null or not link.has_method(&"replicated_cvar") or not link.has_signal(&"replicated_cvar_changed"):
+		return
+	var held := String(link.call(&"replicated_cvar", "mp_killcam_time", ""))
+	if held.is_valid_float():
+		game.config.killcam_seconds = clampf(held.to_float(), 0.0, 30.0)
+	link.connect(&"replicated_cvar_changed", func(cvar_name: String, value: Variant) -> void:
+		if cvar_name == "mp_killcam_time" and str(value).is_valid_float():
+			game.config.killcam_seconds = clampf(str(value).to_float(), 0.0, 30.0))
+
+
+## A round ended: the killcam if it ended on a kill, then the reveal.
+func _begin_round_end() -> void:
+	if killcam == null:
+		return
+	if killcam.round_ended():
+		DotLog.debug(CHANNEL, "the reveal waits for the final killcam")
+
+
+## The best of the standing named and the top three on a podium, after the killcam.
+func _reveal_winner() -> void:
+	if game == null or winner_reveal == null:
+		return
+	var rows: Array = []
+	for id: Variant in game.players:
+		var who: WoPlayer = game.players[id]
+		if who != null:
+			rows.append(who)
+	rows.sort_custom(func(a: WoPlayer, b: WoPlayer) -> bool:
+		return a.points > b.points or (a.points == b.points and a.place != 0 and (b.place == 0 or a.place < b.place)))
+	var entries: Array = []
+	for who: WoPlayer in rows.slice(0, 3):
+		entries.append({"name": who.display_name, "score": "%d points" % who.points})
+	winner_reveal.reduced_motion = settings != null and settings.settings != null and settings.settings.get_bool(&"reduce_motion", false)
+	var shown := winner_reveal.present(entries, {"title": "LEADER" if game.config.teams() else "ROUND WINNER",
+		"hint": "Jump to skip"})
+	if not shown.ok:
+		return
+	winner_reveal.hold_seconds = clampf(game.config.intermission_seconds - 2.0, 3.0, 8.0)
+	if hud != null:
+		_reveal_hid[hud] = hud.visible
+		hud.visible = false
+
+
+func _on_reveal_finished(_skipped: bool) -> void:
+	for n: Variant in _reveal_hid:
+		if is_instance_valid(n):
+			(n as Object).set(&"visible", _reveal_hid[n])
+	_reveal_hid.clear()
 
 
 func _build_audio() -> void:
@@ -745,7 +834,9 @@ func _hear_the_world() -> void:
 		_on_round(n, true, 0))
 	game.round_over.connect(func(n: int, winner: int, why: String) -> void:
 		_on_round(n, false, winner, why))
-	game.player_died.connect(func(id: StringName, _by: StringName, why: StringName) -> void:
+	game.player_died.connect(func(id: StringName, by: StringName, why: StringName) -> void:
+		if killcam != null and _offline:
+			killcam.note_kill(String(by), String(id), String(why))
 		_hear_death(game.players.get(id), why))
 	game.player_fell.connect(func(id: StringName, _checkpoint: int) -> void:
 		_on_progress(WoNetBridge.session_of(id) if id != &"local" else _watch_id,
@@ -1516,6 +1607,10 @@ func _process(delta: float) -> void:
 
 	if announcer != null:
 		announcer.tick()
+
+	if killcam != null:
+		killcam.hide_while_playing = [hud]
+		killcam.frame()
 
 	if camera == null or player == null:
 		return

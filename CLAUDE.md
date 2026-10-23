@@ -27,6 +27,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 | `game/wo_rules.gd` | a `DotMatchRules` whose outcome is whatever `WoGame` decided |
 | `game/wo_module.gd`, `wo_services.gd`, `wo_server.gd`, `wo_vote.gd` | the `DotGameModule` (cvars, `wo_status` / `wo_courses` / `wo_reload`, stand-ins, delivered courses); chat, voice and moderation over dot-game; the course vote over dot-vote |
 | `game/wo_client.gd`, `wo_hud.gd`, `wo_audio.gd`, `wo_figure.gd`, `wo_settings.gd` | the local player, drawing and weather view; HUD; sounds and machinery; watcher figures; dot-menu settings |
+| `game/wo_killcam.gd` | the final killcam: records drawn frames into dot-replay's `DotKillcamBuffer`, replays a round's last kill from the killer's eye (`mp_killcam_time`, 0 off, added to the intermission), then dot-ui's `DotWinnerReveal` shows the podium; a round that ends on a fall or the clock has no kill and goes straight to the reveal. `tools/shot.sh --view=killcam` renders it; Reduce motion is in General |
 | `game/wo_content.gd`, `wo_textures.gd`, `wo_paths.gd`, `wo_avatars.gd` | final-death props; surface roles and tints; `rebase()` for delivery; site avatars |
 | `game/net/` | the codec (`STAGE`, `PROGRESS`, `PICKUP`…), the link, two behaviours, the bridge |
 | `courses` | a dot-bootstrap link to `../mg-wipeout-maps/courses` (gitignored) |

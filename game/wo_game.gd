@@ -579,7 +579,7 @@ func _build_match() -> void:
 	match_node.config = match_config
 
 	var rules: DotMatchRules = WoRules.make()
-	rules.intermission_sec = config.intermission_seconds
+	rules.intermission_sec = intermission_with_killcam()
 	rules.warmup_sec = config.warmup_seconds
 	rules.countdown_sec = 0.0
 	rules.team_based = config.teams()
@@ -1026,6 +1026,18 @@ func _on_round_started(number: int) -> void:
 
 
 func _on_round_ended(number: int, winner: int, _outcome: int) -> void:
+## The intermission plus the final killcam, which plays inside it.
+func intermission_with_killcam() -> float:
+	return config.intermission_seconds + config.killcam_seconds
+
+
+## Sets `mp_killcam_time` and lengthens the intermission to match.
+func set_killcam_seconds(seconds: float) -> void:
+	config.killcam_seconds = clampf(seconds, 0.0, 30.0)
+	if match_node != null and match_node.rules != null:
+		match_node.rules.intermission_sec = intermission_with_killcam()
+
+
 	_set_phase(Phase.IDLE)
 
 	if progress != null:

@@ -54,6 +54,9 @@ extends DotConfig
 ## Seconds between rounds.
 @export_range(0.0, 60.0, 1.0) var intermission_seconds: float = 8.0
 
+## Seconds the final killcam plays when a round ends on a kill, added to the intermission (`mp_killcam_time`, 0 off).
+@export_range(0.0, 30.0, 0.5) var killcam_seconds: float = 7.0
+
 ## Seconds of warmup before the first round. 0 starts immediately.
 @export_range(0.0, 300.0, 1.0) var warmup_seconds: float = 10.0
 

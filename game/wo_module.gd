@@ -200,6 +200,15 @@ func _game_load() -> DotResult:
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
 
+	# REPLICATED: the client plays the killcam and needs the length the server added to the intermission.
+	var killcam_cvar := add_cvar("mp_killcam_time", _number(world.config.killcam_seconds),
+		"Seconds the final killcam plays at a round's end, added to the intermission (0 for none)",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)
+	if killcam_cvar != null:
+		killcam_cvar.changed.connect(func(_old: String, _new: String) -> void:
+			world.set_killcam_seconds(killcam_cvar.get_float()))
+		world.set_killcam_seconds(killcam_cvar.get_float())
+
 	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: dot-spectate's rules, so spectators
 	# free-roam unless an operator says otherwise. REPLICATED, because each client flies its
 	# own spectator camera under them (WoClient.toggle_roam).

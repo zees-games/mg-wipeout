@@ -181,6 +181,29 @@ func _run() -> void:
 				runner.finished = true
 				runner.place = game._finish_count
 			await _seconds_of(game.config.handover_seconds + 1.5)
+		"killcam":
+			# One runner knocks out the rest and the round is called, then frames of the killcam,
+			# the reveal and the intermission, written beside `--out` as `<out>_<seconds>.png`.
+			await _seconds_of(game.config.countdown_seconds + 3.0)
+			var standing: Array = []
+			for id: StringName in game.players:
+				if not game.players[id].watching:
+					standing.append(game.players[id])
+			print("standing: %d" % standing.size())
+			for i in range(1, standing.size()):
+				var hit := DotDamage.make(standing[0].entity_id, standing[i].entity_id, standing[i].health.max_health * 4.0, null)
+				hit.context = {"why": &"shot"}
+				var _dealt := game.combat.apply_damage(hit)
+			game._decide(1, "test")
+			var base := _out.trim_suffix(".png")
+			var last := 0.0
+			for at_sec: float in [1.5, 4.0, 7.0, 9.0, 11.0]:
+				await _seconds_of(at_sec - last)
+				last = at_sec
+				var kc: Object = _client.get("killcam")
+				var reveal: Object = _client.get("winner_reveal")
+				print("t=%.1f killcam=%s reveal=%s" % [at_sec, kc.call(&"is_playing"), reveal.call(&"is_active")])
+				_save("%s_%d.png" % [base, int(at_sec * 10.0)])
 		"course":
 			await _seconds_of(7.0)
 			# Further out than the straight courses needed: a course that turns is as wide as it
