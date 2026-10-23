@@ -109,6 +109,9 @@ const PICKUP_REACH := 1.3
 ## How far a prop may be from somebody's eyes to be picked up, in metres.
 const GRAB_REACH := 3.5
 
+## How far a use key reaches on a course that runs its map's entities.
+const IO_USE_REACH := 2.6
+
 ## Seconds a thrown prop is "thrown" — dangerous, and credited to whoever threw it.
 const THROWN_SECONDS := 3.0
 
@@ -457,6 +460,7 @@ func _build_stage() -> void:
 	stage.authoritative = authoritative
 	stage.toy_rules = toy_rules
 	stage.gravity = config.gravity
+	stage.io_hooks = {"damage_fn": _io_damage, "move_fn": _io_move, "event_fn": _io_event}
 	add_child(stage)
 
 
@@ -1290,6 +1294,10 @@ func build_stage(doc: Dictionary) -> DotResult:
 		arena_doc = stage.doc
 
 	stage.gate_closed = phase == Phase.COUNTDOWN or stage.is_course()
+
+	if stage.io != null:
+		stage.io.begin(_tick)
+
 	_refresh_overviews()
 
 	# Last, once it is all standing: the bridge answers this by sending the document.
@@ -2058,6 +2066,8 @@ func _step(delta: float) -> void:
 	for id: StringName in players:
 		(players[id] as WoPlayer).simulate(_tick, delta)
 
+	_use_io()
+	_step_io()
 	_watch_progress()
 	_advance_pickups()
 	_advance_grabs(delta)
@@ -2077,6 +2087,122 @@ func _step(delta: float) -> void:
 		return
 
 	match_node.tick(_tick)
+
+
+# --- A map's own logic --------------------------------------------------------------
+
+## The last events an io world's map raised that nothing here plays (text, hints, scores), for
+## `describe()` and the suites. Capped.
+var io_events: Array = []
+
+## What the map's own logic did to people, for the suites: teleports, pushes, hurts.
+var io_log: Dictionary = {"teleports": 0, "pushes": 0, "hurts": 0, "uses": 0}
+
+
+## Once a tick, after everybody moved: the map's entity logic and volumes see who is where.
+func _step_io() -> void:
+	if stage == null or stage.io == null or not authoritative:
+		return
+
+	var bodies: Array = []
+
+	if phase == Phase.COURSE:
+		for id: StringName in players:
+			var player: WoPlayer = players[id]
+
+			if player.is_alive() and not player.watching and not player.finished:
+				var tunables := player.controller.tunables
+				bodies.append({
+					"id": String(id), "body": player, "position": player.controller.state.position,
+					"height": tunables.stand_height if tunables != null else 1.8,
+					"radius": tunables.radius if tunables != null else 0.35,
+					"kind": "player", "name": String(id), "class": "player",
+				})
+
+	stage.io.step(_tick, bodies)
+
+
+## The grab key as "use" on a course that runs its map's entities: an edge, and the first mover
+## the player's eyes meet within reach is pressed (a button, a door).
+func _use_io() -> void:
+	if stage == null or stage.io == null or not authoritative or phase != Phase.COURSE:
+		return
+
+	var space := get_world_3d().direct_space_state if get_world_3d() != null else null
+
+	if space == null:
+		return
+
+	for id: StringName in players:
+		var player: WoPlayer = players[id]
+		var pressed := player.wants_grab and not bool(player.get_meta(&"use_held", false))
+		player.set_meta(&"use_held", player.wants_grab)
+
+		if not pressed or not player.is_alive() or player.watching or player.finished:
+			continue
+
+		var eyes := player.eye_position()
+		var query := PhysicsRayQueryParameters3D.create(eyes, eyes + player.aim_direction() * IO_USE_REACH)
+		query.collide_with_areas = false
+		var hit := space.intersect_ray(query)
+
+		if hit.is_empty():
+			continue
+
+		var mover := stage.io.mover_of((hit["collider"] as Object).get_instance_id())
+
+		if mover != null:
+			io_log["uses"] = int(io_log["uses"]) + 1
+			var _used := stage.io.world.io.use(mover.index, String(id))
+
+
+func _io_damage(body: Variant, amount: float, _kind: String, _attacker: Variant) -> void:
+	var player := body as WoPlayer
+
+	if player == null or player.health == null or not authoritative or stage == null \
+			or not stage.is_course() or phase != Phase.COURSE or player.finished or not player.is_alive() or amount <= 0.0:
+		return
+
+	io_log["hurts"] = int(io_log["hurts"]) + 1
+
+	# A volume that kills is the water's rule, so a one-life course puts the body out and any
+	# other sends it back to its checkpoint, whether or not health is on.
+	if amount >= player.health.max_health:
+		_fell(player)
+		return
+
+	var _charged := _hurt_on_course(player, amount, DIED_STRUCK, Vector3.ZERO)
+
+
+func _io_move(body: Variant, motion: Variant) -> void:
+	var player := body as WoPlayer
+
+	if player == null or not authoritative or player.finished or not player.is_alive():
+		return
+
+	if motion is Transform3D:
+		io_log["teleports"] = int(io_log["teleports"]) + 1
+		var heading := rad_to_deg((motion as Transform3D).basis.get_euler().y)
+		player.place_at((motion as Transform3D).origin, heading)
+		return
+
+	if motion is Vector3:
+		io_log["pushes"] = int(io_log["pushes"]) + 1
+		var state := player.controller.state
+		var push: Vector3 = motion
+		state.velocity.x = push.x
+		state.velocity.z = push.z
+
+		if push.y > 0.1:
+			state.velocity.y = push.y
+			state.mode = DotFpsState.Mode.AIR
+
+
+func _io_event(kind: String, data: Dictionary) -> void:
+	io_events.append({"kind": kind, "data": data})
+
+	if io_events.size() > 64:
+		io_events.pop_front()
 
 
 # --- Toys ------------------------------------------------------------------------

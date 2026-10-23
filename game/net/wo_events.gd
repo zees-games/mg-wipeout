@@ -58,6 +58,8 @@ enum Kind {
 	## The stage's toys: their net ids in toy order, then the stage's id (both ends build the toys
 	## in the same order from the document). After STAGE, and to a joiner after theirs.
 	TOYS,
+	## A map's own state (an io course): a door, a button, a hidden brush. Deflated JSON, appended.
+	WORLD_IO,
 }
 
 enum Ask {
@@ -687,6 +689,30 @@ static func read_toys(r: DotNetReader) -> Dictionary:
 		ids.append(r.read_varint())
 	var stage_id := StringName(r.read_string(ID_BYTES))
 	return {"stage_id": stage_id, "ids": ids, "ok": r.ok()}
+
+
+# --- A map's state ----------------------------------------------------------------
+
+const WORLD_IO_BYTES := 1 << 20
+
+
+static func write_world_io(msg: Dictionary) -> PackedByteArray:
+	var raw := JSON.stringify(msg).to_utf8_buffer()
+	var w := _w()
+	w.write_varint(raw.size())
+	w.write_bytes(raw.compress(FileAccess.COMPRESSION_DEFLATE))
+	return w.to_bytes()
+
+
+static func read_world_io(r: DotNetReader) -> Dictionary:
+	var size := r.read_varint()
+	var packed := r.read_bytes(WORLD_IO_BYTES)
+
+	if not r.ok() or size <= 0 or size > WORLD_IO_BYTES * 8:
+		return {"msg": {}, "ok": false}
+
+	var parsed: Variant = JSON.parse_string(packed.decompress(size, FileAccess.COMPRESSION_DEFLATE).get_string_from_utf8())
+	return {"msg": parsed if parsed is Dictionary else {}, "ok": parsed is Dictionary}
 
 
 # --- A hit ----------------------------------------------------------------------

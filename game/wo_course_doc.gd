@@ -433,6 +433,8 @@ static func _piece(source: Variant, index: int) -> DotResult:
 				out[key] = _colour(piece[key], Color.WHITE)
 			"mesh":
 				out[key] = str(piece[key])
+			"io":
+				out[key] = bool(piece[key])
 			"skip":
 				var skipped: Array = []
 				for model: Variant in (piece[key] if piece[key] is Array else []):

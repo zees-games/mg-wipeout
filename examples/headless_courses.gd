@@ -43,7 +43,13 @@ func _run() -> void:
 
 	var catalogue := WoCatalogue.new()
 	var _loaded := catalogue.load_from("courses")
-	var courses := catalogue.courses.keys()
+	var courses: Array = []
+
+	# A course run by its map's own entities has no route to give a stand-in; headless_io plays it.
+	for id: StringName in catalogue.courses:
+		if not _runs_entities(catalogue.courses[id]):
+			courses.append(id)
+
 	courses.sort()
 	var arenas := catalogue.arenas.keys()
 	arenas.sort()
@@ -61,6 +67,7 @@ func _run() -> void:
 
 	for id: StringName in courses:
 		var doc: Dictionary = catalogue.courses[id]
+
 		if _has_fork(doc):
 			forked += 1
 			await _run_course(doc, 0.0)
@@ -141,6 +148,13 @@ func _teleport_pad(doc: Dictionary) -> void:
 	_check(game.stage.teleport_at(top + Vector3(0.0, -3.0, 0.0)).is_empty(), "three metres under it, nobody is")
 	_check(game.stage.teleport_at(top + Vector3(3.0, 0.0, 0.0)).is_empty(), "three metres beside it, nobody is")
 	_finished()
+
+
+func _runs_entities(doc: Dictionary) -> bool:
+	for piece: Dictionary in doc.get("pieces", []):
+		if bool(piece.get("io", false)):
+			return true
+	return false
 
 
 func _has_fork(doc: Dictionary) -> bool:

@@ -281,6 +281,8 @@ func attach(p_game: Object, p_net: DotNetManager) -> DotResult:
 		game.world_rebuilt.connect(_pair_pending_toys)
 
 	if net.is_server:
+		game.stage.io_message.connect(func(peer: Variant, msg: Dictionary) -> void:
+			_tell(int(peer), WoEvents.Kind.WORLD_IO, WoEvents.write_world_io(msg)))
 		game.player_added.connect(_on_player_added)
 		game.player_removed.connect(_on_player_removed)
 		game.world_clearing.connect(_on_world_clearing)
@@ -484,6 +486,9 @@ func remove_player(session_id: int) -> void:
 	_peer_of_player.erase(session_id)
 	_ready_peers.erase(peer_id)
 
+	if game.stage != null and game.stage.io != null:
+		game.stage.io.remove_peer(peer_id)
+
 	# Released BEFORE the game is told: `game.remove_player` emits `player_removed`, which
 	# `_on_player_removed` answers by releasing the entity and broadcasting the LEAVE.
 	# Releasing first empties `_behaviours`, so that handler finds nothing and this stays
@@ -620,6 +625,10 @@ func _on_world_rebuilt() -> void:
 	_stage_body = WoEvents.write_stage(WoCourseDoc.encode(game.stage.doc))
 	_broadcast(WoEvents.Kind.STAGE, _stage_body)
 	_register_toys()
+
+	if game.stage.io != null:
+		for peer_id in _ready_peers.keys():
+			game.stage.io.add_peer(int(peer_id))
 
 
 # --- Both ends: the stage's toys ------------------------------------------------------
@@ -1285,6 +1294,8 @@ func _admit(peer_id: int) -> void:
 		_tell(peer_id, WoEvents.Kind.STAGE, _stage_body)
 	if not _toys_body.is_empty():
 		_tell(peer_id, WoEvents.Kind.TOYS, _toys_body)
+	if game.stage != null and game.stage.io != null:
+		game.stage.io.add_peer(peer_id)
 
 	for other in _behaviours.keys():
 		_tell(peer_id, WoEvents.Kind.JOIN, _join_body(int(other)))
@@ -1444,6 +1455,10 @@ func _on_event(message: DotNetMessage) -> void:
 			var told := WoEvents.read_toys(reader)
 			if bool(told["ok"]):
 				_apply_toys(told)
+		WoEvents.Kind.WORLD_IO:
+			var mapped := WoEvents.read_world_io(reader)
+			if bool(mapped["ok"]) and game != null and game.stage != null:
+				game.stage.io_receive(mapped["msg"])
 		WoEvents.Kind.JOIN:
 			_apply_join(reader)
 		WoEvents.Kind.LEAVE:

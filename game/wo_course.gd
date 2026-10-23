@@ -3,6 +3,7 @@ extends Node3D
 const WoCourseDoc := preload("wo_course_doc.gd")
 const WoTextures := preload("wo_textures.gd")
 const WoWorld := preload("wo_world.gd")
+const WoCourseIo := preload("wo_course_io.gd")
 
 ## A course, or an arena, built from its document: the pieces, where each one is at a given
 ## tick, and the four questions a player's movement asks of them.
@@ -60,6 +61,15 @@ const GATE_DROP := 80.0
 
 ## Emitted when the course has been built and posed once.
 signal built()
+
+## A map-state message for one peer, from an io world (see [WoCourseIo]). Server only.
+signal io_message(peer: Variant, msg: Dictionary)
+
+## The game's callables for an io world (`damage_fn`, `move_fn`, `event_fn`...), set before [method build].
+var io_hooks: Dictionary = {}
+
+## The map's own entity logic when a `world` piece says `"io": true`; else null.
+var io: WoCourseIo = null
 
 ## Whether to draw the sky, the sun and the water. A client sets this; a server need not.
 @export var draw_world: bool = false
@@ -166,6 +176,10 @@ func build(p_doc: Dictionary) -> DotResult:
 		_build_dressing()
 		_add_contact_shade()
 
+	if io != null:
+		io.index_movers()
+		_drain_io_inbox()
+
 	pose_at_time(0.0)
 	built.emit()
 
@@ -182,6 +196,7 @@ func clear() -> void:
 		child.queue_free()
 
 	pieces.clear()
+	io = null
 	_ladders = []
 	_by_collider.clear()
 	_screens.clear()
@@ -250,7 +265,11 @@ func _make_piece(index: int, spec: Dictionary) -> void:
 			piece["moving"] = true
 			piece["carrier"] = true
 		"world":
-			piece["node"] = WoWorld.build(spec, physics)
+			if bool(spec.get("io", false)):
+				piece["node"] = _make_io_world(spec)
+				piece["carrier"] = true
+			else:
+				piece["node"] = WoWorld.build(spec, physics)
 		"ladder":
 			var rungs := Node3D.new()
 			_not_collided(rungs)
@@ -341,6 +360,44 @@ func _build_toys() -> void:
 	var built := toys.build(placements)
 	if not built.ok:
 		DotLog.warn(CHANNEL, "a stage's toys would not build", {"stage": String(id()), "why": built.error.message})
+
+
+## What a client was told about a map's state: applied at once for this stage, held until this
+## end has built it otherwise (a join's snapshot can beat the mesh download).
+func io_receive(msg: Dictionary) -> void:
+	if io != null and io.world != null and str(msg.get("stage", "")) == String(id()):
+		io.apply(msg)
+		return
+
+	_io_inbox.append(msg)
+
+	if _io_inbox.size() > 256:
+		_io_inbox.pop_front()
+
+
+func _drain_io_inbox() -> void:
+	var waiting := _io_inbox
+	_io_inbox = []
+
+	for msg: Dictionary in waiting:
+		if str(msg.get("stage", "")) == String(id()):
+			io.apply(msg)
+		else:
+			_io_inbox.append(msg)
+
+
+var _io_inbox: Array = []
+
+
+func _make_io_world(spec: Dictionary) -> Node3D:
+	io = WoCourseIo.new()
+	io.message.connect(func(peer: Variant, msg: Dictionary) -> void: io_message.emit(peer, msg))
+	var world := io.build(spec, id(), io_hooks, authoritative, draw_world, tick_rate)
+
+	if world == null:
+		io = null
+
+	return world
 
 
 func _collect_bodies(node: Node, into: Array) -> void:
@@ -913,6 +970,11 @@ func _build_markers() -> void:
 
 ## The ladders' boxes in world space, for [DotFpsLadderMode].
 func ladder_boxes() -> Array[AABB]:
+	if io != null and io.world != null:
+		var all: Array[AABB] = _ladders.duplicate()
+		all.append_array(io.world.ladder_boxes())
+		return all
+
 	return _ladders
 
 
@@ -1542,6 +1604,9 @@ static func light_profile() -> DotLightProfile:
 
 ## Poses every moving piece at [param tick]. Idempotent per tick.
 func pose_at(tick: int) -> void:
+	if io != null:
+		io.pose_at(tick)
+
 	if tick == _posed_tick:
 		return
 
@@ -1852,6 +1917,9 @@ func carry(ground_id: int, at: Vector3, tick: int) -> Vector3:
 	if not bool(piece["carrier"]):
 		return Vector3.ZERO
 
+	if io != null and str(piece["kind"]) == "world":
+		return io.carry(ground_id, at, tick)
+
 	var dt := 1.0 / float(maxi(tick_rate, 1))
 	var t := float(tick) * dt
 
@@ -1867,7 +1935,8 @@ func carry(ground_id: int, at: Vector3, tick: int) -> Vector3:
 ## Whether whatever [param ground_id] is moves whoever stands on it.
 func carries(ground_id: int) -> bool:
 	var found: Variant = _by_collider.get(ground_id)
-	return found != null and bool(pieces[int((found as Array)[0])]["carrier"])
+	return found != null and bool(pieces[int((found as Array)[0])]["carrier"]) \
+		and (io == null or str(pieces[int((found as Array)[0])]["kind"]) != "world" or io.carries(ground_id))
 
 
 ## The kind of piece [param ground_id] belongs to (`turntable`, `seesaw`, `box`…), or "".
@@ -2732,6 +2801,12 @@ func respawn_point(checkpoint: int, seat: int = 0) -> Array:
 ## Rows across the pad from the front, a metre and a half apart, so a full server of
 ## twenty-four is four rows of six on a ten metre pad and nobody is placed inside anybody.
 func start_spot(seat: int, of: int) -> Array:
+	var spawns := io_spawns()
+
+	if not spawns.is_empty():
+		var spawn: Dictionary = spawns[seat % spawns.size()]
+		return [spawn["origin"] + Vector3(0.0, 0.1, 0.0), _yaw_of_spawn(float(spawn["yaw"]))]
+
 	var start: Dictionary = doc.get("start", {})
 
 	if start.is_empty():
@@ -2749,6 +2824,27 @@ func start_spot(seat: int, of: int) -> Array:
 	var z := -size.y * 0.5 + 2.5 + float(row) * 1.5
 	z = minf(z, size.y * 0.5 - 0.8)
 	return [(start["at"] as Vector3) + basis * Vector3(x, 0.2, z), float(start["yaw"])]
+
+
+## The map's own start points (`info_player_*`) when an io world is here, the team's first when
+## it has them: dot-map's spawn_points, in metres.
+func io_spawns() -> Array:
+	if io == null or io.world == null:
+		return []
+
+	var all := io.world.spawn_points()
+	var out: Array = []
+
+	for spawn: Dictionary in all:
+		if str(spawn["classname"]) == "info_player_terrorist":
+			out.append(spawn)
+
+	return out if not out.is_empty() else all
+
+
+## A source yaw (degrees, counter-clockwise from +X) as this game's heading (0 faces -Z, to the left).
+static func _yaw_of_spawn(source_yaw: float) -> float:
+	return fposmod(source_yaw - 90.0, 360.0)
 
 
 ## Where a finisher waits: the lounge, spread so two people are not put inside each other.

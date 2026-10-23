@@ -114,3 +114,7 @@ The game's pack does not contain `courses/` (a link, excluded in the pack). mg-w
 ## Spectators free-roam by default
 
 Somebody knocked out of the final death may fly a free camera (G, `WoBindings.ROAM`). The game owns one `DotSpectatorRules` (`WoGame.spectate_rules`), shared with the manager; the module binds `mp_forcecamera`, `mp_freeroam` and `mp_freeroam_speed` on it (REPLICATED) and the client follows them. The key is an `Ask.ROAM` request the server decides (a refusal comes back as a notice), the existing `SPECTATE` event carries ROAMING back, and the client flies a `DotSpectatorFreeCam` per frame, so no camera position crosses the wire. `wo_spectate_camera` is an alias that writes through to `mp_forcecamera`, and a restricted camera wins over roaming silently.
+
+## Io courses
+
+A course whose `world` piece sets `io: true` runs the imported map's own entity logic through `DotMapWorld` instead of our stand-ins. `WoCourseIo` owns the world: the server steps it after the players move, mirrors mover bodies into the physics server and carries riders; a client builds it without logic and poses every mover for the tick it is simulating (`io.now = tick - base - 2`). Hooks send damage, push and teleport back into the game; the grab key presses the button the player faces. Such a course has no scripted route, so `headless_io` stands in for the bot-finish check by firing the map's own buttons, volumes and finish and counting unhandled classes. Open: client-side push prediction, a bot route.

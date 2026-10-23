@@ -160,6 +160,39 @@ static func build(spec: Dictionary, physics: Object) -> StaticBody3D:
 	return body
 
 
+## The map's own world through dot-map's [DotMapWorld]: every model (movers, doors, buttons, glass
+## included), its entity logic and volumes. [param hooks] is what the game plugs in (damage, move,
+## event, send); the layer of every body is the stage's job, after this returns. Null with a line
+## when the files, or the source document beside them, are not here.
+static func build_io(spec: Dictionary, hooks: Dictionary, authoritative: bool, draw: bool, rate: int) -> DotMapWorld:
+	var mesh_id := str(spec.get("mesh", ""))
+	var prefix := prefix_of(mesh_id)
+
+	if prefix.is_empty():
+		DotLog.warn(CHANNEL, "an io world has no mesh here", {"mesh": mesh_id})
+		return null
+
+	if _surfaces == null:
+		_surfaces = DotMapSurfaces.new()
+		_surfaces.path_fn = WoPaths.rebase
+
+	var cache: Dictionary = {}
+	var wired := hooks.duplicate()
+	wired["material_for"] = func(rec: Dictionary) -> Material:
+		return _material(rec, cache)
+
+	var built := DotMapWorld.build(prefix, wired, {
+		"authoritative": authoritative, "rate": rate, "map_id": mesh_id,
+		"environment": false, "props": draw, "sounds": draw,
+	})
+
+	if not built.ok:
+		DotLog.warn(CHANNEL, "an io world would not build", {"mesh": mesh_id, "why": built.error.message})
+		return null
+
+	return built.value
+
+
 static func _material(rec: Dictionary, cache: Dictionary) -> Material:
 	var generic := str(rec.get("generic", ""))
 
