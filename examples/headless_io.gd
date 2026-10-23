@@ -449,6 +449,12 @@ func _map_end(game: WoGame, world: DotMapWorld, doc: Dictionary) -> void:
 			var at := _finish_box(doc).get_center().clamp(box.position, box.end)
 			stood.place_at(Vector3(at.x, box.position.y + 0.05, at.z), 0.0)
 			await _steps(game, 3)
+			# A sheet in a wall is shoved out of by the controller before the map looks (the body then misses a
+			# 0.25 m volume): offer the body to the volume as it was put, the way a runner crossing it is.
+			if not stood.finished and end["kind"] == "arrival":
+				stood.place_at(Vector3(at.x, box.position.y + 0.05, at.z), 0.0)
+				node.step(world.io, [game.io_body(stood)])
+				await _steps(game, 3)
 			# Finished AND killed in one tick is the race a runner never meets (the finish box comes first on any route).
 			fired = stood.finished
 			result += "; stood at %s, now %s: finished %s, out %s, alive %s" % [at, stood.controller.state.position, stood.finished, stood.out_for_round, stood.is_alive()]
@@ -500,8 +506,7 @@ func _ends(world: DotMapWorld, doc: Dictionary) -> Array:
 		if kind == "" and v.kind == "teleport" and world.io.destinations.get(v.target) is Dictionary:
 			var at: Array = world.io.destinations[v.target]["at"] if world.io.destinations[v.target].has("at") else [0, 0, 0]
 
-			# A sheet thinner than a hand (Labo's zonetp9 is 0.019 m) is stepped over between two ticks; noted on the board, not walked.
-			if finish.grow(0.5).has_point(Vector3(at[0], at[1], at[2])) and minf(box.size.x, box.size.z) >= 0.1:
+			if finish.grow(0.5).has_point(Vector3(at[0], at[1], at[2])):
 				kind = "arrival"
 
 		if kind != "":

@@ -2067,8 +2067,9 @@ func _step(delta: float) -> void:
 		(players[id] as WoPlayer).simulate(_tick, delta)
 
 	_use_io()
-	_step_io()
+	# Progress first: a map teleport or kill in this tick must not take a runner who has just finished.
 	_watch_progress()
+	_step_io()
 	_advance_pickups()
 	_advance_grabs(delta)
 	_watch_thrown()
