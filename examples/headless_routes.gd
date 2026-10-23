@@ -8,9 +8,9 @@ const WoGame := preload("../game/wo_game.gd")
 ## jump 5 m, ladders as lifts) is driven to a fixed point with the map's io graph run for real: triggers and
 ## buttons the cells reach fire, doors latch open, rides join their poses, teleports are edges.
 ##
-## Measured 2026-10-23: no course's finish is reached, even with a 10 m jump, 1.6 m step and 30 m drop, so the
-## blocker is walls, doors or Source logic (logic_*, timed doors) the model lacks, not gaps. The plan pins that
-## picture (`dead_tps`: teleport volumes no route reaches); a change fails the suite so somebody looks.
+## Measured 2026-10-23: the finish is reached on pauls (by "model": a fall past a hole under an overhang); the other
+## courses stall at walls, doors or Source logic (logic_*, timed doors) the model lacks. The plan pins that picture
+## (`dead_tps`: teleport volumes no route reaches); a change fails the suite so somebody looks.
 ##
 ## Plan keys: `min_cells` (floor found from the start, default 50), `finish` ("walk", "tp" or "none"),
 ## `hurt_only`, `dead_tps`. `debug` ("map", "ents") prints the walk for one course.
@@ -19,13 +19,13 @@ const COURSES := {
 	&"wo_oaks_course": {"dead_tps": 0},
 	&"wo_office_course": {"dead_tps": 5},
 	&"wo_dans_course": {"dead_tps": 3},
-	&"wo_pauls_course": {"dead_tps": 6, "min_cells": 1},
+	&"wo_pauls_course": {"dead_tps": 5, "min_cells": 1, "finish": "model"},
 	&"wo_scary_course": {"dead_tps": 0},
 	&"wo_lego_course": {"dead_tps": 0},
 	&"wo_dc_course": {"dead_tps": 3},
-	&"wo_waytobar_course": {"dead_tps": 6},
+	&"wo_waytobar_course": {"dead_tps": 3},
 	&"wo_labo_course": {"dead_tps": 3},
-	&"wo_sweet_course": {"dead_tps": 5},
+	&"wo_sweet_course": {"dead_tps": 4},
 }
 const CHECKS_PER_COURSE := 6
 const TICK_RATE := 64
@@ -33,6 +33,8 @@ const TICK := 1.0 / float(TICK_RATE)
 const CELL := 1.0
 const MAX_CELLS := 70000
 const RELAXED_GAP := 10
+## The pinned profile's jump is WoConfig.jump_height (1.25 m); a 56-unit block is 1.07 m and was out of reach at 1.0.
+const STEP_UP := 1.2
 const RELAXED_UP := 1.6
 const RELAXED_DROP := 30.0
 const DIRS := [Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1),
@@ -230,6 +232,7 @@ func _model(ctx: Dictionary, avoid_hurts: bool) -> Dictionary:
 		seeds.append_array(m.ride_cells)
 		var n := m.fire(m.reached)
 		m.advance(_Model.BATCH_SECONDS)
+		walker.falls.clear()
 		# the movers are animatable bodies: the physics server takes their pose on its next frames
 		await tree.physics_frame
 		await tree.physics_frame
@@ -282,7 +285,7 @@ func _model(ctx: Dictionary, avoid_hurts: bool) -> Dictionary:
 	walker.max_drop = RELAXED_DROP
 	var relaxed := walker.flood(start, finish, tps, hurts, seeds)
 	walker.max_gap = 5
-	walker.max_up = 1.0
+	walker.max_up = STEP_UP
 	walker.max_drop = 8.0
 	res["relaxed"] = relaxed["finish"]
 	res["relaxed_nearest"] = relaxed["nearest"]
@@ -309,14 +312,59 @@ class _Walker:
 	var ladders: Array[AABB]
 	var _probe := SphereShape3D.new()
 	var max_gap := 5
-	var max_up := 1.0
+	var max_up := 1.2
 	var max_drop := 8.0
+	## Landings per hole, dropped whenever the machinery changes the world.
+	var falls := {}
+	const FALL_DRIFT := 0.4
+	const FALL_STEP := 1.5
+	const FALL_MAX := 30.0
 
 	func _init(s: PhysicsDirectSpaceState3D, w: float, l: Array[AABB]) -> void:
 		space = s
 		water = w
 		ladders = l
 		_probe.radius = 0.35
+
+	func _free(c: Vector3) -> bool:
+		var sq := PhysicsShapeQueryParameters3D.new()
+		sq.shape = _probe
+		sq.transform = Transform3D(Basis.IDENTITY, c)
+		return space.intersect_shape(sq, 1).is_empty()
+
+	## Where a body that steps into the open air at [param at] (feet) can land: free air below it on a coarse grid, drifting
+	## sideways up to [constant FALL_DRIFT] of the depth fallen, so floors under an overhang count.
+	func _fall(at: Vector3, from_y: float) -> Array[Vector3]:
+		var lands: Array[Vector3] = []
+		var start := Vector3(at.x, at.y + 0.75, at.z)
+		if not _free(start) or not _free(start + Vector3(0, -0.5, 0)):
+			return lands
+		var seen := {Vector3i.ZERO: true}
+		var queue: Array[Vector3] = [start]
+		var head := 0
+		while head < queue.size() and queue.size() < 1500:
+			var c := queue[head]
+			head += 1
+			var depth := start.y - c.y
+			if depth > 1.0:
+				var f: Variant = _floor(c.x, c.z, c.y, 2.25)
+				if f != null and (f as Vector3).y < from_y - 1.0:
+					lands.append(f)
+					continue
+			if c.y - 0.75 <= water or depth > FALL_MAX:
+				continue
+			var budget := minf(FALL_DRIFT * depth + 1.5, 8.0)
+			var nexts: Array[Vector3] = [c + Vector3(0, -FALL_STEP, 0)]
+			for d: Vector2 in DIRS:
+				nexts.append(c + Vector3(d.x, 0, d.y) * FALL_STEP)
+			for n in nexts:
+				var k := Vector3i(roundi((n.x - start.x) / FALL_STEP), roundi((n.y - start.y) / FALL_STEP), roundi((n.z - start.z) / FALL_STEP))
+				if seen.has(k) or Vector2(n.x - start.x, n.z - start.z).length() > budget:
+					continue
+				seen[k] = true
+				if _free(n):
+					queue.append(n)
+		return lands
 
 	func _key(p: Vector3) -> Vector3i:
 		return Vector3i(roundi(p.x / CELL), roundi(p.y * 2.0), roundi(p.z / CELL))
@@ -354,7 +402,9 @@ class _Walker:
 		return " | ".join(out)
 
 	func _blocked(a: Vector3, b: Vector3) -> bool:
-		var q := PhysicsRayQueryParameters3D.create(a + Vector3(0, 0.6, 0), b + Vector3(0, 0.6, 0))
+		# Both ends at the higher floor's chest height: a block taller than 0.6 m is a jump up, not a wall.
+		var h := maxf(a.y, b.y) + 0.6
+		var q := PhysicsRayQueryParameters3D.create(Vector3(a.x, h, a.z), Vector3(b.x, h, b.z))
 		return not space.intersect_ray(q).is_empty()
 
 	func flood(start: Vector3, finish: AABB, tps: Array, hurts: Array, seeds: Array = []) -> Dictionary:
@@ -405,6 +455,17 @@ class _Walker:
 					if d == 1:
 						break
 
+			# A hole beside the cell: step off and fall, steering in the air under whatever overhangs the shaft.
+			for dir: Vector2 in DIRS.slice(0, 4):
+				var fx: float = p.x + dir.x * CELL
+				var fz: float = p.z + dir.y * CELL
+				if _floor(fx, fz, p.y + max_up + 0.1, max_up + max_drop) != null:
+					continue
+				var hole := Vector3i(roundi(fx / 2.0), roundi(p.y / 2.0), roundi(fz / 2.0))
+				if not falls.has(hole):
+					falls[hole] = _fall(Vector3(fx, p.y, fz), p.y)
+				found.append_array(falls[hole])
+
 			for ladder in ladders:
 				if ladder.grow(0.9).intersects(body):
 					for off in [Vector2(1.2, 0), Vector2(-1.2, 0), Vector2(0, 1.2), Vector2(0, -1.2)]:
@@ -418,7 +479,9 @@ class _Walker:
 				if not (t["open_fn"] as Callable).call():
 					continue
 				for box: AABB in t["boxes"]:
-					if box.grow(0.2).intersects(body):
+					# a 0.25 m trigger plane falls between 1 m cells, so pad each axis to a cell
+					var pad := Vector3(maxf(box.size.x, CELL), maxf(box.size.y, CELL), maxf(box.size.z, CELL))
+					if AABB(box.get_center() - pad * 0.5, pad).grow(0.2).intersects(body):
 						tp_hit[i] = true
 						found.append(t["to"])
 						break
@@ -474,6 +537,9 @@ class _Model:
 		for e: DotMapEntity in io.entities:
 			if e is DotMapMoverNode and (e as DotMapMoverNode).mover != null and e.node != null:
 				_movers.append(e)
+				# a synced body takes its pose on the physics step, which the walk's rays do not wait for
+				for b in e.node.find_children("*", "AnimatableBody3D", true, false):
+					(b as AnimatableBody3D).sync_to_physics = false
 
 	func _info_at(p: Vector3) -> Dictionary:
 		var i := info.duplicate()
