@@ -8,24 +8,25 @@ const WoGame := preload("../game/wo_game.gd")
 ## jump 5 m, ladders as lifts) is driven to a fixed point with the map's io graph run for real: triggers and
 ## buttons the cells reach fire, doors latch open, rides join their poses, teleports are edges.
 ##
-## Measured 2026-10-23: the finish is reached on pauls (by "model": a fall past a hole under an overhang); the other
+## Cell counts differ between machines (waytobar 1182/8307 on one box, 1199/8169 on another) while the pinned results agree, so only the finish and dead_tps are asserted. Measured 2026-10-23: the finish is reached on pauls (by "model": a fall past a hole under an overhang); the other
 ## courses stall at walls, doors or Source logic (logic_*, timed doors) the model lacks. The plan pins that picture
 ## (`dead_tps`: teleport volumes no route reaches); a change fails the suite so somebody looks.
 ##
-## Plan keys: `min_cells` (floor found from the start, default 50), `finish` ("walk", "tp" or "none"),
+## Plan keys: `reaches` and `why` (documentation: whether the walk ends in the finish zone, and the diagnosis), `min_cells` (floor found from the start, default 50), `finish` ("walk", "tp" or "none"),
 ## `hurt_only`, `dead_tps`. `debug` ("map", "ents") prints the walk for one course.
 
 const COURSES := {
-	&"wo_oaks_course": {"dead_tps": 0},
-	&"wo_office_course": {"dead_tps": 5},
-	&"wo_dans_course": {"dead_tps": 3},
-	&"wo_pauls_course": {"dead_tps": 5, "min_cells": 1, "finish": "model"},
-	&"wo_scary_course": {"dead_tps": 0},
-	&"wo_lego_course": {"dead_tps": 0},
-	&"wo_dc_course": {"dead_tps": 3},
-	&"wo_waytobar_course": {"dead_tps": 3},
-	&"wo_labo_course": {"dead_tps": 3},
-	&"wo_sweet_course": {"dead_tps": 4},
+	&"wo_oaks_course": {"dead_tps": 0, "reaches": false,
+		"why": "start room is cut off by a 12 m wide, 4.5 m deep pit; no crossing in the converted data (model: air control or bhop untested; importer: undiagnosed)"},
+	&"wo_office_course": {"dead_tps": 5, "reaches": false, "why": "stalls 55 m out at buttons and trigger_once doors; five teleports unreached; Source logic missing from the model"},
+	&"wo_dans_course": {"dead_tps": 3, "reaches": false, "why": "stalls 96 m out behind a touch door (hamwallet); three teleports unreached"},
+	&"wo_pauls_course": {"dead_tps": 5, "min_cells": 1, "finish": "model", "reaches": true, "why": "reached by the model: a fall past a hole under an overhang"},
+	&"wo_scary_course": {"dead_tps": 0, "reaches": false, "why": "stalls 41 m out; the next triggers are trigger_multiple scripts the walk cannot fire from the floor"},
+	&"wo_lego_course": {"dead_tps": 0, "reaches": false, "why": "stalls 95 m out; trigger_once chains (low*) are out of reach of the floor walk"},
+	&"wo_dc_course": {"dead_tps": 3, "reaches": false, "why": "stalls 233 m out; three teleports and a bonus teleport unreached"},
+	&"wo_waytobar_course": {"dead_tps": 3, "reaches": false, "why": "3.3 m short of the finish; one teleport is 8 m short and a bar target lies below the 30 m fall cap"},
+	&"wo_labo_course": {"dead_tps": 3, "reaches": false, "why": "stalls 106 m out; three teleports unreached"},
+	&"wo_sweet_course": {"dead_tps": 4, "reaches": false, "why": "stalls 223 m out; four teleports unreached"},
 }
 const CHECKS_PER_COURSE := 6
 const TICK_RATE := 64
@@ -60,15 +61,32 @@ func _run() -> void:
 	var catalogue := WoCatalogue.new()
 	var _loaded := catalogue.load_from("courses")
 	var summary: Array[String] = []
+	var only := ""
+	var forced_debug := ""
+	# a scratch file `examples/headless_routes.only` ("course,course debug") picks courses when game.sh cannot pass arguments
+	if FileAccess.file_exists("res://examples/headless_routes.only"):
+		var parts := FileAccess.get_file_as_string("res://examples/headless_routes.only").strip_edges().split(" ")
+		only = parts[0]
+		forced_debug = parts[1] if parts.size() > 1 else ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--course="):
+			only = a.substr(9)
+		elif a.begins_with("--debug="):
+			forced_debug = a.substr(8)
 
 	for id: StringName in COURSES:
+		if only != "" and not (id in only.split(",")):
+			continue
 		if not catalogue.courses.has(id):
 			print("(%s is not installed: no mg-wipeout-maps link, nothing to check)" % id)
 			continue
 
 		_expected_sections += 1
 		print("== %s" % id)
-		summary.append(await _course(catalogue.courses[id], id, COURSES[id]))
+		var plan: Dictionary = (COURSES[id] as Dictionary).duplicate()
+		if forced_debug != "":
+			plan["debug"] = forced_debug
+		summary.append(await _course(catalogue.courses[id], id, plan))
 
 	print("")
 	print("per course:")
@@ -84,7 +102,7 @@ func _run() -> void:
 	if _entered != _finished_count or _entered != _expected_sections:
 		print("ERROR: %d of %d sections finished, %d expected." % [_finished_count, _entered, _expected_sections])
 		code = 1
-	if _passed + _failed != _expected_sections * CHECKS_PER_COURSE:
+	if only == "" and _passed + _failed != _expected_sections * CHECKS_PER_COURSE:
 		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [_passed + _failed, _expected_sections * CHECKS_PER_COURSE])
 		code = 1
 	get_tree().quit(code)
@@ -111,6 +129,7 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> String:
 		var c := await _model(ctx2, true)
 		hurts_in_the_way = not c["finish"]
 		c_cells = c["cells"]
+		print("    avoid-hurts walk hash %d" % c["hash"])
 
 	var dead := 0
 	var gated := 0
@@ -129,6 +148,7 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> String:
 		tps.size(), dead, gated, (ctx["hurts"] as Array).size(), " [%s]" % ", ".join(names) if dead > 0 else ""]
 	print("  " + line)
 	print("    route: " + str(b["route"]))
+	print("    walk hash %d" % b["hash"])
 	print("    with a %d m jump, a %.1f m step and a %.0f m drop the machinery walk %s (%d cells, nearest %.1f m)" % [RELAXED_GAP, RELAXED_UP, RELAXED_DROP, "FINISHES" if b["relaxed"] else "still does not finish", b["relaxed_cells"], b["relaxed_nearest"]])
 	if not b["finish"]:
 		print("    blocked: nearest cell %.1f m from the finish at %s; nearest things nobody reached: %s" % [b["nearest"], b["near_at"], b["unfired"]])
@@ -199,7 +219,7 @@ func _model(ctx: Dictionary, avoid_hurts: bool) -> Dictionary:
 	var finish: AABB = ctx["finish"]
 	var hurts: Array = ctx["hurts"] if avoid_hurts else []
 	var m := _Model.new(world, ctx["body"], ctx["space"])
-	if _debug == "ents":
+	if _debug.begins_with("ents"):
 		var list: Array = []
 		for e: DotMapEntity in world.io.entities:
 			if e.classname in ["func_button", "func_door", "func_movelinear", "func_tracktrain", "func_plat", "trigger_teleport", "func_rotating", "func_door_rotating", "prop_door_rotating"] or e is DotMapTrigger:
@@ -279,6 +299,21 @@ func _model(ctx: Dictionary, avoid_hurts: bool) -> Dictionary:
 				z += 2.0
 		for i in mini(3, q.size()):
 			print("    DEBUG frontier %s -> %s" % [q[i], walker.why(q[i], f)])
+		_unreached_report(walker, q, q[0] if not q.is_empty() else start, finish)
+		if _debug.begins_with("slice:"):
+			_slice(walker, q, _debug.substr(6).split(","))
+		if _debug == "toggles":
+			for e: DotMapEntity in world.io.entities:
+				if e is DotMapToggleBrush and e.node != null:
+					var lo2 := Vector3(INF, INF, INF)
+					var hi2 := -lo2
+					for cs in e.node.find_children("*", "CollisionShape3D", true, false):
+						var sh := (cs as CollisionShape3D).shape
+						if sh != null:
+							var bb := (cs as CollisionShape3D).global_transform * sh.get_debug_mesh().get_aabb()
+							lo2 = lo2.min(bb.position)
+							hi2 = hi2.max(bb.end)
+					print("    DEBUG toggle %s#%d enabled %s solid %s box %s..%s" % [e.targetname, e.index, e.enabled, (e as DotMapToggleBrush).is_solid(), lo2.snappedf(0.1), hi2.snappedf(0.1)])
 	# what a longer jump and a taller step (bhop-style air control) would add, measured on the final state of the world
 	walker.max_gap = RELAXED_GAP
 	walker.max_up = RELAXED_UP
@@ -292,7 +327,132 @@ func _model(ctx: Dictionary, avoid_hurts: bool) -> Dictionary:
 	res["relaxed_cells"] = relaxed["cells"]
 	res["route"] = m.log.slice(0, 14) if m.log.size() <= 14 else m.log.slice(0, 14) + ["... %d more" % (m.log.size() - 14)]
 	res["unfired"] = m.nearest_unfired(res["near_at"])
+	var keys: Array = []
+	for c: Vector3 in res["queue"]:
+		keys.append(walker._key(c))
+	keys.sort()
+	res["hash"] = str(keys).hash()
 	return res
+
+
+## Debug: standing spots on a 2 m grid that no cell reached, nearest to the frontier and nearest to the finish.
+func _unreached_report(walker: _Walker, reached: Array[Vector3], frontier: Vector3, finish: AABB) -> void:
+	var have := {}
+	for c in reached:
+		var k := Vector2i(roundi(c.x / 2.0), roundi(c.z / 2.0))
+		if not have.has(k):
+			have[k] = []
+		(have[k] as Array).append(c.y)
+	var lo := finish.get_center().min(frontier) - Vector3(60, 0, 60)
+	var hi := finish.get_center().max(frontier) + Vector3(60, 0, 60)
+	for c in reached:
+		lo = lo.min(c - Vector3(30, 0, 30))
+		hi = hi.max(c + Vector3(30, 0, 30))
+	var spots: Array[Vector3] = []
+	var x := lo.x
+	while x < hi.x:
+		var z := lo.z
+		while z < hi.z:
+			var top := 400.0
+			for _i in 12:
+				var hit := walker.space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(x, top, z), Vector3(x, -400.0, z)))
+				if hit.is_empty():
+					break
+				var p: Vector3 = hit["position"]
+				top = p.y - 0.3
+				if (hit["normal"] as Vector3).y < 0.7 or p.y <= walker.water:
+					continue
+				var seen := false
+				for dx in [-1, 0, 1]:
+					for dz in [-1, 0, 1]:
+						for y: float in have.get(Vector2i(roundi(x / 2.0) + dx, roundi(z / 2.0) + dz), []):
+							if absf(y - p.y) < 1.6:
+								seen = true
+				if not seen:
+					var sq := PhysicsShapeQueryParameters3D.new()
+					sq.shape = walker._probe
+					sq.transform = Transform3D(Basis.IDENTITY, p + Vector3(0, 0.75, 0))
+					if walker.space.intersect_shape(sq, 1).is_empty():
+						spots.append(p)
+			z += 2.0
+		x += 2.0
+	print("    DEBUG %d unreached standing spots on the grid" % spots.size())
+	var bins := {}
+	for c in reached:
+		var bk := Vector3i(floori(c.x / 6.0), floori(c.y / 6.0), floori(c.z / 6.0))
+		if not bins.has(bk):
+			bins[bk] = []
+		(bins[bk] as Array).append(c)
+	var pairs: Array = []
+	for sp in spots:
+		var bk := Vector3i(floori(sp.x / 6.0), floori(sp.y / 6.0), floori(sp.z / 6.0))
+		var best := INF
+		var from := Vector3.ZERO
+		for ox in [-1, 0, 1]:
+			for oy in [-1, 0, 1]:
+				for oz in [-1, 0, 1]:
+					for c: Vector3 in bins.get(bk + Vector3i(ox, oy, oz), []):
+						var d := c.distance_to(sp)
+						if d < best:
+							best = d
+							from = c
+		if best < INF:
+			pairs.append([best, from, sp])
+	pairs.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	var shown := {}
+	var lines := 0
+	for pr: Array in pairs:
+		var kk := Vector3i(roundi((pr[1] as Vector3).x / 4.0), roundi((pr[1] as Vector3).y / 4.0), roundi((pr[1] as Vector3).z / 4.0))
+		if shown.has(kk):
+			continue
+		shown[kk] = true
+		var f2: Vector3 = pr[1]
+		var t2: Vector3 = pr[2]
+		print("    DEBUG gap: from (%.0f,%.1f,%.0f) to unreached (%.0f,%.1f,%.0f): across %.1f m, up %+.1f m" % [f2.x, f2.y, f2.z, t2.x, t2.y, t2.z, Vector2(t2.x - f2.x, t2.z - f2.z).length(), t2.y - f2.y])
+		lines += 1
+		if lines >= 14:
+			break
+	for ref: Vector3 in [frontier, finish.get_center()]:
+		var sorted := spots.duplicate()
+		sorted.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.distance_to(ref) < b.distance_to(ref))
+		var out := PackedStringArray()
+		for i in mini(8, sorted.size()):
+			var v: Vector3 = sorted[i]
+			out.append("(%.0f,%.1f,%.0f) %.1f m" % [v.x, v.y, v.z, v.distance_to(ref)])
+		print("    DEBUG nearest unreached floor to %s: %s" % [ref.snappedf(0.1), " | ".join(out)])
+
+
+## Debug: a vertical slice of the physics world along a line, `x1,z1,x2,z2,y_low,y_high[,step]`; # solid, + a reached cell.
+func _slice(walker: _Walker, reached: Array[Vector3], a: PackedStringArray) -> void:
+	var p1 := Vector3(float(a[0]), 0, float(a[1]))
+	var p2 := Vector3(float(a[2]), 0, float(a[3]))
+	var y0 := float(a[4])
+	var y1 := float(a[5])
+	var step := float(a[6]) if a.size() > 6 else 0.5
+	var probe := SphereShape3D.new()
+	probe.radius = step * 0.45
+	var length := p1.distance_to(p2)
+	print("    DEBUG slice from (%.1f,%.1f) to (%.1f,%.1f), y %.1f..%.1f, %.2f m a character" % [p1.x, p1.z, p2.x, p2.z, y0, y1, step])
+	var y := y1
+	while y >= y0:
+		var row := ""
+		var d := 0.0
+		while d <= length:
+			var at := p1.lerp(p2, d / length)
+			var ch := " "
+			var sq := PhysicsShapeQueryParameters3D.new()
+			sq.shape = probe
+			sq.transform = Transform3D(Basis.IDENTITY, Vector3(at.x, y, at.z))
+			if not walker.space.intersect_shape(sq, 1).is_empty():
+				ch = "#"
+			for c in reached:
+				if absf(c.y - (y - step * 0.5)) < step * 0.5 and Vector2(c.x - at.x, c.z - at.z).length() < step * 0.7:
+					ch = "+"
+					break
+			row += ch
+			d += step
+		print("    DEBUG %6.2f %s" % [y, row])
+		y -= step
 
 
 ## The finish box of the document as a world box (its yaw is a multiple of 90 degrees on the imports).
