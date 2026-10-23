@@ -23,6 +23,9 @@ const COURSES := {
 	&"wo_dans_course": [9, 30, false, true],
 	&"wo_pauls_course": [8, 26, false, false, false],
 	&"wo_scary_course": [8, 26, false, false, false],
+	&"wo_lego_course": [8, 23, false, false, false, false],
+	&"wo_dc_course": [8, 26, false, false, false],
+	&"wo_waytobar_course": [8, 26, false, false, false],
 }
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -58,12 +61,12 @@ func _run() -> void:
 		_expect_sections += int(plan[0])
 		_expect_checks += int(plan[1])
 		print("== %s" % id)
-		await _play(catalogue, id, bool(plan[2]), bool(plan[3]), plan.size() < 5 or bool(plan[4]))
+		await _play(catalogue, id, bool(plan[2]), bool(plan[3]), plan.size() < 5 or bool(plan[4]), plan.size() < 6 or bool(plan[5]))
 
 	_report(_expect_sections, _expect_checks)
 
 
-func _play(catalogue: WoCatalogue, id: StringName, lava: bool, ladders: bool, wants_push: bool) -> void:
+func _play(catalogue: WoCatalogue, id: StringName, lava: bool, ladders: bool, wants_push: bool, wants_button := true) -> void:
 	var doc: Dictionary = catalogue.courses[id]
 
 	_section("the document")
@@ -159,7 +162,8 @@ func _play(catalogue: WoCatalogue, id: StringName, lava: bool, ladders: bool, wa
 	world = game.stage.io.world
 	_section("a button")
 	var buttons := _buttons(world)
-	_check(not buttons.is_empty(), "the map has a button")
+	if wants_button:
+		_check(not buttons.is_empty(), "the map has a button")
 
 	if not buttons.is_empty():
 		# A fresh body: the runner may have been carried over the finish line by the push check.
