@@ -126,7 +126,7 @@ run_suite() {
     return 1
 }
 
-PARSE_NOISE='ObjectDB instances( were)? leaked|resources still in use|Pages in use exist at exit|at: (cleanup|clear|~PagedAllocator)|Text-based project'
+PARSE_NOISE='ObjectDB instances?( were| was)? leaked|resources still in use|Pages in use exist at exit|at: (cleanup|clear|~PagedAllocator)|Text-based project'
 
 # Prints each script that does not parse and returns how many. ANY output for a script,
 # past the noise above, is a failure: a warning-as-error reads as nothing else.
