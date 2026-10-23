@@ -8,6 +8,7 @@ const WoPlayer := preload("wo_player.gd")
 const WoAvatars := preload("wo_avatars.gd")
 const WoVote := preload("wo_vote.gd")
 const WoCourseCfg := preload("wo_course_cfg.gd")
+const WoMapConfig := preload("wo_map_config.gd")
 
 ## This game, as a module a dedicated server loads.
 ##
@@ -753,6 +754,11 @@ func _build_vote(world: WoGame) -> void:
 			if vote != null:
 				vote.forget_voter(StringName(str(session.userid)))
 		)
+
+
+## Per-map settings (`cfg/game/mg-wipeout/dot_map/map/<course id>.yml`): the rules a course may bend. Server-only rules, so no client hook; movement is the game's pinned profile and is not a map's to change.
+func _map_config_keys() -> Dictionary:
+	return WoMapConfig.KEYS
 
 
 func _wire_map(world: WoGame) -> void:
