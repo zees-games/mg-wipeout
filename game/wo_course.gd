@@ -1855,6 +1855,9 @@ func knock(feet: Vector3, crouched: bool, tick: int, limits: Vector3) -> Vector3
 		if not bool(piece["hazard"]):
 			continue
 
+		if cull_hazards and feet.distance_to(_hazard_centre(piece)) > _hazard_reach(piece) + PLAYER_HEIGHT + 1.0:
+			continue
+
 		var thrown := Vector3.ZERO
 
 		match str(piece["kind"]):
@@ -1874,6 +1877,48 @@ func knock(feet: Vector3, crouched: bool, tick: int, limits: Vector3) -> Vector3
 			return Vector3(flat.x, maxf(thrown.y, limits.z), flat.z)
 
 	return Vector3.ZERO
+
+
+## Whether [method knock] skips a hazard too far from the feet to touch them; off only for the check
+## that the shortcut answers the same.
+var cull_hazards := true
+
+
+## The middle of the sphere that holds everything [param piece] can reach, for [method knock]'s cull.
+func _hazard_centre(piece: Dictionary) -> Vector3:
+	var spec: Dictionary = piece["spec"]
+
+	if str(piece["kind"]) == "pendulum":
+		return spec["pivot"]
+
+	var root: Node3D = piece["node"]
+
+	if str(piece["kind"]) == "pusher":
+		return root.transform * (spec["at"] as Vector3)
+
+	return root.transform.origin
+
+
+## The radius of that sphere, worked out once per piece: a bound with a margin, never the exact reach.
+func _hazard_reach(piece: Dictionary) -> float:
+	if piece.has("cull_reach"):
+		return piece["cull_reach"]
+
+	var spec: Dictionary = piece["spec"]
+	var reach := 0.0
+
+	match str(piece["kind"]):
+		"spinner":
+			reach = float(spec.get("arm_height", 1.0)) + float(spec["arm_length"]) + float(spec.get("arm_thickness", 0.35))
+		"pendulum":
+			reach = float(spec["length"]) + float(spec["radius"])
+		"pusher":
+			reach = (spec["size"] as Vector3).length() + absf(float(spec["reach"]))
+		"fall":
+			reach = (spec["size"] as Vector3).length()
+
+	piece["cull_reach"] = reach * 1.25 + 1.0
+	return piece["cull_reach"]
 
 
 func _knock_spinner(piece: Dictionary, bottom: Vector3, top: Vector3, t: float) -> Vector3:

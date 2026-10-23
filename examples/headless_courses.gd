@@ -93,7 +93,7 @@ func _run() -> void:
 		_world.free()
 
 	var sections := 3 + courses.size() + forked + arenas.size() + courses.size() + arenas.size()
-	var checks := 8 + (courses.size() + forked) * 3 + courses.size() * 2 + arenas.size() * (4 + 2) + courses.size() + arenas.size()
+	var checks := 8 + (courses.size() + forked) * 4 + courses.size() * 2 + arenas.size() * (4 + 2) + courses.size() + arenas.size()
 
 	print("")
 	print("%d sections entered, %d finished" % [_sections_entered, _sections_finished])
@@ -150,6 +150,29 @@ func _has_fork(doc: Dictionary) -> bool:
 	return false
 
 
+## The cull in `WoCourse.knock` (a hazard too far off to touch is not asked) must answer exactly what
+## asking every hazard does, at every point a stand-in looks from.
+func _check_knock_cull(game: WoGame) -> void:
+	var limits := Vector3(1.0, 1.0, 1.0)
+	var asked := 0
+	var differ := 0
+
+	for point: Dictionary in game.stage.route():
+		for offset in [Vector3.ZERO, Vector3(2.5, 0.0, 0.0), Vector3(0.0, 0.0, -4.0), Vector3(-7.0, 1.0, 3.0)]:
+			for tick in range(0, 400, 23):
+				for crouched in [false, true]:
+					var feet: Vector3 = (point["at"] as Vector3) + offset
+					game.stage.cull_hazards = true
+					var culled := game.stage.knock(feet, crouched, tick, limits)
+					game.stage.cull_hazards = false
+					var every := game.stage.knock(feet, crouched, tick, limits)
+					asked += 1
+					differ += 1 if culled != every else 0
+
+	game.stage.cull_hazards = true
+	_check(differ == 0, "the hazard cull answers what asking every hazard does", "%d of %d differ" % [differ, asked])
+
+
 func _run_course(doc: Dictionary, risk: float = -1.0) -> void:
 	_section("%s — %s%s" % [doc["id"], doc["name"],
 		"" if risk < 0.0 else (" (the risky way)" if risk > 50.0 else " (the safe way)")])
@@ -162,6 +185,7 @@ func _run_course(doc: Dictionary, risk: float = -1.0) -> void:
 	# The start pen's toys, once a course (not again down a fork's other branch).
 	if risk < 50.0:
 		await _check_toys(game, doc)
+	_check_knock_cull(game)
 	game.start()
 
 	var limit := game.course_limit() + game.config.countdown_seconds + 1.0
