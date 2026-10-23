@@ -474,10 +474,15 @@ func _test_the_course_vote() -> void:
 		"the new course starts the vote over", str(director.current_id()))
 	# Past dot-vote's cooldown between two ballots, on the director alone so the course's own
 	# ballot timer does not open one first. In play a course outlasts it.
+	director.rules.rtv_delay_sec = 0.0
 	director.advance(director.rules.vote_cooldown_sec + 0.1)
 	var opened_count := [0]
 	var counter := func(_options: Array, _seconds: float) -> void: opened_count[0] += 1
 	director.vote_opened.connect(counter)
+	# The map's own rules came back with it; this fixture has one voter.
+	director.rules.min_players_to_vote = 1
+	director.rules.rtv_min_players = 1
+	director.rules.allow_single_voter_auto = true
 	var _rocked := _run_command("rtv")
 	vote.call("advance", 0.05)
 	_check(director.is_voting(), "and rock-the-vote opens a ballot before its time", str(_rocked))
