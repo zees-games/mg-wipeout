@@ -17,14 +17,14 @@ const WoGame := preload("../game/wo_game.gd")
 
 const COURSES := {
 	&"wo_oaks_course": {"dead_tps": 0, "reaches": false,
-		"why": "start room is cut off by a 12 m wide, 4.5 m deep pit; no crossing in the converted data (model: air control or bhop untested; importer: undiagnosed)"},
+		"why": "verified: past the start door (opens by the shoot chain) lies a 12 m flat pit, over twice the pinned jump (about 6 m); no push, teleport, ladder or mover reaches it, and every output target resolves (Rompje are three 0.3 m blocks at the far lip). Not verified: whether the source route needs a bhop the game does not allow, or a piece the importer dropped"},
 	&"wo_office_course": {"dead_tps": 5, "reaches": false, "why": "stalls 55 m out at buttons and trigger_once doors; five teleports unreached; Source logic missing from the model"},
 	&"wo_dans_course": {"dead_tps": 3, "reaches": false, "why": "stalls 96 m out behind a touch door (hamwallet); three teleports unreached"},
 	&"wo_pauls_course": {"dead_tps": 5, "min_cells": 1, "finish": "model", "reaches": true, "why": "reached by the model: a fall past a hole under an overhang"},
 	&"wo_scary_course": {"dead_tps": 0, "reaches": false, "why": "stalls 41 m out; the next triggers are trigger_multiple scripts the walk cannot fire from the floor"},
 	&"wo_lego_course": {"dead_tps": 0, "reaches": false, "why": "stalls 95 m out; trigger_once chains (low*) are out of reach of the floor walk"},
 	&"wo_dc_course": {"dead_tps": 3, "reaches": false, "why": "stalls 233 m out; three teleports and a bonus teleport unreached"},
-	&"wo_waytobar_course": {"dead_tps": 3, "reaches": false, "why": "3.3 m short of the finish; one teleport is 8 m short and a bar target lies below the 30 m fall cap"},
+	&"wo_waytobar_course": {"dead_tps": 3, "reaches": false, "why": "verified: the walk ends 0.76 m in front of a glass wall (z 19.29) that is the 1000-damage score slab; the finish box lies 0.3 m behind it (z 15.9 to 18.9), on the far side, so no walk can enter it. Not verified: whether the box belongs on the approach side (the bar is reachable from the start by floor, with the walker's doors latched open)"},
 	&"wo_labo_course": {"dead_tps": 3, "reaches": false, "why": "stalls 106 m out; three teleports unreached"},
 	&"wo_sweet_course": {"dead_tps": 4, "reaches": false, "why": "stalls 223 m out; four teleports unreached"},
 }
@@ -302,6 +302,8 @@ func _model(ctx: Dictionary, avoid_hurts: bool) -> Dictionary:
 		_unreached_report(walker, q, q[0] if not q.is_empty() else start, finish)
 		if _debug.begins_with("slice:"):
 			_slice(walker, q, _debug.substr(6).split(","))
+		if _debug.begins_with("ray:"):
+			_ray(walker, _debug.substr(4).split(","))
 		if _debug == "toggles":
 			for e: DotMapEntity in world.io.entities:
 				if e is DotMapToggleBrush and e.node != null:
@@ -421,6 +423,21 @@ func _unreached_report(walker: _Walker, reached: Array[Vector3], frontier: Vecto
 			out.append("(%.0f,%.1f,%.0f) %.1f m" % [v.x, v.y, v.z, v.distance_to(ref)])
 		print("    DEBUG nearest unreached floor to %s: %s" % [ref.snappedf(0.1), " | ".join(out)])
 
+
+## Debug: every collider along a segment, `x1,y1,z1,x2,y2,z2`: its path, class and the entry point.
+func _ray(walker: _Walker, a: PackedStringArray) -> void:
+	var from := Vector3(float(a[0]), float(a[1]), float(a[2]))
+	var to := Vector3(float(a[3]), float(a[4]), float(a[5]))
+	var skip: Array[RID] = []
+	for _i in 12:
+		var q := PhysicsRayQueryParameters3D.create(from, to)
+		q.exclude = skip
+		var hit := walker.space.intersect_ray(q)
+		if hit.is_empty():
+			break
+		var c := hit["collider"] as Node
+		print("    DEBUG ray hit %s (%s) at %s normal %s layer %d" % [c.get_path(), c.get_class(), hit["position"], hit["normal"], (c as CollisionObject3D).collision_layer])
+		skip.append(hit["rid"])
 
 ## Debug: a vertical slice of the physics world along a line, `x1,z1,x2,z2,y_low,y_high[,step]`; # solid, + a reached cell.
 func _slice(walker: _Walker, reached: Array[Vector3], a: PackedStringArray) -> void:
