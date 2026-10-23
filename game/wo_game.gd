@@ -2116,7 +2116,9 @@ func _step_io() -> void:
 					"id": String(id), "body": player, "position": player.controller.state.position,
 					"height": tunables.stand_height if tunables != null else 1.8,
 					"radius": tunables.radius if tunables != null else 0.35,
-					"kind": "player", "name": String(id), "class": "player",
+					# On no Source team: a map's team filter then passes only what it names the other way round
+					# (Pauls' knife-round teleports are for terrorists, and sit on its start line).
+					"kind": "player", "name": String(id), "class": "player", "team": 0,
 				})
 
 	stage.io.step(_tick, bodies)

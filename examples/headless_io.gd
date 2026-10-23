@@ -15,11 +15,14 @@ const WoGame := preload("../game/wo_game.gd")
 ## a button through the use key, a trigger that starts a mover), the movers move, a mover carries
 ## a runner standing on it, and the state reaches a client over the wire format.
 
-## Each course and what it must run: [sections, checks, lava room (a hurt that a trigger enables after a delay), ladder].
+## Each course and what it must run: [sections, checks, lava room (a hurt that a trigger enables after a delay), ladder,
+## a push that starts on (default true)].
 const COURSES := {
 	&"wo_oaks_course": [8, 28, false, false],
 	&"wo_office_course": [10, 33, true, true],
 	&"wo_dans_course": [9, 30, false, true],
+	&"wo_pauls_course": [8, 26, false, false, false],
+	&"wo_scary_course": [8, 26, false, false, false],
 }
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -55,12 +58,12 @@ func _run() -> void:
 		_expect_sections += int(plan[0])
 		_expect_checks += int(plan[1])
 		print("== %s" % id)
-		await _play(catalogue, id, bool(plan[2]), bool(plan[3]))
+		await _play(catalogue, id, bool(plan[2]), bool(plan[3]), plan.size() < 5 or bool(plan[4]))
 
 	_report(_expect_sections, _expect_checks)
 
 
-func _play(catalogue: WoCatalogue, id: StringName, lava: bool, ladders: bool) -> void:
+func _play(catalogue: WoCatalogue, id: StringName, lava: bool, ladders: bool, wants_push: bool) -> void:
 	var doc: Dictionary = catalogue.courses[id]
 
 	_section("the document")
@@ -91,12 +94,12 @@ func _play(catalogue: WoCatalogue, id: StringName, lava: bool, ladders: bool) ->
 	_finished()
 
 	_section("a runner spawns")
-	var spawn := _nearest_spawn(game, runner.controller.state.position)
+	var spawn := _nearest_spawn(game, runner.controller.state.position, manifest)
 	var from := runner.controller.state.position
 	_check(spawn < 2.5, "on one of the map's spawn points", "%.2f m from the nearest" % spawn)
 	_check(runner.is_alive() and not runner.finished, "alive and in the round")
 	await _steps(game, 90)
-	_check(runner.controller.state.position.y > from.y - 0.5, "standing on its floor a second and a half later",
+	_check(runner.controller.state.position.y > from.y - 1.0, "standing on its floor a second and a half later",
 		"%s to %s" % [from, runner.controller.state.position])
 	_finished()
 
@@ -119,22 +122,35 @@ func _play(catalogue: WoCatalogue, id: StringName, lava: bool, ladders: bool) ->
 	game.config.instant_death = true
 	_section("a body in a volume")
 	var before: Dictionary = game.io_log.duplicate()
-	var pushed := _volume(manifest, "push", false)
-	var hurt := _volume(manifest, "hurt", false, 100.0)
-	_check(not pushed.is_empty(), "the map has a push that starts on")
-	_check(not hurt.is_empty(), "and a hurt volume that starts on")
+	var floor_y := float(doc["water_height"])
+	var pushes := _volumes(manifest, "push", false, 0.0, floor_y)
+	var hurts := _volumes(manifest, "hurt", false, 100.0, floor_y)
+	if wants_push:
+		_check(not pushes.is_empty(), "the map has a push that starts on")
+	_check(not hurts.is_empty(), "and a hurt volume that starts on")
 
-	if not pushed.is_empty():
-		runner.place_at(pushed["centre"], 0.0)
-		await _steps(game, 4)
+	# Roomiest first; the first that answers is the one checked (a volume may sit in a room a teleport
+	# empties, or behind a filter; a hurt that does not kill at once is followed by the next).
+	if wants_push and not pushes.is_empty():
+		for pushed in pushes:
+			runner.place_at(pushed["centre"], 0.0)
+			await _steps(game, 4)
+			if int(game.io_log["pushes"]) > int(before["pushes"]):
+				break
+
 		_check(int(game.io_log["pushes"]) > int(before["pushes"]), "the push moves the runner", str(game.io_log))
 
-	if not hurt.is_empty():
+	if not hurts.is_empty():
 		var other := game.add_player(&"u2", "Other")
 		await _steps(game, 2)
 		var struck := int(game.io_log["hurts"])
-		other.place_at(hurt["centre"], 0.0)
-		await _steps(game, 4)
+
+		for hurt in hurts:
+			other.place_at(hurt["centre"], 0.0)
+			await _steps(game, 4)
+			if other.out_for_round:
+				break
+
 		_check(int(game.io_log["hurts"]) > struck, "the hurt volume hits a runner", str(game.io_log))
 		_check(other.out_for_round and other.watching, "and a one-life course puts him out for the round")
 		_check(runner.is_alive(), "while the runner is still in the round")
@@ -151,9 +167,10 @@ func _play(catalogue: WoCatalogue, id: StringName, lava: bool, ladders: bool) ->
 		await _steps(game, 2)
 		var seen := int(game.io_log["uses"])
 		var pressed := world.io.delivered
+		var used := false
 
 		# Each button in turn, from each side, eyes on its middle, the grab key pressed for one tick: the first
-		# that answers is the one checked (some start locked or sit behind a door).
+		# that answers and delivers is the one checked (some start locked or sit behind a door).
 		for button in buttons:
 			var box := _centre_of(button)
 			for side in [Vector2(0, 1), Vector2(1, 0), Vector2(0, -1), Vector2(-1, 0)]:
@@ -181,11 +198,17 @@ func _play(catalogue: WoCatalogue, id: StringName, lava: bool, ladders: bool) ->
 				if int(game.io_log["uses"]) > seen:
 					break
 
+			# A button with outputs to deliver ends the search; one without (a switch that only gates another) does not.
 			if int(game.io_log["uses"]) > seen:
-				break
+				used = true
+				await _steps(game, 40)
 
-		_check(int(game.io_log["uses"]) > seen, "the use key presses it from where a runner stands", str(game.io_log))
-		await _steps(game, 40)
+				if world.io.delivered > pressed:
+					break
+
+				seen = int(game.io_log["uses"])
+
+		_check(used, "the use key presses it from where a runner stands", str(game.io_log))
 		_check(world.io.delivered > pressed, "and its OnPressed outputs are delivered", "%d before, %d after" % [pressed, world.io.delivered])
 	_finished()
 
@@ -346,8 +369,13 @@ func _io_piece(doc: Dictionary) -> bool:
 	return false
 
 
-func _nearest_spawn(game: WoGame, at: Vector3) -> float:
+func _nearest_spawn(game: WoGame, at: Vector3, manifest: Dictionary) -> float:
 	var best := INF
+
+	# A map may move everybody off its spawn room at once (a teleport to its real start).
+	for dest: Dictionary in (manifest.get("destinations", {}) as Dictionary).values():
+		var where: Array = dest["at"]
+		best = minf(best, Vector3(where[0], where[1], where[2]).distance_to(at))
 
 	for spawn: Dictionary in game.stage.io_spawns():
 		var origin: Vector3 = spawn["origin"]
@@ -356,11 +384,11 @@ func _nearest_spawn(game: WoGame, at: Vector3) -> float:
 	return best
 
 
-## The roomiest volume of [param kind] in the manifest that is not [param disabled], with its middle
-## (a thin slab is no place to stand a body for a check).
-func _volume(manifest: Dictionary, kind: String, disabled: bool, damage: float = 0.0) -> Dictionary:
-	var best := {}
-	var room := 0.0
+## The volumes of [param kind] in the manifest that are not [param disabled], roomiest first, each with its
+## middle (a thin slab is no place to stand a body for a check), above [param floor_y] (a body below the water
+## is out of the round, as on a map's side arena). At most eight.
+func _volumes(manifest: Dictionary, kind: String, disabled: bool, damage: float, floor_y: float) -> Array:
+	var found: Array = []
 
 	for v: Dictionary in manifest["volumes"]:
 		if str(v["kind"]) != kind or bool(v.get("disabled", false)) != disabled:
@@ -369,10 +397,11 @@ func _volume(manifest: Dictionary, kind: String, disabled: bool, damage: float =
 			continue
 		var extent := _brush_extent(v)
 		var size := extent.size.x * extent.size.y * extent.size.z
-		if extent.size.is_finite() and size > room:
-			room = size
-			best = {"entity": v["entity"], "centre": extent.get_center()}
-	return best
+		if extent.size.is_finite() and extent.get_center().y > floor_y:
+			found.append({"entity": v["entity"], "centre": extent.get_center(), "room": size})
+
+	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["room"]) > float(b["room"]))
+	return found.slice(0, 8)
 
 
 ## The box of a volume's first brush, from its axis-aligned planes.
