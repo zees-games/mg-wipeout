@@ -21,6 +21,7 @@
 #   tools/shot.sh --view=maps --seconds=0.5   # M: the solo course list with a Workshop fixture course (Name [Pack])
 #   tools/shot.sh --view=third --board                 # with the Tab scoreboard held open
 #   tools/shot.sh --view=third --ballot                # the course vote's ballot, mid-vote
+#   tools/shot.sh --action emote dance                # the local runner, third person, playing an avatar action (action_a/_b.png)
 #   tools/shot.sh --console="net_stat 3"               # a line typed at the player's console first
 #
 # xvfb-run because this needs a rendering context and the machines this runs on have no
@@ -38,8 +39,11 @@ out=""
 # a value changed after that has already been copied into the round's rules.
 config=("--wo-warmup-seconds=0" "--wo-countdown-seconds=1")
 
+take=0
 for arg in "$@"; do
+    if [ "$take" -gt 0 ]; then config+=("$arg"); take=$((take - 1)); continue; fi
     case "$arg" in
+        --action)    config+=("$arg"); take=2; view=action ;;
         --view=*)    view="${arg#*=}" ;;
         --seconds=*) seconds="${arg#*=}" ;;
         --out=*)     out="${arg#*=}" ;;

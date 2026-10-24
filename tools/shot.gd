@@ -33,6 +33,10 @@ var _out := "res://screenshots/shot.png"
 var _arena := ""
 var _client: Node = null
 
+## `--action <kind> <id>` (`--action emote dance`): the local runner, in third person, playing an
+## avatar action through the client's own input path, from the front, early and later in the clip.
+var _action: Array = []
+
 ## `--board`: the Tab scoreboard held open over the frame.
 var _board: bool = false
 
@@ -82,7 +86,12 @@ func _subscribe_fixture() -> void:
 
 
 func _ready() -> void:
-	for arg in OS.get_cmdline_user_args():
+	var user_args := OS.get_cmdline_user_args()
+	var action_at := user_args.find("--action")
+	if action_at >= 0 and action_at + 2 < user_args.size():
+		_action = [StringName(user_args[action_at + 1]), String(user_args[action_at + 2])]
+		_view = "action"
+	for arg in user_args:
 		if arg.begins_with("--view="):
 			_view = arg.trim_prefix("--view=")
 		elif arg.begins_with("--seconds="):
@@ -110,7 +119,7 @@ func _ready() -> void:
 	_client = WoClient.new()
 	_client.name = "Client"
 	_client.set("force_offline", true)
-	_client.set("third_person", _view == "third")
+	_client.set("third_person", _view == "third" or _view == "action")
 	add_child(_client)
 	# --view=cover: the loading cover dot-game's DotGameClient puts up first, before it lifts.
 	if _view == "cover":
@@ -136,6 +145,10 @@ func _run() -> void:
 		var _ran := console.submit(_console_line)
 
 	match _view:
+		"action":
+			await _stage_action(game)
+			get_tree().quit(0)
+			return
 		"arena":
 			await _frames(4)
 			var doc: Dictionary = game.catalogue.arenas.get(StringName(_arena), {}) if _arena != "" \
@@ -447,6 +460,39 @@ func _first_hazard(game: WoGame) -> Vector3:
 			var spec: Dictionary = piece["spec"]
 			return spec.get("at", spec.get("pivot", Vector3.ZERO))
 	return Vector3.ZERO
+
+
+## Writes <out>_a.png and <out>_b.png.
+func _stage_action(game: WoGame) -> void:
+	await _seconds_of(7.0)
+	var me: Node3D = _client.get("player")
+	if me == null:
+		print("action: no local player")
+		return
+	var figure: Object = _client.call("_avatar_figure", 0)
+	print("action %s/%s: figure=%s third_person=%s" % [_action[0], _action[1], figure != null, _client.get("third_person")])
+	var entry := DotAvatarActions.defaults().find(_action[0], _action[1])
+	var input: Object = (_client.get("platform") as DotGameClient).avatar_actions.input
+	input.emit_signal(&"action_requested", entry)
+	var yaw := deg_to_rad(float((me.get("controller") as DotFpsController).state.yaw))
+	var ahead := Vector3(-sin(yaw), 0.0, -cos(yaw))
+	var feet: Vector3 = me.global_position
+	if figure is Node3D:
+		feet = (figure as Node3D).global_position
+	# The start pen holds the whole field shoulder to shoulder; hide the rest so the frame is about this one.
+	for id: StringName in game.players:
+		var other: Node3D = game.players[id]
+		if other != me:
+			other.visible = false
+	var camera := _free_camera()
+	for part in ["a", "b"]:
+		await _frames(12 if part == "a" else 30)
+		camera.look_at_from_position(feet + ahead * 3.2 + Vector3.UP * 1.6, feet + Vector3.UP * 1.0)
+		await _frames(3)
+		await RenderingServer.frame_post_draw
+		var path := _out.trim_suffix(".png") + "_%s.png" % part
+		var _saved := _save(path)
+		print("wrote ", path, " action=", figure.get("action") if figure != null else "n/a")
 
 
 func _free_camera() -> Camera3D:
