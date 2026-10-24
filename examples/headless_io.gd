@@ -21,16 +21,16 @@ const WoPlayer := preload("../game/wo_player.gd")
 ## sink in a second and a half on its start: measured, 0.5 where the course passes), `rejects` (how many of the
 ## map's volumes a team filter turns a body of no team away from, which the run prints).
 const COURSES := {
-	&"wo_oaks_course": {"sections": 9, "checks": 33, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_office_course": {"sections": 11, "checks": 38, "lava": true, "ladders": true, "rejects": 0},
-	&"wo_dans_course": {"sections": 10, "checks": 35, "lava": false, "ladders": true, "rejects": 0},
-	&"wo_pauls_course": {"sections": 9, "checks": 32, "lava": false, "ladders": false, "push": false, "floor": 0.7, "rejects": 3},
-	&"wo_scary_course": {"sections": 9, "checks": 32, "lava": false, "ladders": false, "push": false, "rejects": 0},
-	&"wo_lego_course": {"sections": 9, "checks": 29, "lava": false, "ladders": false, "push": false, "button": false, "rejects": 0},
-	&"wo_dc_course": {"sections": 9, "checks": 33, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_waytobar_course": {"sections": 9, "checks": 33, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_labo_course": {"sections": 9, "checks": 33, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_sweet_course": {"sections": 9, "checks": 33, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_oaks_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_office_course": {"sections": 11, "checks": 39, "lava": true, "ladders": true, "rejects": 0},
+	&"wo_dans_course": {"sections": 10, "checks": 36, "lava": false, "ladders": true, "rejects": 0},
+	&"wo_pauls_course": {"sections": 9, "checks": 33, "lava": false, "ladders": false, "push": false, "floor": 0.7, "rejects": 3},
+	&"wo_scary_course": {"sections": 9, "checks": 33, "lava": false, "ladders": false, "push": false, "rejects": 0},
+	&"wo_lego_course": {"sections": 9, "checks": 30, "lava": false, "ladders": false, "push": false, "button": false, "rejects": 0},
+	&"wo_dc_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_waytobar_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_labo_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_sweet_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "rejects": 0},
 }
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -110,6 +110,8 @@ func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 	var by_team := turned_away.filter(func(line: String) -> bool: return line.contains("filter_activator_team"))
 	_check(by_team.size() == int(plan.get("rejects", 0)), "the team filters that turn a runner away are the ones known",
 		"%d: %s" % [by_team.size(), str(by_team)])
+	var shot_at := _shoot_something(game, world)
+	_check(shot_at != -2, "a shot along a ray reaches a breakable, button or door the map has (or it has none)", "nothing answered")
 	_finished()
 
 	_section("a runner spawns")
@@ -772,6 +774,37 @@ func _buttons(world: DotMapWorld) -> Array[DotMapMoverNode]:
 		if e.classname == "func_button" and e is DotMapMoverNode and (e as DotMapMoverNode).node != null:
 			out.append(e as DotMapMoverNode)
 	return out
+
+
+## Fires `DotMapWorld.shoot` at every shootable thing's middle from outside along each axis. -1: the map has none;
+## the entity index of one that answered; -2: it has some and none answered.
+func _shoot_something(game: WoGame, world: DotMapWorld) -> int:
+	var space := game.stage.get_world_3d().direct_space_state
+	var any := false
+	for e: DotMapEntity in world.io.entities:
+		var node: Node3D = null
+		if e is DotMapMoverNode:
+			node = (e as DotMapMoverNode).node as Node3D
+		elif e is DotMapBreakable:
+			node = (e as DotMapBreakable).node as Node3D
+		if node == null or not e.key("model").begins_with("*"):
+			continue
+		var box := AABB()
+		var found := false
+		for shape: CollisionShape3D in node.find_children("*", "CollisionShape3D", true, false):
+			if shape.shape != null:
+				var part: AABB = shape.global_transform * shape.shape.get_debug_mesh().get_aabb()
+				box = box.merge(part) if found else part
+				found = true
+		if not found:
+			continue
+		any = true
+		var centre := box.get_center()
+		for axis in [Vector3.UP, Vector3.DOWN, Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]:
+			var from: Vector3 = centre + (axis as Vector3) * (box.size.length() * 0.5 + 0.3)
+			if world.shoot(space, from, centre, 10.0) == e.index:
+				return e.index
+	return -2 if any else -1
 
 
 func _centre_of(mover: DotMapMoverNode) -> Vector3:

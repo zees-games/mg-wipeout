@@ -1833,6 +1833,7 @@ func _advance_weapons() -> void:
 			shot.tick = _tick
 			_shoot_toys(shot)
 			var resolved := combat.resolve_shot(shot)
+			_shoot_io(player, resolved)
 			_note_hits(player, resolved)
 
 
@@ -2254,6 +2255,23 @@ func _shoot_toys(shot: DotShot) -> void:
 	var directions: Array = shot.pellets if not shot.pellets.is_empty() else [shot.direction]
 	for raw: Variant in directions:
 		var _pushed := stage.toys.shot_along(shot.origin, raw as Vector3, maxf(shot.max_range, 1.0), shot.damage, physics.layer_mask(&"world"))
+
+
+## A finale shot against an io course's own breakables, buttons and doors (dot-map's `DotMapWorld.shoot`):
+## each pellet's ray, no further than where the combat stopped it, so a player in front shields the panel.
+func _shoot_io(shooter: WoPlayer, shot: DotShot) -> void:
+	if not authoritative or stage == null or stage.io == null or stage.io.world == null or physics == null or shooter == null:
+		return
+	var space := stage.get_world_3d().direct_space_state
+	var mask := physics.layer_mask(&"world")
+	var directions: Array = shot.pellets if not shot.pellets.is_empty() else [shot.direction]
+	for i in range(directions.size()):
+		var far: Vector3 = shot.impacts[i] if i < shot.impacts.size() else shot.origin + (directions[i] as Vector3) * shot.max_range
+		var limit := shot.origin.distance_to(far)
+		var index := stage.io.world.shoot(space, shot.origin, shot.origin + (directions[i] as Vector3) * shot.max_range, shot.damage,
+				io_body(shooter), mask, limit)
+		if index >= 0:
+			io_log["shots"] = int(io_log.get("shots", 0)) + 1
 
 
 func delta_for_tick() -> float:
