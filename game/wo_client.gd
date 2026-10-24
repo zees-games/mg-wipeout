@@ -169,10 +169,12 @@ func _ready() -> void:
 	# [b]`load_layered` on the CLIENT too.[/b] The family's `defaults < JSON < env < argv`
 	# chain is a convention, and a client that quietly skipped it would be one where every
 	# command-line flag worked against a dedicated server and did nothing at all offline.
-	var loaded := config.load_layered(config_file)
+	var binder := DotGameConfigBinder.create(config, "mg-wipeout", "wo", config_file)
+	var loaded := binder.load_layers()
 
 	if not loaded.ok:
-		DotLog.warn(CHANNEL, "falling back to defaults", {"why": loaded.error.message})
+		DotGameConfigBinder.fail_boot(get_tree(), loaded)
+		return
 
 	link = platform.link as Node
 	_offline = platform.offline
@@ -180,6 +182,7 @@ func _ready() -> void:
 	game = WoGame.new()
 	game.name = "World"
 	game.config = config
+	game.config_binder = binder
 	game.authoritative = _offline
 	# A connected client's world is not what a module looks up, and registering it would mean
 	# a client and a server sharing a process fighting over the name — which is what every
@@ -352,6 +355,24 @@ func _bind_bot_console() -> void:
 	var index := args.find("--bot_difficulty")
 	if index >= 0 and index + 1 < args.size():
 		DotLog.result(CHANNEL, "bot difficulty from the command line", DotBotSettings.of(game).set_difficulty(args[index + 1]))
+
+
+## dot-team's block rules followed from the server, or, solo, the F9 tuning panel over this process's own config.
+func _add_noblock_and_workbench() -> void:
+	if not _offline:
+		DotLog.result(CHANNEL, "noblock", platform.add_noblock(game, Callable(game, "team_of_side")))
+		return
+	var wb := DotGameWorkbench.new()
+	wb.name = "Workbench"
+	wb.listen_host_fn = func() -> bool: return true
+	if game.config_binder != null:
+		wb.add_set(game.config_binder.profile_set(), "Game settings")
+	add_child(wb)
+	var started := wb.start()
+	DotLog.result(CHANNEL, "the workbench", started)
+	if started.ok and game.config_binder != null and wb.api != null:
+		game.config_binder.attach(wb.api.runtime as DotProfileRuntime)
+	platform.add_workbench(wb)
 
 
 # --- Connected -------------------------------------------------------------
@@ -701,6 +722,7 @@ func _build_settings() -> void:
 	platform.maps_title = "Change course"
 	platform.maps_noun = "courses"
 	DotLog.result(CHANNEL, "the platform", platform.setup())
+	_add_noblock_and_workbench()
 	# Walking is off while the cover is up, a menu is open or a line is typed: the sampler
 	# polls the keyboard, and a player dragging a volume slider with the arrow keys would
 	# otherwise walk off whatever they had stopped on.

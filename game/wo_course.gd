@@ -53,6 +53,9 @@ const TILE_WARN_SECONDS := 0.6
 ## ([method tile_crossing_clear]): a run is not quite the model's.
 const TILE_MARGIN_SECONDS := 0.08
 
+## The margin in force; [member WoConfig.bot_tile_margin_seconds] on the server.
+var tile_margin_seconds: float = TILE_MARGIN_SECONDS
+
 ## The slowest share of the given speeds a stand-in crossing tiles is reckoned to go at.
 const TILE_SLOW := 0.9
 
@@ -2443,7 +2446,7 @@ func tile_crossing_clear(from: Vector3, to: Vector3, tick: int, approach_speed: 
 	# How much of the slow speed and the margin to reckon with: all of it before setting off,
 	# less once on the tiles, where the runner is already on a crossing that was clear.
 	var slow := lerpf(1.0, TILE_SLOW, slack)
-	var margin := TILE_MARGIN_SECONDS * slack
+	var margin := tile_margin_seconds * slack
 	var target := tile_cell(to)
 
 	if target.is_empty():

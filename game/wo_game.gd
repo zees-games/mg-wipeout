@@ -112,9 +112,6 @@ const GRAB_REACH := 3.5
 ## How far a use key reaches on a course that runs its map's entities.
 const IO_USE_REACH := 2.6
 
-## Seconds a thrown prop is "thrown" — dangerous, and credited to whoever threw it.
-const THROWN_SECONDS := 3.0
-
 signal player_added(player_id: StringName)
 signal player_removed(player_id: StringName)
 
@@ -208,6 +205,18 @@ var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
 var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
 var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
 
+## Binds [member config] to cvars, the cfg/ yml layers and the workbench; made by the server scene or the client.
+var config_binder: DotGameConfigBinder = null
+
+## dot-team's block rules (`!block`, `!noblock`, `mp_teamblock`), set by the server module or `DotGameClient.add_noblock`. They feed [member body_rules]'s `pair_fn`.
+var block_rules: Object = null:
+	set(value):
+		if block_rules != null and block_rules.is_connected(&"changed", body_rules.refresh):
+			block_rules.disconnect(&"changed", body_rules.refresh)
+		block_rules = value
+		if block_rules != null and block_rules.has_signal(&"changed"):
+			block_rules.connect(&"changed", body_rules.refresh)
+
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on first use.
 var _weapon_defs: Dictionary = {}
 var effects: DotFxManager = null
@@ -272,8 +281,6 @@ var _thrown: Dictionary = {}
 ## player id -> the last tick a thrown prop hurt them, so one prop is one hit.
 var _thrown_hit: Dictionary = {}
 
-## A hop from stone to stone covers about this many metres a second, landing to landing.
-const SPAN_HOP_SPEED := 4.8
 ## How early or late a runner may be against the timing of [method _span_clear], in seconds.
 const SPAN_SLACK := 0.25
 
@@ -375,6 +382,23 @@ func _on_bot_changed(player: WoPlayer) -> void:
 func _on_body_rules_changed() -> void:
 	for id in players:
 		_apply_body_mask(players[id] as WoPlayer)
+	apply_pass_through()
+
+
+## The side id dot-team's block rules compare ("" for none): team-mates pass each other under `mp_teamblock 0`; solo, nobody has a team-mate.
+func team_of_side(player_id: Variant) -> Variant:
+	var side := team_of(StringName(str(player_id)))
+	return str(side) if config.teams() and side > 0 else ""
+
+
+## Hands every controller the bodies it passes through under `block_rules`; the same call on every machine, or a client predicts a wall.
+func apply_pass_through() -> void:
+	var entries := {}
+	for id: Variant in players:
+		var who := players[id] as WoPlayer
+		if who != null and who.controller != null:
+			entries[id] = {"body": who, "controller": who.controller}
+	body_rules.apply_exceptions(entries)
 
 
 ## The `<pack>/<subdir>` directories of the map packs a host running this game with no server
@@ -458,6 +482,7 @@ func _build_stage() -> void:
 	stage.tick_rate = tick_rate
 	stage.draw_world = draw_world
 	stage.authoritative = authoritative
+	stage.tile_margin_seconds = config.bot_tile_margin_seconds
 	stage.toy_rules = toy_rules
 	stage.gravity = config.gravity
 	stage.io_hooks = {"damage_fn": _io_damage, "move_fn": _io_move, "event_fn": _io_event}
@@ -497,7 +522,7 @@ func _build_combat() -> void:
 	combat.register_service = false
 
 	var rules := DotDamageRules.new()
-	rules.friendly_fire = false
+	rules.friendly_fire = config.friendly_fire
 	rules.self_damage = true
 	rules.hit_groups = true
 	combat.rules = rules
@@ -760,6 +785,7 @@ func add_player(
 	# Placed NOW, not only at the top of a round: a joiner left at the origin is a joiner in
 	# the water, and mg-smash-copter's version of that ended rounds.
 	place_one(player)
+	apply_pass_through()
 
 	DotLog.debug(CHANNEL, "player joined", {"id": String(player_id), "side": side})
 
@@ -881,6 +907,9 @@ func remove_player(player_id: StringName) -> void:
 	_bot_runup.erase(player_id)
 	_bot_stuck.erase(player_id)
 	player.queue_free()
+	if block_rules != null:
+		block_rules.call(&"forget", player_id)
+	apply_pass_through()
 
 	if spectate != null:
 		spectate.on_left(player_id)
@@ -1907,7 +1936,7 @@ func _advance_grabs(delta: float) -> void:
 			var thrown := player.grab.punt(space, eyes, aim)
 
 			if thrown != null:
-				_thrown[thrown.instance_id] = {"by": player.player_id, "until": _tick + int(THROWN_SECONDS * tick_rate)}
+				_thrown[thrown.instance_id] = {"by": player.player_id, "until": _tick + int(config.thrown_seconds * tick_rate)}
 
 
 ## A thrown prop that meets somebody hurts them, by its momentum, and knocks them back.
@@ -2530,7 +2559,7 @@ func _span_clear(from: Vector3, index: int, span: int) -> bool:
 		for i in range(index + 1, mini(index + 1 + span, route.size())):
 			var there: Vector3 = (route[i] as Dictionary)["at"]
 			var from_jump := i - 1 >= 0 and bool((route[i - 1] as Dictionary)["jump"])
-			var speed := SPAN_HOP_SPEED if from_jump else config.run_speed
+			var speed := config.bot_hop_speed if from_jump else config.run_speed
 			var length := Vector2(there.x - here.x, there.z - here.z).length()
 
 			if not stage.path_clear(here, there, _tick + int(maxf(offset, 0.0) * float(tick_rate)), speed / 0.8, 0.0):
@@ -2757,10 +2786,10 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 					if col == own or (not crowded and own >= 0 and claims[col] > claims[own]):
 						continue
 					var step_across := stage.tile_column_shift(piece, at, col)
-					var later := _tick + int((step_across.length() / walk + TILE_START_SECONDS) * float(tick_rate))
+					var later := _tick + int((step_across.length() / walk + config.bot_tile_start_seconds) * float(tick_rate))
 					var there := original + stage.tile_column_shift(piece, original, col)
 					if stage.tile_crossing_clear(at + step_across, there, later, walk, config.run_speed,
-							TILE_START_SECONDS, line):
+							config.bot_tile_start_seconds, line):
 						racing["tile_col"] = col
 						point = point.duplicate()
 						point["at"] = there
@@ -3007,7 +3036,7 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 			# field fell on Log Roll.
 			if going >= need * TAKEOFF_SPARE and facing.length() > 0.1 \
 					and stage.carry(player.controller.state.ground_id, at, _tick).dot(facing) >= 0.0:
-				command.move = Vector2(0.0, -clampf((going - need * TAKEOFF_SPARE) / GROUND_BRAKE, 0.0, 1.0))
+				command.move = Vector2(0.0, -clampf((going - need * TAKEOFF_SPARE) / config.bot_ground_brake, 0.0, 1.0))
 		elif not next.is_empty():
 			# [b]An edge's jump point already behind: the jump goes on, not back.[/b] A hop
 			# on the sweeper came down a few centimetres past the point, the yaw was still
@@ -3182,13 +3211,6 @@ const RUNUP_TICKS := 9
 ## Log Roll's logs.
 const TAKEOFF_SPARE := 1.3
 
-## Metres a second a full backward wish takes off a runner on the ground in one tick.
-const GROUND_BRAKE := 3.3
-
-## Seconds a stand-in standing still may take to get going, reckoned onto the latest it is on
-## each tile of a crossing (`WoCourse.tile_crossing_clear`).
-const TILE_START_SECONDS := 0.1
-
 ## How much of the crossing's slow speed and margin a stand-in already on the tiles allows
 ## for. With all of it, a runner who set off on a clear crossing found it not clear any more
 ## from the first row (it lands at a walk, off the model) and stood there until the tile went.
@@ -3236,7 +3258,7 @@ func _bot_tile_column(player: WoPlayer, racing: Dictionary, point: Dictionary, o
 		var line := _tile_line(at)
 		var best := -1
 		for col in range(cols):
-			if not stage.tile_column_crossable(piece, col, here, at, walk, config.run_speed, TILE_START_SECONDS, line):
+			if not stage.tile_column_crossable(piece, col, here, at, walk, config.run_speed, config.bot_tile_start_seconds, line):
 				continue
 			if best < 0 or claims[col] < claims[best] or (claims[col] == claims[best] \
 					and stage.tile_column_shift(piece, here, col).length() < stage.tile_column_shift(piece, here, best).length()):
@@ -3593,7 +3615,7 @@ func _bot_may_board(player: WoPlayer, point: Dictionary, line: Vector3 = Vector3
 		var velocity := player.controller.state.velocity
 		var moving := Vector2(velocity.x, velocity.z).length() > 1.0
 		return stage.tile_crossing_clear(from, to, _tick, config.run_speed * config.walk_speed_scale,
-			config.run_speed, 0.0 if moving else TILE_START_SECONDS, line,
+			config.run_speed, 0.0 if moving else config.bot_tile_start_seconds, line,
 			TILE_ON_SLACK if not stage.tile_under(player.controller.state.ground_id).is_empty() else 1.0)
 
 	var lands := _tick + int(distance / maxf(config.run_speed, 0.5) * float(tick_rate)) + tick_rate / 8

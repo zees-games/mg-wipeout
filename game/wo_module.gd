@@ -10,6 +10,21 @@ const WoVote := preload("wo_vote.gd")
 const WoCourseCfg := preload("wo_course_cfg.gd")
 const WoMapConfig := preload("wo_map_config.gd")
 
+## Older cvar names kept for shipped server configs and course files: alias -> WoConfig field.
+const ALIASES := {
+	"wo_health": "health_enabled",
+	"wo_knock_damage": "knock_damage_per_speed",
+	"wo_fall_damage": "fall_damage_per_metre",
+	"wo_fling_below": "knockout_fling_below",
+	"wo_fling_power": "knockout_fling_power",
+	"wo_teams": "team_count",
+	"wo_props_per_side": "finale_props_per_side",
+	"wo_weapons_per_side": "finale_weapons_per_side",
+	"wo_knock_min": "knock_min_speed",
+	"wo_min_players": "minimum_players",
+	"sv_map_rotation_file": "map_rotation_file",
+}
+
 ## This game, as a module a dedicated server loads.
 ##
 ## [b]A hundred and forty lines, against the five hand-written modules' 837 to 1,816.[/b]
@@ -48,6 +63,12 @@ const ROSTER_INTERVAL := 2.0
 ## every run appended the live tools' audit warnings to the real store, 106 of them by the
 ## time anybody counted.
 static var punishments_file: String = ""
+
+## dot-workbench over the config and the block rules; null before the module loads.
+var workbench: DotGameWorkbench = null
+
+## `mp_killcam_time`, which follows `wo_killcam_seconds` and the other way round.
+var _killcam_cvar: DotConVar = null
 
 ## The `wo_bots` cvar, held so the tick does not look it up sixty times a second.
 var _bots: DotConVar = null
@@ -170,13 +191,6 @@ func _game_load() -> DotResult:
 	add_command("wo_rotation", _cmd_rotation,
 		"wo_rotation [name]: switch to a rotation in maps.yml, or list them", DotAdminFlags.CHANGEMAP)
 	add_command("wo_maps_reload", _cmd_maps_reload, "Re-read maps.yml", DotAdminFlags.CHANGEMAP)
-	var _file_cvar := add_cvar("sv_map_rotation_file", world.config.map_rotation_file,
-		"maps.yml: the courses that rotate, in named rotations. Unlisted courses stay installed.")
-	_file_cvar.changed.connect(func(_old: String, new_value: String) -> void:
-		world.config.map_rotation_file = new_value.strip_edges()
-		var _read := world.load_rotation()
-		if vote != null:
-			vote.refresh_courses())
 	add_command("wo_say", _cmd_say, "Say something to everybody, as the server")
 
 	_wire_chat()
@@ -202,13 +216,16 @@ func _game_load() -> DotResult:
 	)
 
 	# REPLICATED: the client plays the killcam and needs the length the server added to the intermission.
-	var killcam_cvar := add_cvar("mp_killcam_time", _number(world.config.killcam_seconds),
+	_killcam_cvar = add_cvar("mp_killcam_time", _number(world.config.killcam_seconds),
 		"Seconds the final killcam plays at a round's end, added to the intermission (0 for none)",
 		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)
-	if killcam_cvar != null:
-		killcam_cvar.changed.connect(func(_old: String, new_value: String) -> void:
-			world.set_killcam_seconds(new_value.to_float()))
-		world.set_killcam_seconds(killcam_cvar.get_float())
+	if _killcam_cvar != null:
+		_killcam_cvar.changed.connect(func(_old: String, new_value: String) -> void:
+			world.set_killcam_seconds(new_value.to_float())
+			var field := world.config_binder.cvar_for("killcam_seconds") if world.config_binder != null else null
+			if field != null:
+				var _set: Variant = field.set_value(new_value))
+		world.set_killcam_seconds(_killcam_cvar.get_float())
 
 	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: dot-spectate's rules, so spectators
 	# free-roam unless an operator says otherwise. REPLICATED, because each client flies its
@@ -379,57 +396,6 @@ func _on_profile(event: DotEvent) -> void:
 func _add_tunables(world: WoGame) -> void:
 	var config := world.config
 
-	_tunable("wo_course_seconds", config.course_seconds,
-		"The most seconds a course stays open (a course may ask for less)",
-		func(value: float) -> void: config.course_seconds = clampf(value, 10.0, 1200.0))
-	_tunable("wo_courses_per_round", float(config.courses_per_round),
-		"Courses a round runs before the final death, while more than one side finishes each (1: one course)",
-		func(value: float) -> void: config.courses_per_round = clampi(int(value), 1, 12))
-	_tunable("wo_health", 1.0 if config.health_enabled else 0.0,
-		"Whether the course hurts: knocks, lightning and hard landings cost health (0 turns it all off)",
-		func(value: float) -> void: config.health_enabled = value > 0.5)
-	_tunable("wo_knock_damage", config.knock_damage_per_speed,
-		"Health a knock costs per m/s it threw the player (0: knocks never hurt)",
-		func(value: float) -> void: config.knock_damage_per_speed = clampf(value, 0.0, 10.0))
-	_tunable("wo_strike_damage", config.strike_damage,
-		"Health lightning costs at the least",
-		func(value: float) -> void: config.strike_damage = clampf(value, 0.0, 400.0))
-	_tunable("wo_fall_safe_height", config.fall_safe_height,
-		"Metres a player may drop onto a deck for free",
-		func(value: float) -> void: config.fall_safe_height = clampf(value, 0.0, 30.0))
-	_tunable("wo_fall_damage", config.fall_damage_per_metre,
-		"Health a hard landing costs per metre fallen past wo_fall_safe_height (0: never)",
-		func(value: float) -> void: config.fall_damage_per_metre = clampf(value, 0.0, 50.0))
-	_tunable("wo_fling_below", config.knockout_fling_below,
-		"Health fraction at or below which a knockout flings the body (0: never; the lower, the wilder)",
-		func(value: float) -> void: config.knockout_fling_below = clampf(value, 0.0, 1.0))
-	_tunable("wo_fling_power", config.knockout_fling_power,
-		"How hard a knockout at no health flings the body (the ragdoll caps it at 3)",
-		func(value: float) -> void: config.knockout_fling_power = clampf(value, 0.0, 10.0))
-	_tunable("wo_finale_seconds", config.finale_seconds,
-		"Seconds a final death lasts before it is called on the clock",
-		func(value: float) -> void: config.finale_seconds = clampf(value, 10.0, 900.0))
-	_tunable("wo_countdown_seconds", config.countdown_seconds,
-		"Seconds behind the start gate",
-		func(value: float) -> void: config.countdown_seconds = clampf(value, 0.0, 30.0))
-	_tunable("wo_teams", float(config.team_count), "Sides: 0 is everybody for themselves, or two to six teams",
-		func(value: float) -> void:
-			var teams := clampi(int(value), 0, 6)
-			config.team_count = 0 if teams == 1 else teams)
-	_tunable("wo_props_per_side", float(config.finale_props_per_side),
-		"Props dropped into a final death, per side that made it",
-		func(value: float) -> void: config.finale_props_per_side = clampi(int(value), 0, 40))
-	_tunable("wo_weapons_per_side", float(config.finale_weapons_per_side),
-		"Weapons laid out in a final death, per side that made it",
-		func(value: float) -> void: config.finale_weapons_per_side = clampi(int(value), 0, 20))
-	_tunable("wo_knock_min", config.knock_min_speed, "The least an obstacle throws a player, m/s",
-		func(value: float) -> void: config.knock_min_speed = clampf(value, 0.0, config.knock_max_speed))
-	_tunable("wo_instant_death", 1.0 if config.instant_death else 0.0,
-		"1: a fall into the water, or any death on a course, is out until the round is over (no checkpoint restart)",
-		func(value: float) -> void: config.instant_death = value > 0.5)
-	_tunable("wo_progress_decides", 1.0 if config.progress_decides else 0.0,
-		"Whether whoever got furthest wins a round nobody finished",
-		func(value: float) -> void: config.progress_decides = value > 0.5)
 	# [b]How the stand-ins race and fight is one word[/b]: dot-bot's `bot_difficulty` (easy,
 	# medium, hard, nightmare; medium by default) and every `bot_*` setting it bundles, the
 	# names every game in the family uses, for the aim in a final death and the reaction to a
@@ -439,29 +405,131 @@ func _add_tunables(world: WoGame) -> void:
 	var _bot_cvars := DotBotSettings.of(world).bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY, add_command)
 	if world.racer != null:
 		var _racer_cvars := world.racer.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
-	_tunable("wo_bot_mistakes", config.bot_mistakes,
-		"Scales every racing mistake a stand-in makes: 1 the preset's, 0 never wrong",
-		func(value: float) -> void: config.bot_mistakes = clampf(value, 0.0, 4.0))
-	_tunable("wo_gravity", config.gravity, "Metres per second squared, for everything",
-		func(value: float) -> void: config.gravity = value)
-	_tunable("wo_spectate_camera", float(config.spectate_camera),
-		"Deprecated, sets mp_forcecamera. Who somebody who is out may watch: 0 anybody, 1 their own side, 2 nobody",
-		func(value: float) -> void:
-			config.spectate_camera = clampi(int(value), 0, 2)
+	_bind_config(world)
+
+
+## Every [WoConfig] field as a `wo_<field>` cvar, a cfg/ yml key and a workbench set. The names shipped server configs and course files already use stay, as aliases of the field.
+func _bind_config(world: WoGame) -> void:
+	var binder := world.config_binder
+	if binder == null:
+		return
+	binder.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
+	binder.bind_commands(add_command)
+	for alias: String in ALIASES:
+		_alias(world, alias, ALIASES[alias])
+	binder.field_changed.connect(_on_config_field)
+	_start_workbench(world)
+
+
+## An older cvar name for a config field: it reports the field and writes through the field's own cvar.
+func _alias(world: WoGame, alias: String, key: String) -> void:
+	var target := world.config_binder.cvar_for(key)
+	var cvar := add_cvar(alias, _field_text(world.config.get(key)), "Same as wo_%s" % key)
+	if cvar == null or target == null:
+		return
+	cvar.changed.connect(func(_old: String, new_value: String) -> void:
+		var value: Variant = world.config.get(key)
+		var text := new_value
+		if value is bool:
+			text = "1" if new_value.to_float() >= 0.5 else "0"
+		elif value is int:
+			text = str(roundi(new_value.to_float()))
+		# One team is not a mode: taken as solo, as it always was.
+		if key == "team_count" and text == "1":
+			text = "0"
+		var _set: Variant = target.set_value(text))
+
+
+static func _field_text(value: Variant) -> String:
+	if value is bool:
+		return "1" if value else "0"
+	return str(value)
+
+
+## A field changed from a cvar, the workbench or a file: the aliases follow, and whatever the world cached is told.
+func _on_config_field(key: String, _value: Variant, _source: String) -> void:
+	var world := game as WoGame
+	if world == null:
+		return
+	var config := world.config
+	for alias: String in ALIASES:
+		if ALIASES[alias] == key and console != null:
+			var _set: Variant = console.set_cvar(alias, _field_text(config.get(key)))
+	match key:
+		"team_count":
+			if config.team_count == 1:
+				config.team_count = 0
+		"gravity":
+			world._apply_gravity()
+		"bot_mistakes":
+			if world.racer != null:
+				world.racer.mistakes = config.bot_mistakes
+		"bot_tile_margin_seconds":
+			world.stage.tile_margin_seconds = config.bot_tile_margin_seconds
+		"friendly_fire":
+			if world.combat != null and world.combat.rules != null:
+				world.combat.rules.friendly_fire = config.friendly_fire
+		"killcam_seconds":
+			if _killcam_cvar != null:
+				var _set: Variant = _killcam_cvar.set_value(_number(config.killcam_seconds))
+		"spectate_camera":
 			# Through the cvar, so what `mp_forcecamera` reports is what is in force.
 			if _force_camera_cvar != null:
 				var _set: Variant = _force_camera_cvar.set_value(str(config.spectate_camera))
 			elif world.spectate != null:
-				world.spectate.set_force_camera(config.spectate_camera))
-	# [b]Deprecated: the count is `bot_quota` now[/b], and this forwards to it. Kept rather than
-	# removed because every shipped server config sets it; left as its own number it would be
-	# a second cvar deciding the same count, and whichever was read last would win.
-	_tunable("wo_min_players", float(config.minimum_players),
-		"Deprecated, sets bot_quota. How many players the server keeps in a round with stand-ins",
-		func(value: float) -> void:
-			config.minimum_players = clampi(int(value), 0, 24)
+				world.spectate.set_force_camera(config.spectate_camera)
+		"minimum_players":
 			if _quota != null and _quota.quota_cvar != null:
-				var _set := _quota.quota_cvar.set_value(str(config.minimum_players)))
+				var _set: Variant = _quota.quota_cvar.set_value(str(config.minimum_players))
+		"map_rotation_file":
+			config.map_rotation_file = config.map_rotation_file.strip_edges()
+			var _read := world.load_rotation()
+			if vote != null:
+				vote.refresh_courses()
+
+
+## dot-workbench over the config and the block rules: the F9 panel off a dedicated server, the HTTP page only with `workbench.enabled` in cfg/server.yml. Admission by dot-auth ticket is [DotGameWorkbench]'s own (`admin_uids` / `admin_groups`), beside the server's admins.
+func _start_workbench(world: WoGame) -> void:
+	workbench = DotGameWorkbench.new()
+	workbench.name = "Workbench"
+	workbench.dedicated = DisplayServer.get_name() == "headless"
+	workbench.listen_host_fn = func() -> bool: return DisplayServer.get_name() != "headless"
+	var admin_permit := Callable()
+	if server != null and server.admins != null:
+		admin_permit = server.admins.uid_has_permission
+	workbench.permit_fn = func(actor: Variant, flag: String) -> bool:
+		return admin_permit.is_valid() and actor is String and bool(admin_permit.call(actor, flag))
+	workbench.account_permit_fn = workbench.permit_fn
+	workbench.add_set(world.config_binder.profile_set(), "Game settings")
+	add_child(workbench)
+	var started := workbench.start()
+	if not started.ok:
+		log_info("the workbench did not start", {"why": started.error.message})
+		return
+	if workbench.api != null:
+		var rt := workbench.api.runtime as DotProfileRuntime
+		if rt != null:
+			world.config_binder.attach(rt)
+	add_command("workbench", func(ctx: DotCmdContext) -> void: ctx.reply_lines(_workbench_lines()),
+		"Show the admin workbench's state", DotAdminFlags.CVAR)
+
+
+## The workbench's runtime, so the `noblock` kind is listed beside the game settings.
+func _noblock_runtime() -> Object:
+	return workbench.api.runtime if workbench != null and workbench.api != null else null
+
+
+## Team-mates pass each other under `mp_teamblock 0`; the world's sides, not a numeric userid.
+func _noblock_side(id: Variant) -> Variant:
+	return (game as WoGame).team_of_side(id)
+
+
+func _workbench_lines() -> PackedStringArray:
+	if workbench == null:
+		return PackedStringArray(["workbench    off"])
+	if workbench.running_http:
+		return PackedStringArray(["workbench    http " + JSON.stringify(workbench.http.call("describe"))])
+	return PackedStringArray(["workbench    off (workbench.enabled in cfg/server.yml)"])
 
 
 ## A number as an operator would type it: `34`, not `34.000000`.
@@ -503,6 +571,11 @@ func _tunable(
 ## tree before the module loaded, and a server can unload and reload a game module without
 ## the map going away, which is what `module reload` is for.
 func _game_unload() -> void:
+	if workbench != null:
+		workbench.queue_free()
+		workbench = null
+	if game != null and "block_rules" in game:
+		game.set(&"block_rules", null)
 	_bot_ids.clear()
 
 	if _course_cfg != null:

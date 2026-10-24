@@ -47,6 +47,7 @@
 /addons/dot_replay
 /addons/dot_bot
 /addons/dot_spawn
+/addons/dot_team
 /addons/zee_weapons
 
 # The courses and arenas: the mg-wipeout-maps repository, linked here by dot-bootstrap off

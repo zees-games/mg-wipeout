@@ -16,8 +16,8 @@ const WoNetLink := preload("../game/net/wo_net_link.gd")
 ## [DotGameModule]'s order runs, a cvar is typed at a console and a round is played by
 ## nothing but the stand-ins the module seats itself.
 
-const SECTIONS := 13
-const CHECKS := 92
+const SECTIONS := 14
+const CHECKS := 102
 
 const SERVER_DIR := "user://wo_dedicated"
 const PORT := 28931
@@ -51,6 +51,7 @@ func _run() -> void:
 	if server != null and server.state == DotServer.State.RUNNING:
 		await _test_the_module_loads()
 		_test_the_commands()
+		_test_config_and_noblock()
 		await _test_a_round_runs()
 		await _test_a_reload_keeps_delivered_courses()
 		_test_the_course_vote()
@@ -165,13 +166,16 @@ func _test_the_module_loads() -> void:
 	config.warmup_seconds = 0.0
 	config.intermission_seconds = 0.0
 	config.countdown_seconds = 0.5
-	config.course_seconds = 8.0
+	config.course_seconds = 10.0
 	config.minimum_players = 3
 	config.course_ids = PackedStringArray(["wo_practice"])
 
+	var binder := DotGameConfigBinder.create(config, "mg-wipeout", "wo")
+	_check(binder.load_layers().ok, "the config layers load")
 	game = WoGame.new()
 	game.name = "World"
 	game.config = config
+	game.config_binder = binder
 	game.tick_rate = Engine.physics_ticks_per_second
 	add_child(game)
 	await get_tree().process_frame
@@ -202,7 +206,7 @@ func _test_the_commands() -> void:
 	_check(_said(_run_command("wo_net"), "bridge"), "wo_net says what the netcode is doing")
 
 	# A cvar's default is the value the world was built with, and setting one writes through.
-	_check(_said(_run_command("wo_course_seconds"), "8"), "wo_course_seconds reports the world's own value")
+	_check(_said(_run_command("wo_course_seconds"), "10"), "wo_course_seconds reports the world's own value")
 	var _set := _run_command("wo_course_seconds 12")
 	_check(is_equal_approx(game.config.course_seconds, 12.0), "and setting it writes through to the world",
 		"%.1f" % game.config.course_seconds)
@@ -222,6 +226,37 @@ func _test_the_commands() -> void:
 
 
 ## A whole round, played by the stand-ins the module seats on its own.
+## The config as cvars and a workbench set, the old cvar names as aliases, and dot-team's block rules through dot-game.
+func _test_config_and_noblock() -> void:
+	_section("config and noblock")
+	var console := server.console
+	var binder := game.config_binder
+	_check(binder != null and console.has_name("wo_finale_seconds") and console.has_name("wo_config_diff"), "the config is bound to cvars and commands")
+	var _set := _run_command("wo_thrown_seconds 5")
+	_check(is_equal_approx(game.config.thrown_seconds, 5.0) and binder.source_of("thrown_seconds") == "cvar", "a wo_<field> cvar writes the field")
+	var _hp := _run_command("wo_health 0")
+	_check(not game.config.health_enabled and console.get_string("wo_health_enabled", "") == "0", "the old wo_health alias writes the field and its cvar")
+	var _back := _run_command("wo_health_enabled 1")
+	_check(game.config.health_enabled and console.get_string("wo_health", "") == "1", "and the field's cvar moves the alias")
+	var module := _module()
+	var wb: DotGameWorkbench = module.get("workbench") if module != null else null
+	_check(wb != null and wb.api != null, "the module hosts a workbench")
+	if wb == null or wb.api == null:
+		return
+	var rel: String = binder.profile_set().rel_path
+	var res: DotResult = wb.api.handle(DotGameWorkbench.LOCAL_ACTOR, {"op": "set", "kind": rel, "id": binder.profile_id, "key": "friendly_fire", "value": true})
+	_check(res.ok and game.config.friendly_fire and game.combat.rules.friendly_fire and console.get_string("wo_friendly_fire", "") == "1",
+		"a workbench edit changes the field, the live cvar and the combat rules", "" if res.ok else res.error.message)
+	var teamblock := console.find_cvar("mp_teamblock")
+	var enemyblock := console.find_cvar("mp_enemyblock")
+	_check(teamblock != null and teamblock.get_string() == "0" and enemyblock != null and enemyblock.get_string() == "1", "mp_teamblock is 0 and mp_enemyblock is 1 by default")
+	_check(game.block_rules != null, "block rules are wired to the world")
+	_check(game.team_of_side(&"nobody") == "", "a player with no side has no block side")
+	var _reset := _run_command("wo_thrown_seconds 3")
+	var _ff := _run_command("wo_friendly_fire 0")
+	_finished()
+
+
 func _test_a_round_runs() -> void:
 	_section("a round, played by the stand-ins")
 	var rounds: Array = []

@@ -263,6 +263,12 @@ extends DotConfig
 ## How hard a thrown prop leaves the hands, as an impulse.
 @export_range(10.0, 20000.0, 10.0) var throw_impulse: float = 1500.0
 
+## Seconds a thrown prop stays dangerous and credited to whoever threw it.
+@export_range(0.5, 30.0, 0.5) var thrown_seconds: float = 3.0
+
+## Whether a hit hurts a team-mate (blows and thrown props alike).
+@export var friendly_fire: bool = false
+
 # --- Bots ------------------------------------------------------------------
 
 @export_group("Bots")
@@ -282,6 +288,18 @@ extends DotConfig
 ## gives a real person something to beat. 0 is for the course suite, which proves a course
 ## can be finished. How a stand-in aims in a final death is dot-bot's `bot_*` settings.
 @export_range(0.0, 4.0, 0.05) var bot_mistakes: float = 1.0
+
+## Metres a second a stand-in is reckoned to cover on a hop from stone to stone, landing to landing.
+@export_range(1.0, 12.0, 0.1) var bot_hop_speed: float = 4.8
+
+## Metres a second a full backward wish takes off a stand-in on the ground in one tick (its take-off braking).
+@export_range(0.5, 20.0, 0.1) var bot_ground_brake: float = 3.3
+
+## Seconds a stand-in standing still may take to get going, reckoned onto each tile of a crossing.
+@export_range(0.0, 1.0, 0.01) var bot_tile_start_seconds: float = 0.1
+
+## Seconds either side of a stand-in's time on a tile that the tile must also be up. The tile warning and drop schedule stay in code: a client draws them.
+@export_range(0.0, 0.5, 0.01) var bot_tile_margin_seconds: float = 0.08
 
 # --- Watching --------------------------------------------------------------
 
