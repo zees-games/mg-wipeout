@@ -21,16 +21,16 @@ const WoPlayer := preload("../game/wo_player.gd")
 ## sink in a second and a half on its start: measured, 0.5 where the course passes), `rejects` (how many of the
 ## map's volumes a team filter turns a body of no team away from, which the run prints).
 const COURSES := {
-	&"wo_oaks_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_office_course": {"sections": 11, "checks": 39, "lava": true, "ladders": true, "rejects": 0},
-	&"wo_dans_course": {"sections": 10, "checks": 36, "lava": false, "ladders": true, "rejects": 0},
-	&"wo_pauls_course": {"sections": 9, "checks": 33, "lava": false, "ladders": false, "push": false, "floor": 0.7, "rejects": 3},
-	&"wo_scary_course": {"sections": 9, "checks": 33, "lava": false, "ladders": false, "push": false, "rejects": 0},
-	&"wo_lego_course": {"sections": 9, "checks": 30, "lava": false, "ladders": false, "push": false, "button": false, "rejects": 0},
-	&"wo_dc_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_waytobar_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_labo_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_sweet_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_oaks_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_office_course": {"sections": 11, "checks": 40, "lava": true, "ladders": true, "rejects": 0},
+	&"wo_dans_course": {"sections": 10, "checks": 37, "lava": false, "ladders": true, "rejects": 0},
+	&"wo_pauls_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "push": false, "floor": 0.7, "rejects": 3},
+	&"wo_scary_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "push": false, "rejects": 0},
+	&"wo_lego_course": {"sections": 9, "checks": 31, "lava": false, "ladders": false, "push": false, "button": false, "rejects": 0},
+	&"wo_dc_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_waytobar_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_labo_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_sweet_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "rejects": 0},
 }
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -43,6 +43,7 @@ var _failures := PackedStringArray()
 var _world: WoGame = null
 var _expect_sections := 0
 var _expect_checks := 0
+var _shot_could_hurt := false
 
 
 func _ready() -> void:
@@ -111,7 +112,13 @@ func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 	_check(by_team.size() == int(plan.get("rejects", 0)), "the team filters that turn a runner away are the ones known",
 		"%d: %s" % [by_team.size(), str(by_team)])
 	var shot_at := _shoot_something(game, world)
-	_check(shot_at != -2, "a shot along a ray reaches a breakable, button or door the map has (or it has none)", "nothing answered")
+	_check(shot_at != -2, "a shot along a ray reaches a breakable, button or door the map has (strict when it has one)", "nothing answered")
+	var hit := world.io.entity_of(shot_at) if shot_at >= 0 else null
+	var changed := true
+	if hit is DotMapBreakable and _shot_could_hurt:
+		changed = (hit as DotMapBreakable).health < (hit as DotMapBreakable).max_health or (hit as DotMapBreakable).broken
+	_check(changed, "and a shot breakable lost health", "%s #%d" % [hit.classname if hit != null else "-", shot_at])
+	print("    shoot: entity %d (-1 none shootable, -2 none answered)" % shot_at)
 	_finished()
 
 	_section("a runner spawns")
@@ -799,6 +806,7 @@ func _shoot_something(game: WoGame, world: DotMapWorld) -> int:
 		if not found:
 			continue
 		any = true
+		_shot_could_hurt = e is DotMapBreakable and (e as DotMapBreakable).is_breakable() and (e as DotMapBreakable).min_damage <= 10.0
 		var centre := box.get_center()
 		for axis in [Vector3.UP, Vector3.DOWN, Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]:
 			var from: Vector3 = centre + (axis as Vector3) * (box.size.length() * 0.5 + 0.3)
