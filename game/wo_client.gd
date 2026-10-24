@@ -438,6 +438,8 @@ func _build_netcode() -> DotResult:
 
 	# Under the link, and NAMED the same as the server's — the name is the routing.
 	bridge.open_link(link)
+	# Before the seal and in the server's order (after the bridge), or the actions stay local.
+	DotLog.result(CHANNEL, "avatar action message", DotGameAvatarActionMessage.register(net))
 	net.messages.seal()
 
 	bridge.hello_received.connect(_on_hello)
@@ -499,6 +501,16 @@ func _on_hello(session_id: int) -> void:
 func _on_roster_changed(session_id: int) -> void:
 	if session_id == _watch_id and player == null:
 		_adopt(game.players.get(WoNetBridge.player_key(session_id)))
+
+
+## The figure an avatar action plays on: that peer's player, or the local one offline.
+func _avatar_figure(peer_id: int) -> Object:
+	var who: WoPlayer = null
+	if bridge != null and peer_id != 0:
+		who = game.players.get(WoNetBridge.player_key(bridge.player_for_peer(peer_id)), null)
+	if who == null and player != null and (net == null or peer_id == net.local_peer_id):
+		who = player
+	return who.figure.person if who != null and who.figure != null else null
 
 
 func _adopt(candidate: WoPlayer) -> void:
@@ -726,6 +738,8 @@ func _build_settings() -> void:
 	platform.maps_title = "Change course"
 	platform.maps_noun = "courses"
 	DotLog.result(CHANNEL, "the platform", platform.setup())
+	# The starter set: the equipped list needs a credential the client does not hold (the server reads it).
+	DotLog.result(CHANNEL, "avatar actions", platform.add_avatar_actions(net, _avatar_figure))
 	_add_noblock_and_workbench()
 	# Walking is off while the cover is up, a menu is open or a line is typed: the sampler
 	# polls the keyboard, and a player dragging a volume slider with the arrow keys would
