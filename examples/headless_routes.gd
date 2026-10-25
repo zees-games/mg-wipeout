@@ -8,7 +8,7 @@ const WoGame := preload("../game/wo_game.gd")
 ## jump 5 m, ladders as lifts) is driven to a fixed point with the map's io graph run for real: triggers and
 ## buttons the cells reach fire, doors latch open, rides join their poses, teleports are edges.
 ##
-## Cell counts differ between machines (waytobar 1182/8307 on one box, 1199/8169 on another) while the pinned results agree, so only the finish and dead_tps are asserted. Measured 2026-10-23: the finish is reached on pauls (by "model": a fall past a hole under an overhang); the other
+## Only the finish and dead_tps are asserted; cell counts and the walk hash are printed. Measured 2026-10-23: the finish is reached on pauls (by "model": a fall past a hole under an overhang); the other
 ## courses stall at walls, doors or Source logic (logic_*, timed doors) the model lacks. The plan pins that picture
 ## (`dead_tps`: teleport volumes no route reaches); a change fails the suite so somebody looks.
 ##
@@ -267,6 +267,7 @@ func _model(ctx: Dictionary, avoid_hurts: bool) -> Dictionary:
 	await tree.physics_frame
 	res = walker.flood(start, finish, tps, hurts, seeds)
 	if _debug != "":
+		print("    DEBUG full route: %s" % [m.log])
 		var f := finish.get_center()
 		var q: Array[Vector3] = res["queue"]
 		q.sort_custom(func(x: Vector3, y: Vector3) -> bool: return x.distance_to(f) < y.distance_to(f))
@@ -714,9 +715,6 @@ class _Model:
 		for e: DotMapEntity in io.entities:
 			if e is DotMapMoverNode and (e as DotMapMoverNode).mover != null and e.node != null:
 				_movers.append(e)
-				# a synced body takes its pose on the physics step, which the walk's rays do not wait for
-				for b in e.node.find_children("*", "AnimatableBody3D", true, false):
-					(b as AnimatableBody3D).sync_to_physics = false
 
 	func _info_at(p: Vector3) -> Dictionary:
 		var i := info.duplicate()
