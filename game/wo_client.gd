@@ -576,6 +576,15 @@ const INTRODUCE_AGAIN_MSEC := 5000
 
 ## A new course or arena. The name, once, big; the camera re-placed, because the player was
 ## just moved somewhere that may be eighty metres away.
+## Hands the course's converted map (an `io` world piece) to the platform's map culling; off unless `vis_mode` is set.
+func _cull_world() -> void:
+	platform.detach_visibility()
+	var io: Object = game.stage.io if game.stage != null else null
+	var world: DotMapWorld = io.world if io != null else null
+	if world != null and world.visual != null and world.visual.is_inside_tree():
+		var _culled := platform.attach_visibility(world.mesh, world.visual)
+
+
 func _on_stage(stage_id: StringName, is_arena: bool) -> void:
 	if ragdolls != null:
 		# A body from before would lie on a floor that has been rebuilt or reset.
@@ -871,7 +880,8 @@ func _hear_the_world() -> void:
 		return
 
 	game.world_rebuilt.connect(func() -> void:
-		_on_stage(game.stage.id(), game.stage.is_arena()))
+		_on_stage(game.stage.id(), game.stage.is_arena())
+		_cull_world())
 	game.phase_changed.connect(_on_phase)
 	game.round_began.connect(func(n: int, _course: StringName) -> void:
 		_on_round(n, true, 0))
