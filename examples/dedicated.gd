@@ -18,7 +18,7 @@ const WoNetLink := preload("../game/net/wo_net_link.gd")
 ## nothing but the stand-ins the module seats itself.
 
 const SECTIONS := 15
-const CHECKS := 105
+const CHECKS := 106
 
 const SERVER_DIR := "user://wo_dedicated"
 const PORT := 28931
@@ -172,7 +172,7 @@ func _test_the_module_loads() -> void:
 	config.minimum_players = 3
 	config.course_ids = PackedStringArray(["wo_practice"])
 
-	var binder := DotGameConfigBinder.create(config, "mg-wipeout", "wo")
+	var binder := WoConfig.make_binder(config)
 	_check(binder.load_layers().ok, "the config layers load")
 	game = WoGame.new()
 	game.name = "World"
@@ -245,10 +245,13 @@ func _test_config_and_noblock() -> void:
 	_check(wb != null and wb.api != null, "the module hosts a workbench")
 	if wb == null or wb.api == null:
 		return
-	var rel: String = binder.profile_set().rel_path
+	var rel := "config_players"
 	var res: DotResult = wb.api.handle(DotGameWorkbench.LOCAL_ACTOR, {"op": "set", "kind": rel, "id": binder.profile_id, "key": "friendly_fire", "value": true})
 	_check(res.ok and game.config.friendly_fire and game.combat.rules.friendly_fire and console.get_string("wo_friendly_fire", "") == "1",
 		"a workbench edit changes the field, the live cvar and the combat rules", "" if res.ok else res.error.message)
+	var amb: DotResult = wb.api.handle(DotGameWorkbench.LOCAL_ACTOR, {"op": "set", "kind": "ambience", "id": DotGameWorkbench.CVAR_SET_ID, "key": "wo_ambient_volume", "value": 0.2})
+	_check(amb.ok and is_equal_approx(console.get_float("wo_ambient_volume"), 0.2), "the wo_ambient* cvars are a workbench set and an edit moves the cvar", "" if amb.ok else amb.error.message)
+	var _restore := console.set_cvar("wo_ambient_volume", "0.35")
 	var teamblock := console.find_cvar("mp_teamblock")
 	var enemyblock := console.find_cvar("mp_enemyblock")
 	_check(teamblock != null and teamblock.get_string() == "0" and enemyblock != null and enemyblock.get_string() == "1", "mp_teamblock is 0 and mp_enemyblock is 1 by default")

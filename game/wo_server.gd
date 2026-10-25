@@ -32,7 +32,7 @@ func _ready() -> void:
 	# an operator sets `WO_COURSE_SECONDS` or `--wo-columns` without editing anything, and
 	# the cvars the module adds are the live half of the same numbers.
 	# Through DotGameConfigBinder: cfg/game and cfg/server yml too, strict on a dedicated server.
-	var binder := DotGameConfigBinder.create(config, "mg-wipeout", "wo", "user://cfg/wipeout.json")
+	var binder := WoConfig.make_binder(config, "user://cfg/wipeout.json")
 	var loaded := binder.load_layers()
 
 	if not loaded.ok:

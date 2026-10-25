@@ -9,6 +9,9 @@ const WoAvatars := preload("wo_avatars.gd")
 const WoVote := preload("wo_vote.gd")
 const WoCourseCfg := preload("wo_course_cfg.gd")
 const WoMapConfig := preload("wo_map_config.gd")
+const WoAmbience := preload("wo_ambience.gd")
+## The workbench kind of the ambience cvar set (saved to cfg/.../ambience/server.yml).
+const AMBIENT_KIND := "ambience"
 
 ## Older cvar names kept for shipped server configs and course files: alias -> WoConfig field.
 const ALIASES := {
@@ -198,6 +201,11 @@ func _game_load() -> DotResult:
 	_wire_armed(world)
 	_wire_map(world)
 	_wire_progress(world)
+	# wo_ambient*: REPLICATED, because each client plays its own ambience under the server's intent; the directory cvar stays local.
+	var _ambient := world.ambient_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED,
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+	)
 	_add_tunables(world)
 
 	# Whether shots pass through team-mates: `mp_teammate_passthrough` 0 never, 1 a team-mate
@@ -245,12 +253,6 @@ func _game_load() -> DotResult:
 	)
 	var _bodies := world.body_rules.bind_cvars(
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
-
-	# wo_ambient*: REPLICATED, because each client plays its own ambience under the server's intent; the directory cvar stays local.
-	var _ambient := world.ambient_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED,
-		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
 	)
 
 	# The stage's toys: dot-props' sv_toys* set. REPLICATED, because a client hides the toys the
@@ -506,7 +508,11 @@ func _start_workbench(world: WoGame) -> void:
 	workbench.permit_fn = func(actor: Variant, flag: String) -> bool:
 		return admin_permit.is_valid() and actor is String and bool(admin_permit.call(actor, flag))
 	workbench.account_permit_fn = workbench.permit_fn
-	workbench.add_set(world.config_binder.profile_set(), "Game settings")
+	for set: DotProfileSet in world.config_binder.profile_sets():
+		workbench.add_set(set, "Game settings: %s" % set.rel_path.trim_prefix("config_"))
+	var ambient_set := DotGameWorkbench.cvar_set(console, WoAmbience.cvar_types(), AMBIENT_KIND)
+	if ambient_set != null:
+		workbench.add_set(ambient_set, "Ambience (wo_ambient*)")
 	add_child(workbench)
 	var started := workbench.start()
 	if not started.ok:
@@ -516,6 +522,8 @@ func _start_workbench(world: WoGame) -> void:
 		var rt := workbench.api.runtime as DotProfileRuntime
 		if rt != null:
 			world.config_binder.attach(rt)
+			if ambient_set != null:
+				var _applied := DotGameWorkbench.bind_cvar_set(ambient_set, rt, console)
 	add_command("workbench", func(ctx: DotCmdContext) -> void: ctx.reply_lines(_workbench_lines()),
 		"Show the admin workbench's state", DotAdminFlags.CVAR)
 

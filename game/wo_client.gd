@@ -169,7 +169,7 @@ func _ready() -> void:
 	# [b]`load_layered` on the CLIENT too.[/b] The family's `defaults < JSON < env < argv`
 	# chain is a convention, and a client that quietly skipped it would be one where every
 	# command-line flag worked against a dedicated server and did nothing at all offline.
-	var binder := DotGameConfigBinder.create(config, "mg-wipeout", "wo", config_file)
+	var binder := WoConfig.make_binder(config, config_file)
 	var loaded := binder.load_layers()
 
 	if not loaded.ok:
@@ -366,7 +366,8 @@ func _add_noblock_and_workbench() -> void:
 	wb.name = "Workbench"
 	wb.listen_host_fn = func() -> bool: return true
 	if game.config_binder != null:
-		wb.add_set(game.config_binder.profile_set(), "Game settings")
+		for set: DotProfileSet in game.config_binder.profile_sets():
+			wb.add_set(set, "Game settings: %s" % set.rel_path.trim_prefix("config_"))
 	add_child(wb)
 	var started := wb.start()
 	DotLog.result(CHANNEL, "the workbench", started)
