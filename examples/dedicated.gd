@@ -5,6 +5,7 @@ const WoGame := preload("../game/wo_game.gd")
 const WoPlayer := preload("../game/wo_player.gd")
 const WoRacer := preload("../game/wo_racer.gd")
 const WoNetBridge := preload("../game/net/wo_net_bridge.gd")
+const WoAmbience := preload("../game/wo_ambience.gd")
 const WoNetLink := preload("../game/net/wo_net_link.gd")
 
 ## The game as a deployed server runs it: a real [DotServer], booted from a config file, with
@@ -16,8 +17,8 @@ const WoNetLink := preload("../game/net/wo_net_link.gd")
 ## [DotGameModule]'s order runs, a cvar is typed at a console and a round is played by
 ## nothing but the stand-ins the module seats itself.
 
-const SECTIONS := 14
-const CHECKS := 102
+const SECTIONS := 15
+const CHECKS := 105
 
 const SERVER_DIR := "user://wo_dedicated"
 const PORT := 28931
@@ -60,6 +61,7 @@ func _run() -> void:
 		_test_finish_round_waits_for_a_live_round()
 		await _test_a_module_reload()
 		await _test_a_covered_seat_is_not_harmed()
+		await _test_ambient_cvars_reach_the_client()
 		await _test_it_unloads_cleanly()
 
 	_test_no_message_preloads_itself()
@@ -952,6 +954,74 @@ func _until(condition: Callable, seconds: float) -> bool:
 			return true
 		await get_tree().physics_frame
 	return bool(condition.call())
+
+
+## [b]`wo_ambient*` on a client.[/b] The server's ambience intent rides the replicated cvars over a real socket, and a
+## director that follows the game's rules (as [WoClient] wires it) has it in its layer's config.
+func _test_ambient_cvars_reach_the_client() -> void:
+	_section("the server's wo_ambient* reaches a client's ambience director, live")
+	var side := Node.new()
+	side.name = "AmbientClient"
+	add_child(side)
+	get_tree().set_multiplayer(MultiplayerAPI.create_default_interface(), side.get_path())
+	var mirror := Node.new()
+	mirror.name = name
+	side.add_child(mirror)
+	var link := DotClientLink.new()
+	link.name = "Server"
+	link.player_name = "Ambient"
+	link.transport_preference = "udp"
+	link.udp_address = "127.0.0.1:%d" % PORT
+	mirror.add_child(link)
+	var attach := func(_a: Variant = null, _b: Variant = null) -> void:
+		if link.get_node_or_null(NodePath(WoNetLink.NODE_NAME)) == null:
+			var sink := WoNetLink.attached_to(link, null, false)
+			sink.name = WoNetLink.NODE_NAME
+			link.add_child(sink)
+	attach.call()
+	link.phase_changed.connect(attach)
+	link.connect_to_server("127.0.0.1:%d" % PORT)
+	var rules := WoAmbience.make_rules()
+	var _followed := rules.follow_cvars(link)
+	var director := DotAmbienceDirector.new()
+	director.ambient = DotAmbience.new()
+	director.follow_settings(null, rules)
+	var joined := false
+	for _i in 1800:
+		await get_tree().physics_frame
+		if link.replicated_cvar("wo_ambient_volume", "") != "":
+			joined = true
+			break
+	_check(joined and link.replicated_cvar("wo_ambient_dir", "x") == "x",
+		"the join carried wo_ambient_volume, and the machine-local wo_ambient_dir stayed home", str(link.replicated_cvars))
+	var _vol := server.console.set_cvar("wo_ambient_volume", "0.8")
+	var _mood := server.console.set_cvar("wo_ambient_mood", "swamp")
+	var _off := server.console.set_cvar("wo_ambient", "0")
+	var arrived := false
+	for _i in 900:
+		await get_tree().physics_frame
+		if is_equal_approx(director.ambient.config.volume, 0.8) and director.ambient.config.mood == "swamp" \
+				and not director.ambient.config.enabled:
+			arrived = true
+			break
+	_check(arrived, "a change of volume, mood and the switch reaches the director live", str(rules.describe()))
+	var _back_vol := server.console.set_cvar("wo_ambient_volume", "0.35")
+	var _back_mood := server.console.set_cvar("wo_ambient_mood", "")
+	var _back_on := server.console.set_cvar("wo_ambient", "1")
+	var back := false
+	for _i in 900:
+		await get_tree().physics_frame
+		if rules.is_on() and rules.mood == "":
+			back = true
+			break
+	_check(back, "and back", str(rules.describe()))
+	director.ambient.free()
+	director.free()
+	link.disconnect_from_server("done")
+	for _i in 120:
+		await get_tree().physics_frame
+	side.queue_free()
+	_finished()
 
 
 func _test_it_unloads_cleanly() -> void:

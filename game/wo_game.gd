@@ -1,5 +1,6 @@
 extends Node3D
 
+const WoAmbience := preload("wo_ambience.gd")
 const WoCatalogue := preload("wo_catalogue.gd")
 const WoConfig := preload("wo_config.gd")
 const WoContent := preload("wo_content.gd")
@@ -204,6 +205,8 @@ var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
 ## under the first and predicts its own player under the second.
 var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
 var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
+## The ambience cvars (`wo_ambient*`): bound by the module (REPLICATED), followed by a client through its link.
+var ambient_rules: DotAmbienceRules = WoAmbience.make_rules()
 
 ## Binds [member config] to cvars, the cfg/ yml layers and the workbench; made by the server scene or the client.
 var config_binder: DotGameConfigBinder = null

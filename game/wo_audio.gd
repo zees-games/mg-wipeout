@@ -1,5 +1,6 @@
 extends Node
 
+const WoAmbience := preload("wo_ambience.gd")
 const WoCourse := preload("wo_course.gd")
 const WoPaths := preload("wo_paths.gd")
 
@@ -107,6 +108,9 @@ var manager: DotAudioManager = null
 ## A course over water in the open air, padded underfoot: a breeze, birds, foam steps.
 var steps: DotAudioFootsteps = null
 var ambience: DotAudioAmbience = null
+
+## Quiet moods under the course (dot-audio's stock set); the old bed plays only when none loaded.
+var ambient: DotAmbienceDirector = null
 
 
 static func ids() -> Array[StringName]:
@@ -370,7 +374,17 @@ func setup() -> DotResult:
 	ambience.manager = manager
 	ambience.fallback_bed = &"amb_outdoor"
 	add_child(ambience)
-	ambience.set_map_bed(&"amb_outdoor")
+	ambient = DotAmbienceDirector.new()
+	ambient.name = "Ambient"
+	ambient.manager = manager
+	ambient.default_mood = WoAmbience.DEFAULT_MOOD
+	ambient.prefix_moods = WoAmbience.PREFIX_MOODS
+	ambient.rules = WoAmbience.make_rules()
+	add_child(ambient)
+	var _moods := ambient.setup()
+	ambient.follow_settings(null)
+	if not ambient.has_moods():
+		ambience.set_map_bed(&"amb_outdoor")
 
 	# Only on a real sink: the manager has already decided whether there is a device, and a
 	# headless process has nothing to bake for.
@@ -409,9 +423,15 @@ func keep_walkers(bodies: Array) -> void:
 		steps.keep(bodies)
 
 
+## A course or arena arrived: the director picks its mood.
+func on_course(id: StringName, doc: Dictionary) -> void:
+	if ambient != null and ambient.has_moods():
+		ambient.on_map(id, doc)
+
+
 ## A map arrived: its bed and its ground. Empty keeps what is playing.
 func on_map(bed: StringName, surface: StringName = &"") -> void:
-	if ambience != null and bed != &"":
+	if ambience != null and bed != &"" and (ambient == null or not ambient.has_moods()):
 		ambience.set_map_bed(bed)
 	if steps != null and surface != &"":
 		steps.default_surface = surface

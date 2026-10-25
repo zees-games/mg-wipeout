@@ -391,6 +391,7 @@ func _build_netcode() -> DotResult:
 		# predicts its own player.
 		var _view := game.view_rules.follow_cvars(link)
 		var _solid := game.body_rules.follow_cvars(link)
+		var _ambient := game.ambient_rules.follow_cvars(link)
 		# And sv_toys*: this end hides the toys the server took away.
 		var _toys := game.toy_rules.follow_cvars(link)
 		# And mp_forcecamera / mp_freeroam*: this end flies the spectator's free camera.
@@ -576,6 +577,9 @@ func _on_stage(stage_id: StringName, is_arena: bool) -> void:
 	if game.stage == null:
 		return
 
+	if audio != null:
+		audio.on_course(stage_id, game.stage.doc)
+
 	# The new stage's toys are heard: a beach ball's bounce, one knocked off an arena's edge.
 	if game.stage.toys != null and not game.stage.toys.sound.is_connected(_toy_sound):
 		var _toys := game.stage.toys.sound.connect(_toy_sound)
@@ -739,6 +743,9 @@ func _build_settings() -> void:
 
 	if audio != null:
 		settings.bind_audio(audio.manager)
+		# The server's wo_ambient* drive the quiet layer; the player's sliders multiply on top.
+		if audio.ambient != null:
+			audio.ambient.follow_settings(settings.settings, game.ambient_rules)
 
 	_bind_bot_console()
 	if hud != null and settings.menu != null:
@@ -1775,6 +1782,8 @@ func _present_effects(delta: float) -> void:
 	if audio != null:
 		audio.listen_from(camera.global_position)
 		audio.keep_walkers(game.players.values())
+		if audio.ambient != null and game.physics != null:
+			audio.ambient.follow_roof(delta, camera.global_position, camera.get_world_3d().direct_space_state, game.physics.mask_of([&"world"]))
 
 		# The machinery, from the time the course was drawn at this frame.
 		if game.stage != null and not game.stage.doc.is_empty() and _stage_seconds >= 0.0:
