@@ -25,6 +25,13 @@ const TICK_RATE := 64
 
 var _game: WoGame
 var _tick := 0
+## An io course has no route for a stand-in, so its runners wander: random heading, jumps and the
+## use key, which is what puts buttons, teleports, pushes and hurt volumes through the long run.
+var _wander := false
+var _rng := RandomNumberGenerator.new()
+var _heading: Dictionary = {}
+var _finished_runs := 0
+var _lost := 0
 
 
 func _ready() -> void:
@@ -55,6 +62,8 @@ func _run() -> void:
 		_fail("no course %s" % map_id)
 		return
 
+	_wander = _io_course(catalogue.courses[map_id])
+	_rng.seed = 1
 	var config := WoConfig.new()
 	config.wind_chance = 0.0
 	config.storm_chance = 0.0
@@ -78,7 +87,7 @@ func _run() -> void:
 		var bot_name := DotBotNames.pick(taken, i, WoGame.BOT_NAMES)
 		taken.append(bot_name)
 		var bot := _game.add_player(StringName("u%d" % (900100 + i)), bot_name)
-		bot.is_bot = true
+		bot.is_bot = not _wander
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	_game.start()
@@ -107,6 +116,13 @@ func _run() -> void:
 		var body: WoPlayer = _game.players[id]
 		falls += body.falls
 	report["falls"] = falls
+	report["wander"] = _wander
+	report["io"] = _game.io_log
+	report["finished_runs"] = _finished_runs
+	report["out_of_world"] = _lost
+	if _lost > 0:
+		report["ok"] = false
+		(report["reasons"] as Array).append("%d runner-ticks outside the world" % _lost)
 	report["rounds"] = _game.course_number()
 	print(DotBotSoak.summary(report))
 	print(DotBotSoak.report_line(report))
@@ -127,7 +143,49 @@ func _release_game() -> void:
 
 func _step(_delta: float) -> void:
 	_tick += 1
+
+	if _wander and _game.phase == WoGame.Phase.COURSE:
+		_wander_step()
+
 	_game.simulate(1.0 / float(TICK_RATE))
+
+
+func _io_course(doc: Dictionary) -> bool:
+	for piece: Dictionary in doc["pieces"]:
+		if str(piece["kind"]) == "world" and bool(piece.get("io", false)):
+			return true
+	return false
+
+
+func _wander_step() -> void:
+	for id: StringName in _game.players:
+		var body: WoPlayer = _game.players[id]
+
+		if body.finished and not body.get_meta(&"counted", false):
+			body.set_meta(&"counted", true)
+			_finished_runs += 1
+
+		if not body.is_alive():
+			continue
+
+		var at := body.controller.state.position
+
+		if not at.is_finite() or absf(at.y) > 2000.0 or Vector2(at.x, at.z).length() > 4000.0:
+			_lost += 1
+
+		var held: Dictionary = _heading.get(id, {"until": 0, "yaw": 0.0})
+
+		if _tick >= int(held["until"]):
+			held = {"until": _tick + _rng.randi_range(64, 192), "yaw": _rng.randf_range(-180.0, 180.0)}
+			_heading[id] = held
+
+		var command := DotFpsCommand.new()
+		command.yaw = float(held["yaw"])
+		command.pitch = -10.0
+		command.move = Vector2(0.0, 1.0)
+		command.set_button(DotFpsCommand.BUTTON_JUMP, _tick % 48 < 3)
+		body.wants_grab = _tick % 40 < 2
+		body.controller.apply_command(command)
 
 
 func _movers() -> Array:
@@ -136,7 +194,7 @@ func _movers() -> Array:
 	for id: StringName in _game.players:
 		var body: WoPlayer = _game.players[id]
 		out.append({"id": id, "position": body.controller.state.position, "kind": &"bot",
-			"has_goal": open and not body.finished and body.is_alive()})
+			"has_goal": open and not _wander and not body.finished and body.is_alive()})
 	return out
 
 
