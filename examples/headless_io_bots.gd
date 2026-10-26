@@ -14,16 +14,16 @@ const WoGame := preload("../game/wo_game.gd")
 ## somebody looks. headless_routes finds which teleports and doors a walk can fire.
 
 const COURSES := {
-	&"wo_oaks_course": {"floor": false, "finish": false, "limit": 90, "why": "the floor ends 13 m on at the pit past the start door; the way on is teleports and button chains, needs a human route"},
-	&"wo_pauls_course": {"floor": false, "finish": false, "limit": 90, "why": "the floor ends 12 m short of the finish; headless_routes reaches it only by a fall past a hole, which a mesh has no edge for"},
-	&"wo_scary_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 40 m out and the stand-in walks off the edge into the kill volume again and again; the next triggers are scripts the floor cannot fire"},
-	&"wo_lego_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 95 m out; trigger_once chains (low*) are the way on, and the stand-in keeps falling at the gap"},
-	&"wo_dc_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 249 m out; three teleports and a bonus teleport are the way on"},
-	&"wo_waytobar_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 21 m from the finish at a glass wall (the score slab); the finish box lies behind it"},
-	&"wo_dans_course": {"floor": false, "finish": false, "limit": 90, "why": "stalls 95 m out behind a touch door (hamwallet); three teleports unreached"},
-	&"wo_office_course": {"floor": false, "finish": true, "limit": 90, "why": "finished in 20 s after 36 m on the floor although the mesh ends 70 m out: something on the way (a teleport or trigger) carries it; headless_routes does not know this, look"},
-	&"wo_labo_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 103 m out; zonetp9 sits in a wall 33 m from the finish and needs a human route"},
-	&"wo_sweet_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 260 m out; four teleports unreached"},
+	&"wo_oaks_course": {"floor": false, "finish": false, "limit": 90, "why": "13 m on the floor ends at the pit past the start door; the one teleport is disabled until a button chain enables it, which links do not read"},
+	&"wo_pauls_course": {"floor": false, "finish": false, "limit": 90, "why": "12 m short of the finish; both open teleports lie off the mesh, 52 are disabled (button-enabled) and one is filtered"},
+	&"wo_scary_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 47 m out and the stand-in still falls (121) at an edge the carved kill volumes do not cover; no teleport on the course"},
+	&"wo_lego_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 96 m out and the stand-in falls (91) at a gap; no teleport, trigger_once chains and four touch doors are the way on"},
+	&"wo_dc_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 292 m out; two teleports join but the stand-in still falls (99) before reaching one"},
+	&"wo_waytobar_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 25 m out at the glass slab; all six teleports lie off the mesh, and the stand-in falls (121)"},
+	&"wo_dans_course": {"floor": false, "finish": false, "limit": 90, "why": "stalls 99 m out; of three teleports one joins, two lie off the mesh, and a touch door (hamwallet) is on the way"},
+	&"wo_office_course": {"floor": false, "finish": false, "limit": 90, "why": "never finishes: the map's own timer kills the stand-in, and the lounge it is seated in used to count as the finish; the mesh ends 70 m out, 2 of 5 teleports join"},
+	&"wo_labo_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 128 m out; all three teleports lie off the mesh and 14 touch doors stand between"},
+	&"wo_sweet_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 251 m out; three of five teleports join and the stand-in stalls after 27 m"},
 }
 const CHECKS_PER_COURSE := 6
 const TICK_RATE := 64
@@ -106,6 +106,8 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 	_check(floor_reaches == bool(plan["floor"]), "the floor alone %s the finish" % ("reaches" if plan["floor"] else "does not reach"),
 		"path ends %.1f m from it" % [(path[path.size() - 1] if not path.is_empty() else start).distance_to(finish.get_center())])
 
+	print("  links %s" % [game._io_bot.links.describe()])
+	var tracing := OS.get_cmdline_user_args().has("--trace")
 	var limit: float = float(plan["limit"])
 	var travelled := 0.0
 	var last := start
@@ -117,16 +119,20 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 		var at := bot.controller.state.position
 		if at.distance_to(last) < 10.0:
 			travelled += at.distance_to(last)
+		if tracing and i % 128 == 0:
+			var tail: PackedVector3Array = game._io_bot.path_to(at)
+			print("    t=%.0f at %s falls=%d path_end=%s" % [i * TICK, at, bot.falls, str(tail[tail.size() - 1]) if not tail.is_empty() else "-"])
 		last = at
-		if bot.finished:
+		# an eliminated stand-in is seated in the lounge, which lies inside the finish box: not a finish
+		if bot.finished and not bot.watching:
 			finished_at = game.course_elapsed
 			break
 		if game.phase != WoGame.Phase.COURSE:
 			break
 	var nearest := bot.controller.state.position.distance_to(finish.get_center())
-	print("  walked %.0f m, %.0f m from the finish, %d falls, finished %s" % [travelled, nearest, bot.falls, str(bot.finished)])
+	print("  walked %.0f m, %.0f m from the finish, %d falls, finished %s" % [travelled, nearest, bot.falls, str(bot.finished and not bot.watching)])
 	_check(travelled > 3.0, "the stand-in walks a route of its own", "%.1f m" % travelled)
-	_check(bot.finished == bool(plan["finish"]), "it %s" % ("finishes" if plan["finish"] else "does not finish: " + str(plan["why"])),
+	_check((bot.finished and not bot.watching) == bool(plan["finish"]), "it %s" % ("finishes" if plan["finish"] else "does not finish: " + str(plan["why"])),
 		"%d falls, %.0f m from the finish" % [bot.falls, nearest])
 	_check(not bot.finished or finished_at < limit, "inside %d seconds" % int(limit), "%.1f s" % finished_at)
 	_finished_count += 1
