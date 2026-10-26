@@ -169,7 +169,7 @@ static func build_io(spec: Dictionary, hooks: Dictionary, authoritative: bool, d
 	var built := DotMapWorld.build(prefix, wired, {
 		"authoritative": authoritative, "rate": rate, "map_id": mesh_id,
 		# Ambient players on the dummy driver leave their playbacks and streams alive at exit.
-		"environment": false, "surfaces": _surfaces, "lightmap": draw, "props": draw, "sounds": draw and DotAudioSink.device_present(),
+		"environment": false, "surfaces": _surfaces, "draw": draw, "lightmap": draw, "props": draw, "sounds": draw and DotAudioSink.device_present(),
 	})
 
 	if not built.ok:
