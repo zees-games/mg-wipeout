@@ -2776,6 +2776,16 @@ func in_finish(feet: Vector3) -> bool:
 	return _inside(feet + Vector3(0.0, 0.9, 0.0), finish["at"], finish["size"], float(finish["yaw"]))
 
 
+## The finish as a world box, from half a metre below its floor to the top of its volume.
+func finish_box() -> AABB:
+	var finish: Dictionary = doc["finish"]
+	var at: Vector3 = finish["at"]
+	var size: Vector3 = finish["size"]
+	var turned := int(roundf(float(finish["yaw"]) / 90.0)) % 2 != 0
+	var half := Vector3(size.z, size.y, size.x) * 0.5 if turned else size * 0.5
+	return AABB(Vector3(at.x - half.x, at.y - 0.5, at.z - half.z), Vector3(half.x * 2.0, size.y + 0.5, half.z * 2.0))
+
+
 ## Whether [param point] is inside a box whose BOTTOM-centre is [param at].
 ##
 ## Bottom-centre for a gate, because a mapper places a checkpoint on the floor a player

@@ -44,6 +44,10 @@ Each was earned by watching a bot fail in `tools/trace_course` (one runner) or `
 - Too slow at an edge, it backs up for a run, **except on a turntable**: the disc's carry reads as a squint, and backing up under a spinner's arms is standing in them. On a seesaw it still backs up; without the run the next plank was short.
 - `_bot_unstick` jumps after a second of going nowhere, or lets go on a face too steep to jump from, measured against a mark from the last second and a half only: a stand-in held still (a mover, a window, a column) is not asked, and against the wait's own mark it jumped from a standstill on the tick it set off.
 
+## Courses that are a map's own world
+
+An io course has no `route`, so a stand-in walks a navigation mesh to the finish (`game/wo_io_bot.gd`: dot-bot's `DotBotNav` baked from the map's static colliders, movers left out). That gets it as far as the floor goes; what lies beyond (buttons, doors, teleports, rides) is the map's own logic and needs a human's route, which nothing records yet. `examples/headless_io_bots` pins per course whether the floor reaches the finish and whether a stand-in finishes: only Office does (in 20 s, by something on the way that the floor walk of `headless_routes` does not see); the other nine stop at the end of the floor, and Scary, Lego, Dc, Waytobar and Labo keep walking into a kill volume there.
+
 ## A field of them
 
 - **Stand-ins pass through each other.** They are on their own collision layer (`bot`); a person's movement stops at stand-ins and people, a stand-in's at people only. A solid field of eight shoved itself off every edge and queued at every run of tops. With a person in the way (`mp_solidplayers` on), a stand-in waits a couple of metres back from an edge while the top it would land on is taken (two seconds at most), and queues behind a person standing near a jump point.

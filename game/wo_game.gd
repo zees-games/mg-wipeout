@@ -5,6 +5,7 @@ const WoCatalogue := preload("wo_catalogue.gd")
 const WoConfig := preload("wo_config.gd")
 const WoContent := preload("wo_content.gd")
 const WoCourse := preload("wo_course.gd")
+const WoIoBot := preload("wo_io_bot.gd")
 const WoCourseDoc := preload("wo_course_doc.gd")
 const WoCourseCfg := preload("wo_course_cfg.gd")
 const WoPlayer := preload("wo_player.gd")
@@ -301,6 +302,8 @@ var racer: WoRacer = null
 
 ## Bots: player id -> ticks spent getting up to speed on a top before jumping off it.
 var _bot_runup: Dictionary = {}
+## Stand-ins' navigation of the current io course, baked on first use.
+var _io_bot: WoIoBot = null
 
 ## Bots: player id -> `[position, tick]` a second ago, for [method _bot_unstick].
 var _bot_stuck: Dictionary = {}
@@ -2667,10 +2670,28 @@ func _bot_plan(player: WoPlayer, racing: Dictionary, index: int) -> void:
 	racing["window"] = -1
 
 
+## A stand-in on a course that is a map's own world: along the navigation mesh to the finish ([WoIoBot]).
+func _bot_run_io(player: WoPlayer, command: DotFpsCommand) -> void:
+	if stage.io == null or stage.io.world == null:
+		return
+
+	if _io_bot == null or _io_bot.source != stage.io:
+		if _io_bot != null:
+			_io_bot.clear()
+		var tunables := player.controller.tunables
+		_io_bot = WoIoBot.new()
+		_io_bot.setup(stage.io, stage.io.world, stage.finish_box(), {
+			"radius": tunables.radius if tunables != null else 0.35, "height": 0.9, "climb": 0.42})
+
+	_io_bot.steer(player.controller.state.position, player.controller.state.mode == DotFpsState.Mode.GROUND,
+		_tick, player.player_id, command)
+
+
 func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 	var route := stage.route()
 
 	if route.is_empty():
+		_bot_run_io(player, command)
 		return
 
 	var racing := _racer_of(player)
