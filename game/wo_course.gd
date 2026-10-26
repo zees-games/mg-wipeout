@@ -1121,6 +1121,9 @@ func _build_world() -> void:
 		sun.shadow_blur = 1.5
 
 	for node in lighting.get_children():
+		if node is WorldEnvironment and io != null and io.world != null:
+			io.world.light_with((node as WorldEnvironment).environment, [], sun)
+
 		if node is WorldEnvironment and (node as WorldEnvironment).environment.sky != null:
 			var material := (node as WorldEnvironment).environment.sky.sky_material as ProceduralSkyMaterial
 			if material != null:

@@ -18,16 +18,6 @@ const CLOUD_SERVICE := &"dot_cloud_client"
 ## with its own scripted pieces.
 const SOLID_KINDS := ["solid", "clip", "glass"]
 
-## Source material generic id to a [DotMapSurfaces] kind. The tint is the original's average
-## colour, so the hue and darkness of a room survive the replaced texture.
-const KINDS := {
-	"stone_wall": &"concrete", "metal": &"metal", "plaster_painted": &"plaster",
-	"carpet": &"plaster", "ceiling": &"concrete_clean", "flat": &"plaster",
-	"wood_planks": &"wood_planks", "parquet": &"wood_floor", "tile_floor": &"tile_white",
-	"door_wood": &"wood_planks", "concrete": &"concrete", "wood_floor": &"wood_floor",
-	"mud": &"ground",
-}
-
 ## Directories that hold `<mesh>.json`; the catalogue adds `<courses>/../worlds`.
 static var dirs: PackedStringArray = PackedStringArray()
 
@@ -138,14 +128,13 @@ static func build(spec: Dictionary, physics: Object) -> StaticBody3D:
 	var drawn := Node3D.new()
 	drawn.name = "Drawn"
 	body.add_child(drawn)
-	var cache: Dictionary = {}
+	var material_for := _surfaces.world_material_for(mesh, mesh.source_path.get_base_dir())
 
 	for model in mesh.models():
 		if skip.has(model) or not mesh.mover(model).is_empty():
 			continue
 
-		for group: Dictionary in mesh.build_meshes(model, func(rec: Dictionary) -> Material:
-				return _material(rec, cache)):
+		for group: Dictionary in mesh.build_meshes(model, material_for):
 			if bool(group["sky3d"]):
 				continue
 			var instance := MeshInstance3D.new()
@@ -176,15 +165,11 @@ static func build_io(spec: Dictionary, hooks: Dictionary, authoritative: bool, d
 		_surfaces = DotMapSurfaces.new()
 		_surfaces.path_fn = WoPaths.rebase
 
-	var cache: Dictionary = {}
 	var wired := hooks.duplicate()
-	wired["material_for"] = func(rec: Dictionary) -> Material:
-		return _material(rec, cache)
-
 	var built := DotMapWorld.build(prefix, wired, {
 		"authoritative": authoritative, "rate": rate, "map_id": mesh_id,
 		# Ambient players on the dummy driver leave their playbacks and streams alive at exit.
-		"environment": false, "props": draw, "sounds": draw and DotAudioSink.device_present(),
+		"environment": false, "surfaces": _surfaces, "lightmap": draw, "props": draw, "sounds": draw and DotAudioSink.device_present(),
 	})
 
 	if not built.ok:
@@ -192,29 +177,3 @@ static func build_io(spec: Dictionary, hooks: Dictionary, authoritative: bool, d
 		return null
 
 	return built.value
-
-
-static func _material(rec: Dictionary, cache: Dictionary) -> Material:
-	var generic := str(rec.get("generic", ""))
-
-	if generic == "water":
-		return null
-
-	var colour: Array = rec.get("colour", [0.6, 0.6, 0.6]) if rec.get("colour") != null else [0.1, 0.1, 0.1]
-	var key := "%s|%s" % [generic, colour]
-
-	if cache.has(key):
-		return cache[key]
-
-	var tint := Color(minf(colour[0] * 1.8, 1.2), minf(colour[1] * 1.8, 1.2), minf(colour[2] * 1.8, 1.2))
-	var material: StandardMaterial3D
-
-	if generic == "glass":
-		material = StandardMaterial3D.new()
-		material.albedo_color = Color(0.7, 0.85, 0.9, 0.25)
-		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	else:
-		material = _surfaces.material(KINDS.get(generic, &"concrete"), tint)
-
-	cache[key] = material
-	return material

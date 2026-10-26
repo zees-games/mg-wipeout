@@ -249,7 +249,8 @@ func _run() -> void:
 			if _look.size() == 6:
 				camera.look_at_from_position(Vector3(_look[0], _look[1], _look[2]), Vector3(_look[3], _look[4], _look[5]))
 		"start":
-			await _seconds_of(0.6)
+			# Past the load gate's cover, which holds an io course's first seconds.
+			await _seconds_of(maxf(_seconds, 7.0))
 			var camera := _free_camera()
 			var start: Vector3 = game.course_doc["start"]["at"]
 			camera.look_at_from_position(start + Vector3(0, 5.5, 10.0), start + Vector3(0, 0, -14.0))
