@@ -27,10 +27,13 @@ var base: int = NO_BASE
 var _movers: Dictionary = {}
 ## Touch doors, teleports and kill volumes read from the map ([DotBotLinks]); built on first use.
 var _links: DotBotLinks = null
-## `door:body` to the tick it was last touched, so a body in a doorway touches it about once a second.
-var _touched: Dictionary = {}
-## Set while a stand-in plays: it opens touch doors the way a body walking in would; a person is not helped.
-var touch_doors: bool = false
+## Set while a stand-in plays: it opens touch doors the way a body walking in would (dot-map does it); a person is not helped.
+var touch_doors: bool = false:
+	set(value):
+		touch_doors = value
+		if world != null:
+			world.touch_doors = value
+			world.touch_interval_steps = rate
 var _posed: int = NO_BASE
 
 
@@ -84,7 +87,6 @@ func step(tick: int, bodies: Array) -> void:
 	if world == null or not authoritative or base == NO_BASE:
 		return
 
-	_touch_doors(tick, bodies)
 	world.step(bodies)
 	_mirror()
 	_posed = tick
@@ -95,25 +97,6 @@ func links() -> DotBotLinks:
 	if _links == null:
 		_links = DotBotLinks.read(world)
 	return _links
-
-
-## Bodies overlapping a door that opens by touch touch it: nothing else in the map's logic does.
-func _touch_doors(tick: int, bodies: Array) -> void:
-	if not touch_doors:
-		return
-
-	var doors := links()
-
-	if doors.doors.is_empty():
-		return
-
-	for info: Dictionary in bodies:
-		for index in doors.doors_touched(info["position"], float(info.get("radius", 0.35)), float(info.get("height", 1.8))):
-			var key := "%d:%s" % [index, info["id"]]
-
-			if tick - int(_touched.get(key, -rate)) >= rate:
-				_touched[key] = tick
-				var _result := world.io.touch(index, info.get("body"))
 
 
 ## Both ends, before a body moves on [param tick]: movers where the server had them when it
