@@ -446,7 +446,7 @@ func _test_the_start_box() -> void:
 
 
 func _test_a_one_life_course_has_no_start() -> void:
-	_section("a one-life course has no start box, no finish arch and no countdown")
+	_section("a one-life course has no start box and no countdown, and keeps its finish arch")
 	var base := "user://wo_instant_fixture"
 	DirAccess.make_dir_recursive_absolute(base + "/courses")
 	DirAccess.make_dir_recursive_absolute(base + "/cfg")
@@ -475,7 +475,8 @@ func _test_a_one_life_course_has_no_start() -> void:
 		if child.name == "Arch":
 			arches += 1
 	_check(game.stage.get_node_or_null("Gate") == null and not game.stage.gate_closed, "no gate")
-	_check(arches == (game.course_doc["checkpoints"] as Array).size(), "no finish arch (checkpoint flags only)",
+	_check(arches == (game.course_doc["checkpoints"] as Array).size()
+			and game.stage.get_node_or_null("FinishArch") != null, "checkpoint flags and a finish arch",
 		"%d arches" % arches)
 	_check(game.phase == WoGame.Phase.COURSE, "the round starts at once", str(game.phase))
 	var start: Dictionary = game.course_doc["start"]

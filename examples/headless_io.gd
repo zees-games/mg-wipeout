@@ -21,16 +21,16 @@ const WoPlayer := preload("../game/wo_player.gd")
 ## sink in a second and a half on its start: measured, 0.5 where the course passes), `rejects` (how many of the
 ## map's volumes a team filter turns a body of no team away from, which the run prints).
 const COURSES := {
-	&"wo_oaks_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_office_course": {"sections": 11, "checks": 40, "lava": true, "ladders": true, "rejects": 0},
-	&"wo_dans_course": {"sections": 10, "checks": 37, "lava": false, "ladders": true, "rejects": 0},
-	&"wo_pauls_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "push": false, "floor": 0.7, "rejects": 3},
-	&"wo_scary_course": {"sections": 9, "checks": 34, "lava": false, "ladders": false, "push": false, "rejects": 0},
-	&"wo_lego_course": {"sections": 9, "checks": 31, "lava": false, "ladders": false, "push": false, "button": false, "rejects": 0},
-	&"wo_dc_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_waytobar_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_labo_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_sweet_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_oaks_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_office_course": {"sections": 11, "checks": 41, "lava": true, "ladders": true, "rejects": 0},
+	&"wo_dans_course": {"sections": 10, "checks": 38, "lava": false, "ladders": true, "rejects": 0},
+	&"wo_pauls_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "push": false, "floor": 0.7, "rejects": 3},
+	&"wo_scary_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "push": false, "rejects": 0},
+	&"wo_lego_course": {"sections": 9, "checks": 32, "lava": false, "ladders": false, "push": false, "button": false, "rejects": 0},
+	&"wo_dc_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_waytobar_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_labo_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_sweet_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
 }
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -98,6 +98,9 @@ func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 
 	_section("the world loads")
 	_check(world != null, "dot-map built it")
+	var arch := game.stage.finish_arch()
+	_check(arch != null and game.stage.finish_box().grow(0.6).has_point(arch.position + Vector3(0.0, 1.0, 0.0)),
+		"a finish arch stands at the finish box")
 	_check(game.stage.io_spawns().size() > 0, "the map names its spawn points", str(game.stage.io_spawns().size()))
 	var coverage := world.io.coverage()
 	var unhandled: Dictionary = coverage["unhandled"]

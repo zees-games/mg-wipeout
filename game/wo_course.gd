@@ -98,7 +98,8 @@ var gate_closed: bool = false:
 
 var _ladders: Array[AABB] = []
 
-## A one-life course (`doc["instant"]`): no start pen and no finish arch, the round starts at once.
+## A one-life course (`doc["instant"]`): no start pen, the round starts at once. It keeps the finish arch,
+## which an imported level's finish box otherwise leaves invisible.
 var instant: bool = false
 
 ## One per piece, in document order. See [method _make_piece].
@@ -964,11 +965,13 @@ func _build_markers() -> void:
 		var checkpoint: Dictionary = doc["checkpoints"][index]
 		_arch(checkpoint["at"], checkpoint["size"], float(checkpoint["yaw"]), WoTextures.Role.SAFE, 0.25)
 
-	if instant:
-		return
-
 	var finish: Dictionary = doc["finish"]
-	_arch(finish["at"], finish["size"], float(finish["yaw"]), WoTextures.Role.CANNON, 0.5)
+	_arch(finish["at"], finish["size"], float(finish["yaw"]), WoTextures.Role.CANNON, 0.5, "FinishArch")
+
+
+## The arch drawn at the finish box, or null before the markers are built.
+func finish_arch() -> Node3D:
+	return get_node_or_null("FinishArch") as Node3D
 
 
 ## The ladders' boxes in world space, for [DotFpsLadderMode].
@@ -1020,10 +1023,11 @@ func confine_to_start(at: Vector3) -> Vector3:
 	return (start["at"] as Vector3) + basis * local
 
 
-func _arch(at: Vector3, size: Vector3, yaw: float, role: WoTextures.Role, thickness: float) -> void:
+func _arch(at: Vector3, size: Vector3, yaw: float, role: WoTextures.Role, thickness: float,
+		arch_name: String = "Arch") -> void:
 	var basis := _yaw_basis(yaw)
 	var arch := Node3D.new()
-	arch.name = "Arch"
+	arch.name = arch_name
 	_not_collided(arch)
 	arch.transform = Transform3D(basis, at)
 	add_child(arch)

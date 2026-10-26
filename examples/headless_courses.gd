@@ -100,7 +100,7 @@ func _run() -> void:
 		_world.free()
 
 	var sections := 3 + courses.size() + forked + arenas.size() + courses.size() + arenas.size()
-	var checks := 8 + (courses.size() + forked) * 4 + courses.size() * 2 + arenas.size() * (4 + 2) + courses.size() + arenas.size()
+	var checks := 8 + (courses.size() + forked) * 4 + courses.size() * 2 + arenas.size() * (4 + 2) + courses.size() + arenas.size() + courses.size()
 
 	print("")
 	print("%d sections entered, %d finished" % [_sections_entered, _sections_finished])
@@ -200,6 +200,8 @@ func _run_course(doc: Dictionary, risk: float = -1.0) -> void:
 	if risk < 50.0:
 		await _check_toys(game, doc)
 	_check_knock_cull(game)
+	if risk < 50.0:
+		_check_finish_marker(game, doc)
 	game.start()
 
 	var limit := game.course_limit() + game.config.countdown_seconds + 1.0
@@ -322,6 +324,14 @@ func _stand_in_arena(doc: Dictionary) -> void:
 	_check(open.is_empty(), "and walls all round it", ", ".join(open))
 	await _check_toys(game, doc)
 	_finished()
+
+
+## Every course draws one arch at its finish box, standing in it.
+func _check_finish_marker(game: WoGame, doc: Dictionary) -> void:
+	var arch := game.stage.finish_arch()
+	_check(arch != null and game.stage.finish_box().grow(0.6).has_point(arch.position + Vector3(0.0, 1.0, 0.0))
+			and arch.position.is_equal_approx(doc["finish"]["at"]),
+		"a finish arch stands at the finish box")
 
 
 ## A stage's toys (dot-props', loose only): every one built, none inside a piece, and after a
