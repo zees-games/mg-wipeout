@@ -76,3 +76,6 @@ Thumbs.db
 
 # Editors
 .vscode/
+# art stores the worlds name (licence.pbr_store ../pbr-library): symlinks to mg-wipeout-maps, see its CLAUDE.md
+/pbr-library
+/model-library
