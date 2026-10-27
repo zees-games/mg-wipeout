@@ -27,6 +27,12 @@ const HOLD_TICKS := 24
 const ERRAND_REPATHS := 200
 ## Windows of a second without progress after which an errand is given up.
 const GIVE_UP_STUCK := 5
+## Ticks a platform may be waited for, at a dock or aboard, before the leg is given up.
+const RIDE_PATIENCE := 64 * 25
+## Metres from a leg's start within which a bot waits for the platform.
+const DOCK_REACH := 1.4
+## Metres from a hop edge's start at which the jump is pressed.
+const HOP_REACH := 0.7
 
 var nav: DotBotNav = DotBotNav.new()
 ## The io instance this was baked for: a new one means a new course.
@@ -41,6 +47,18 @@ var _held := 0
 var _age := 0
 ## Windows of a second in a row without half a metre of progress.
 var _stuck := 0
+
+## The platform leg being ridden (a link of [member DotBotLinks.platform_links]) and the ticks spent on it.
+var _clock := 0
+var _hops: Array[Dictionary] = []
+var _hops_for: NavigationMesh = null
+var _ride := {}
+var _ride_ticks := 0
+
+var _world: Node3D = null
+var _agent := {}
+## Ticks at which the mesh is baked again, after a button or trigger changed the map (a wall that breaks, a door that goes).
+var _rebakes: Array[int] = []
 
 var _goal := Vector3.ZERO
 var _finish := AABB()
@@ -57,9 +75,24 @@ func setup(p_source: Object, world: Node3D, finish: AABB, agent: Dictionary, p_l
 	links.carve(nav)
 	_finish = finish
 	_goal = Vector3(finish.get_center().x, finish.position.y + 0.5, finish.get_center().z)
+	_world = world
+	_agent = agent
+	_bake()
+
+
+## Bakes the map as it stands: static colliders, doors posed open, floor where a platform can lie.
+func _bake() -> void:
 	var bodies: Array = []
-	_statics(world, bodies)
-	var baked := nav.bake_in_background(world, agent, 0, bodies)
+	_statics(_world, bodies)
+	# doors baked open: shut they are walls on the mesh and nothing walks to them
+	var undo := links.pose_open()
+	bodies.append_array(links.swing_bodies())
+	# rafts and lifts: a floor wherever one can lie, with legs between (ridden by waiting for it, see _on_platform)
+	var copies := links.stop_bodies(_world, _world.get("io"))
+	bodies.append_array(copies)
+	var baked := nav.bake_in_background(_world, _agent, 0, bodies)
+	links.free_stop_bodies(copies)
+	links.restore(undo)
 	if not baked.ok:
 		DotLog.warn(CHANNEL, "no mesh baked", {"why": baked.error.message})
 
@@ -83,6 +116,11 @@ func path_to(from: Vector3) -> PackedVector3Array:
 
 ## Sets [param command]'s heading, movement and jump for a stand-in at [param feet] on [param tick].
 func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, command: DotFpsCommand) -> void:
+	_clock = tick
+	if not _rebakes.is_empty() and tick >= _rebakes[0] and nav.is_ready():
+		_rebakes.pop_front()
+		_bake()
+		return
 	if not is_ready():
 		return
 	# Moved by the map (a teleport): the path ahead is the one from before it.
@@ -99,6 +137,9 @@ func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, comm
 		_arrived()
 		_replan(feet)
 		_path_tick = tick
+
+	if _on_platform(feet, tick, command):
+		return
 
 	var target := _into_teleport(_next_point(feet), feet)
 	if target == Vector3.INF:
@@ -119,8 +160,75 @@ func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, comm
 		mark = {"tick": tick, "at": feet}
 	_mark[player_id] = mark
 
+	if grounded and _at_hop(feet):
+		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
 	if grounded and target.y - feet.y > JUMP_RISE:
 		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+
+
+## Waits at a dock for the platform, steps aboard when it is there, stays on it until it lies at the far stop, then
+## steps off. Returns whether it has set the command (the caller then steers nothing).
+func _on_platform(feet: Vector3, tick: int, command: DotFpsCommand) -> bool:
+	var world: Object = source.get("world") if source != null else null
+	var io: Object = world.get("io") if world != null else null
+	if links == null or io == null or links.platform_links.is_empty():
+		return false
+	if _ride.is_empty():
+		var leg := links.platform_link_near(feet, DOCK_REACH)
+		if leg.is_empty() or not _path_uses(leg):
+			_ride_ticks = 0
+			return false
+		_ride_ticks += 1
+		if _ride_ticks > RIDE_PATIENCE:
+			# give up this leg: the path will not use it again
+			_ride_ticks = 0
+			return false
+		if not links.platform_at_stop(int(leg["platform"]), int(leg["stop_from"]), io):
+			return true
+		_ride = leg
+		_ride_ticks = 0
+	_ride_ticks += 1
+	var platform := int(_ride["platform"])
+	var to: Vector3 = _ride["to"]
+	var centre := links.platform_centre(platform, io)
+	var arrived := links.platform_at_stop(platform, int(_ride["stop_to"]), io)
+	var flat_to := Vector2(to.x - feet.x, to.z - feet.z).length()
+	if _ride_ticks > RIDE_PATIENCE or (arrived and flat_to < 0.8) or (not arrived and Vector2(centre.x - feet.x, centre.z - feet.z).length() > 3.0 \
+			and not links.platform_at_stop(platform, int(_ride["stop_from"]), io)):
+		_ride = {}
+		_ride_ticks = 0
+		_path_tick = -REPATH_TICKS
+		return false
+	var aim := to if arrived else centre
+	var toward := aim - feet
+	toward.y = 0.0
+	if toward.length() > 0.4:
+		command.yaw = rad_to_deg(atan2(-toward.x, -toward.z))
+		command.move = Vector2(0.0, 1.0)
+	return true
+
+
+## Whether the body stands at the start of a hop edge the path crosses: a gap is cleared by jumping off its rim.
+func _at_hop(feet: Vector3) -> bool:
+	if _hops_for != nav.mesh:
+		_hops_for = nav.mesh
+		_hops.clear()
+		for ride in nav.rides():
+			if int(ride["id"]) >= DotBotLinks.HOP_ID:
+				_hops.append(ride)
+	for hop in _hops:
+		var from: Vector3 = hop["from"]
+		if Vector2(from.x - feet.x, from.z - feet.z).length() < HOP_REACH and absf(from.y - feet.y) < 1.0 and _path_uses(hop):
+			return true
+	return false
+
+
+func _path_uses(leg: Dictionary) -> bool:
+	var to: Vector3 = leg["to"]
+	for point in _path:
+		if Vector2(point.x - to.x, point.z - to.z).length() < 0.6 and absf(point.y - to.y) < 1.0:
+			return true
+	return false
 
 
 ## The path to the finish, or while that does not end in it, to the nearest button or trigger that enables a teleport.
@@ -156,6 +264,8 @@ func _replan(feet: Vector3) -> void:
 
 ## A button is used, a trigger already fired by the stand-in walking into it; either way it is not gone to again.
 func _arrived() -> void:
+	_rebakes.append(_clock + 48)
+	_rebakes.append(_clock + 64 * 5)
 	_held = 0
 	_age = 0
 	_stuck = 0
@@ -200,6 +310,10 @@ func clear() -> void:
 	source = null
 	_path = PackedVector3Array()
 	_mark.clear()
+	_rebakes.clear()
+	_world = null
+	_ride = {}
+	_ride_ticks = 0
 
 
 ## The first path point not yet reached, Vector3.INF at the end of the path.

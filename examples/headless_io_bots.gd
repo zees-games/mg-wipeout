@@ -115,12 +115,31 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 		for g in lk.gadgets:
 			print("    gadget %s %s box %s feeds %s" % [g["kind"], g["index"], g["box"], g["feeds"]])
 		print("    finish %s start %s" % [finish, start])
+		var kinds := {}
+		for ent in game.stage.io.world.io.entities:
+			var mv = ent.get("mover")
+			if mv != null:
+				var k := "%s%s%s%s" % [mv.kind, " touch" if mv.touch else "", " use" if mv.use else "", " locked" if ent.locked else ""]
+				kinds[k] = int(kinds.get(k, 0)) + 1
+		print("    movers %s" % [kinds])
 		for node in game.stage.io.world.volumes.nodes:
 			var vb: AABB = node.volume.bounds()
 			if node.volume.kind == "hurt" and vb.grow(5.0).intersects(finish):
 				print("    hurt near finish %s %s box %s dmg %s outputs %s" % [node.volume.classname, node.volume.targetname, vb, node.volume.record.get("damage"), node.volume.outputs])
+	if OS.get_cmdline_user_args().has("--graph"):
+		var gnav: DotBotNav = game._io_bot.nav
+		var goal: Vector3 = Vector3(finish.get_center().x, finish.position.y + 0.5, finish.get_center().z)
+		print("  GRAPH islands %d; start island %d at %s, goal island %d (closest %s); start joined goal: %s" % [gnav.islands().size(), gnav.island_at(start), start, gnav.island_at(gnav.closest(goal)), gnav.closest(goal), gnav.joined(start, goal)])
+		for t in game._io_bot.links.teleports:
+			var tf: Variant = t.get("from")
+			print("   tp %s from-island %s reachable-from-start %s | dest %s island %s reaches-goal %s" % [t["entity"], gnav.island_at(tf) if tf is Vector3 else "-", gnav.joined(start, tf) if tf is Vector3 else "-", t["to"], gnav.island_at(t["to"]), gnav.joined(t["to"], goal)])
+		for isl in gnav.islands().slice(0, 12):
+			print("   island %d area %.0f bounds %s joined-from-start %s" % [isl["index"], isl["area"], isl["bounds"], gnav.joined(start, isl["centre"])])
 	var tracing := OS.get_cmdline_user_args().has("--trace")
 	var limit: float = float(plan["limit"])
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--seconds="):
+			limit = float(a.substr(10))
 	var travelled := 0.0
 	var last := start
 	var finished_at := -1.0
@@ -160,6 +179,24 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 			var mv = ent.get("mover")
 			if mv != null and ent.hit_half != Vector3.ZERO and ent.hit_frame.origin.distance_to(here) < 20.0:
 				print("    mover %s %s kind=%s name=%s at %s half %s use=%s touch=%s locked=%s outs=%s" % [ent.index, ent.classname, mv.kind, ent.targetname, ent.hit_frame.origin, ent.hit_half, mv.use, mv.touch, ent.locked, ent.links.map(func(l): return "%s>%s:%s" % [l["output"], l["target"], l["input"]])])
+	if OS.get_cmdline_user_args().has("--ring"):
+		var here := bot.controller.state.position
+		var space := game.stage.io.world.get_world_3d().direct_space_state
+		print("  RING from %s" % here)
+		for deg in range(0, 360, 45):
+			var dir := Vector3(sin(deg_to_rad(deg)), 0, cos(deg_to_rad(deg)))
+			var line := ""
+			for dist in [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0]:
+				var top: Vector3 = here + dir * dist + Vector3(0, 1.0, 0)
+				var wall := space.intersect_ray(PhysicsRayQueryParameters3D.create(here + Vector3(0, 1, 0), top))
+				var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(top, top + Vector3(0, -30, 0)))
+				line += " %.0f:%s%s" % [dist, "W" if not wall.is_empty() else "", "%.1f" % (hit["position"].y - here.y) if not hit.is_empty() else "-"]
+			print("   dir %3d%s" % [deg, line])
+	if OS.get_cmdline_user_args().has("--paths"):
+		for ent in game.stage.io.world.io.entities:
+			var mv = ent.get("mover")
+			if mv != null and mv.kind == "path":
+				print("    path %s %s name=%s node %s hit %s half %s corners %s loop=%s" % [ent.index, ent.classname, ent.targetname, ent.node.global_position if ent.node != null else null, ent.hit_frame.origin, ent.hit_half, ent._corners, ent._ring])
 	var nearest := bot.controller.state.position.distance_to(finish.get_center())
 	print("  walked %.0f m, %.0f m from the finish, %d falls, finished %s" % [travelled, nearest, bot.falls, str(bot.finished and not bot.watching)])
 	_check(travelled > 3.0, "the stand-in walks a route of its own", "%.1f m" % travelled)
