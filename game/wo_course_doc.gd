@@ -198,6 +198,17 @@ static func _course(doc: Dictionary) -> DotResult:
 	else:
 		doc.erase("instant")
 
+	# A map's own world is walked by a stand-in along these steps first (see WoIoBot); a malformed one is dropped.
+	if doc.has("io_route"):
+		var steps: Array = []
+		for step: Variant in (doc["io_route"] if doc["io_route"] is Array else []):
+			if step is Dictionary and ((step.get("to") is Array and (step["to"] as Array).size() == 3) or step.has("use") or step.has("wait")):
+				steps.append(step)
+		if steps.is_empty():
+			doc.erase("io_route")
+		else:
+			doc["io_route"] = steps
+
 	var start: Variant = doc.get("start")
 
 	if typeof(start) != TYPE_DICTIONARY or not (start as Dictionary).has("at"):

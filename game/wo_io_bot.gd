@@ -35,6 +35,11 @@ const RIDE_PATIENCE := 64 * 25
 const DOCK_REACH := 1.4
 ## Metres from a hop edge's start at which the jump is pressed.
 const HOP_REACH := 0.7
+## Metres ahead of the feet a hurt volume is looked for.
+const KILL_LOOK := 1.3
+## Flat metres within which a route point is reached, and ticks one step may take before it is given up.
+const ROUTE_REACH := 0.8
+const ROUTE_PATIENCE := 64 * 25
 
 var nav: DotBotNav = DotBotNav.new()
 ## The io instance this was baked for: a new one means a new course.
@@ -49,6 +54,17 @@ var _held := 0
 var _age := 0
 ## Windows of a second in a row without half a metre of progress.
 var _stuck := 0
+## A course's scripted steps (`io_route` in its document) walked before the mesh takes over: `{"to": [x, y, z]}` a
+## point walked straight to (`"jump": true` hops on the way), `{"use": entity}` a button used, `{"wait": seconds}`.
+## What the mesh cannot know (a door, a button chain, an arrival the map teleports to) is named here by a person.
+var _route: Array = []
+var _route_at := 0
+var _route_since := 0
+## Steps finished, and steps given up after ROUTE_PATIENCE ticks.
+var route_done := 0
+var route_skipped := 0
+## Strides held back for a hurt volume ahead.
+var _avoided := 0
 
 ## The platform leg being ridden (a link of [member DotBotLinks.platform_links]) and the ticks spent on it.
 var _clock := 0
@@ -71,8 +87,10 @@ var _last_feet := Vector3.INF
 
 
 ## Bakes the static (never the moving) colliders of [param world] and aims at [param finish].
-func setup(p_source: Object, world: Node3D, finish: AABB, agent: Dictionary, p_links: DotBotLinks) -> void:
+func setup(p_source: Object, world: Node3D, finish: AABB, agent: Dictionary, p_links: DotBotLinks, p_route: Array = []) -> void:
 	source = p_source
+	_route = p_route
+	_route_at = 0
 	links = p_links
 	links.carve(nav)
 	_finish = finish
@@ -140,6 +158,8 @@ func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, comm
 		_replan(feet)
 		_path_tick = tick
 
+	if _route_step(feet, grounded, command):
+		return
 	if _on_platform(feet, tick, command):
 		return
 
@@ -153,6 +173,9 @@ func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, comm
 	toward.y = 0.0
 	command.yaw = rad_to_deg(atan2(-toward.x, -toward.z))
 	command.move = Vector2(0.0, 1.0)
+	if grounded and _kill_ahead(feet, toward):
+		command.move = Vector2.ZERO
+		return
 
 	var mark: Dictionary = _mark.get(player_id, {"tick": tick, "at": feet})
 	if tick - int(mark["tick"]) >= STUCK_TICKS:
@@ -168,6 +191,49 @@ func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, comm
 		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
 	if grounded and target.y - feet.y > JUMP_RISE:
 		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+
+
+## Walks the scripted route; returns whether it set the command. A step is done when reached, used or waited out.
+func _route_step(feet: Vector3, grounded: bool, command: DotFpsCommand) -> bool:
+	if _route_at >= _route.size():
+		return false
+	var step: Dictionary = _route[_route_at]
+	_route_since += 1
+	if step.has("use"):
+		var world: Object = source.get("world")
+		var _result: Variant = world.get("io").call("use", int(step["use"]), null)
+		_rebakes.append(_clock + 48)
+		_rebakes.append(_clock + 64 * 5)
+		_finish_step(true)
+		return false
+	if step.has("wait"):
+		if _route_since >= int(float(step["wait"]) * 64.0):
+			_finish_step(true)
+		return true
+	var to := Vector3(float(step["to"][0]), float(step["to"][1]), float(step["to"][2]))
+	var toward := to - feet
+	toward.y = 0.0
+	if toward.length() < ROUTE_REACH:
+		_finish_step(true)
+		return false
+	if _route_since > ROUTE_PATIENCE:
+		_finish_step(false)
+		return false
+	command.yaw = rad_to_deg(atan2(-toward.x, -toward.z))
+	command.move = Vector2(0.0, 1.0)
+	if grounded and (bool(step.get("jump", false)) or to.y - feet.y > JUMP_RISE):
+		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+	_path_tick = -REPATH_TICKS
+	return true
+
+
+func _finish_step(reached: bool) -> void:
+	_route_at += 1
+	_route_since = 0
+	if reached:
+		route_done += 1
+	else:
+		route_skipped += 1
 
 
 ## Waits at a dock for the platform, steps aboard when it is there, stays on it until it lies at the far stop, then
@@ -210,6 +276,40 @@ func _on_platform(feet: Vector3, tick: int, command: DotFpsCommand) -> bool:
 		command.yaw = rad_to_deg(atan2(-toward.x, -toward.z))
 		command.move = Vector2(0.0, 1.0)
 	return true
+
+
+## Whether one more stride toward [param toward] would carry the body into a hurt volume, learned from the live
+## volumes (one that was off when the mesh was baked, or hurts less than a kill, is not cut out of it). The volume is
+## then cut out of the mesh and the path planned again, so the stand-in stops short of it rather than through it.
+func _kill_ahead(feet: Vector3, toward: Vector3) -> bool:
+	var world: Object = source.get("world") if source != null else null
+	if world == null or world.get("volumes") == null or toward.length() < 0.01:
+		return false
+	var probe := feet + toward.normalized() * KILL_LOOK
+	var space: PhysicsDirectSpaceState3D = (_world as Node3D).get_world_3d().direct_space_state
+	var ground := -INF
+	var checked := false
+	for node: Object in world.get("volumes").get("nodes"):
+		var volume: Object = node.get("volume")
+		if str(volume.get("kind")) != "hurt" or not node.call("active"):
+			continue
+		var box: AABB = volume.call("bounds")
+		if _finish.grow(1.0).intersects(box) or box.has_point(feet) or box.grow(0.2).has_point(feet):
+			continue
+		if not (probe.x >= box.position.x and probe.x <= box.end.x and probe.z >= box.position.z and probe.z <= box.end.z) or box.position.y > feet.y + 2.0:
+			continue
+		if not checked:
+			checked = true
+			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(probe + Vector3(0.0, 0.4, 0.0), probe + Vector3(0.0, -6.0, 0.0), 1))
+			ground = (hit["position"] as Vector3).y if not hit.is_empty() else -INF
+		if ground <= box.end.y + 0.05:
+			var cut := AABB(box.position - Vector3(0.6, 0.0, 0.6), box.size + Vector3(1.2, 0.0, 1.2))
+			if not nav.avoid.has(cut):
+				nav.avoid.append(cut)
+				_rebakes.append(_clock + 1)
+			_avoided += 1
+			return true
+	return false
 
 
 ## Whether the body stands at the start of a hop edge the path crosses: a gap is cleared by jumping off its rim.
@@ -277,6 +377,8 @@ func _arrived() -> void:
 	if _errand["kind"] == "use":
 		var world: Object = source.get("world")
 		var _result: Variant = world.get("io").call("use", int(_errand["index"]), null)
+	elif _errand["kind"] == "shoot":
+		var _shot: Variant = source.get("world").get("io").call("hurt", int(_errand["index"]), 1000.0)
 	_errand = {}
 
 
@@ -315,7 +417,7 @@ func _into_teleport(target: Vector3, feet: Vector3) -> Vector3:
 
 func describe() -> Dictionary:
 	return {"errand": _errand.get("index", -1), "done": _done.keys(), "later": links.later.size() if links != null else 0,
-		"teleports": links.teleports.size() if links != null else 0}
+		"teleports": links.teleports.size() if links != null else 0, "avoided": _avoided, "route": route_done, "route_skipped": route_skipped}
 
 
 func clear() -> void:
@@ -328,6 +430,12 @@ func clear() -> void:
 	_path = PackedVector3Array()
 	_mark.clear()
 	_rebakes.clear()
+	_avoided = 0
+	_route = []
+	_route_at = 0
+	_route_since = 0
+	route_done = 0
+	route_skipped = 0
 	_world = null
 	_ride = {}
 	_ride_ticks = 0
@@ -347,5 +455,3 @@ static func _statics(node: Node, into: Array) -> void:
 		into.append(node)
 	for child in node.get_children():
 		_statics(child, into)
-	elif _errand["kind"] == "shoot":
-		var _shot: Variant = source.get("world").get("io").call("hurt", int(_errand["index"]), 1000.0)

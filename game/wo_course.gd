@@ -324,6 +324,9 @@ func _make_piece(index: int, spec: Dictionary) -> void:
 		_by_collider[body.get_instance_id()] = [index, sub]
 		_put_on_world_layer(body)
 
+	if io != null and io.world != null and kind == "world":
+		io.reseat_brushes()
+
 	piece["bodies"] = bodies
 	pieces.append(piece)
 

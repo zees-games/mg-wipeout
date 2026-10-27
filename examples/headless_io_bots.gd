@@ -7,11 +7,11 @@ const WoGame := preload("../game/wo_game.gd")
 ## Do stand-ins finish the courses that are a map's own world? Each is run with one stand-in, which has no route
 ## document there and walks a navigation mesh baked from the map's static colliders (WoIoBot, dot-bot's DotBotNav).
 ##
-## Per course, seven checks: the mesh bakes; a path leads from the start; the floor alone leads to the finish
+## Per course, eight checks: the mesh bakes; a path leads from the start; the floor alone leads to the finish
 ## (`floor`); the stand-in walked a route of its own; it finished (`finish`) or did not, and the plan says why; and
 ## a finish came inside `limit` seconds; and the stand-in pressed `fired` buttons or triggers and took `taken` teleports on its way (the
 ## map's own logic that dot-bot's DotBotLinks finds and the stand-in goes to; a count that changes means the way on changed). A course whose way on is the map's own logic (a button, a teleport, a ride)
-## cannot be finished from the floor: `why` records the diagnosis and the suite fails when the picture changes, so
+## cannot be finished from the floor (`route`: steps of the course's `io_route` a person scripted, all of which the stand-in must walk): `why` records the diagnosis and the suite fails when the picture changes, so
 ## somebody looks. headless_routes finds which teleports and doors a walk can fire.
 
 const COURSES := {
@@ -22,11 +22,11 @@ const COURSES := {
 	&"wo_dc_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 292 m out; two teleports join but the stand-in is killed (99) by the 'spawnkill' trigger_hurt around its spawn, not at an edge, before reaching one (a logic_auto enables it 40 s after map spawn as an anti-camp rule, so a stand-in still near the spawn then dies on every respawn; the 'finish' is a row of frag volumes at the far end of a deathmatch map)"},
 	&"wo_waytobar_course": {"floor": false, "finish": false, "limit": 90, "why": "hop edges across the start pool (stepping pads 1.9 m wide) join 8 islands to the start, ending 26 m out at the glass slab, a lethal trigger_hurt carved out of the mesh; the six teleports are on islands the pads do not reach, and the AFK_KILLER trigger_hurt kills the idle stand-in (121)"},
 	&"wo_dans_course": {"floor": false, "finish": false, "limit": 90, "fired": 1, "why": "presses the door button (23) but stalls 96 m out; of three teleports one joins and two lie off the mesh with nothing found to enable them"},
-	&"wo_office_course": {"floor": false, "finish": false, "limit": 90, "why": "walks 67 m, presses nothing now (the hop and drop edges found a way round the button) and ends 2 m from the finish, but the map's own timer kills the stand-in, so it never finishes; 2 of 5 teleports are disabled until then"},
+	&"wo_office_course": {"floor": false, "finish": false, "limit": 90, "route": 1, "why": "BLOCKER: the lava-room hurt floor and the timed Spawn_HURT; the stand-in now leaves the spawn room (its Spawn_brush door was solid, see WoCourseIo.reseat_brushes) and walks 70+ m, but never reaches the finish; a death seats it in the lounge, which is inside the finish box (that, not a finish, was the 20 s result)"},
 	&"wo_labo_course": {"floor": false, "finish": false, "limit": 90, "fired": 5, "why": "presses five buttons and doors but the mesh still ends 131 m out; the three teleports lie off the mesh and 14 touch doors stand between"},
 	&"wo_sweet_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 251 m out; three of five teleports join, one is disabled with no button found, and the stand-in stalls after 27 m"},
 }
-const CHECKS_PER_COURSE := 7
+const CHECKS_PER_COURSE := 8
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
 ## Seconds the bake may take before the suite gives up.
@@ -176,6 +176,11 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 		if tracing and i % 128 == 0:
 			var tail: PackedVector3Array = game._io_bot.path_to(at)
 			print("    t=%.0f at %s falls=%d path_end=%s %s" % [i * TICK, at, bot.falls, str(tail[tail.size() - 1]) if not tail.is_empty() else "-", game._io_bot.describe()])
+			print("      mode %s vel %s surf %s mods %s" % [bot.controller.state.mode, bot.controller.state.velocity, bot.controller.state.surface, bot.controller.state.modifiers])
+			if OS.get_cmdline_user_args().has("--points"):
+				print("      path %s" % [Array(tail).slice(0, 6)])
+		if tracing and at.distance_to(last) > 3.0:
+			print("    jump t=%.2f %s -> %s finished=%s watching=%s phase=%s" % [i * TICK, last, at, bot.finished, bot.watching, game.phase])
 		last = at
 		# an eliminated stand-in is seated in the lounge, which lies inside the finish box: not a finish
 		if bot.finished and not bot.watching:
@@ -195,7 +200,7 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 		print("  NEAR %s" % here)
 		for node in game.stage.io.world.volumes.nodes:
 			var nb: AABB = node.volume.bounds()
-			if node.volume.kind != "hurt" and nb.grow(20.0).has_point(here):
+			if (node.volume.kind != "hurt" and nb.grow(20.0).has_point(here)) or (node.volume.kind == "hurt" and nb.grow(3.0).has_point(here)):
 				var ent = node.entity
 				print("    vol %s %s name=%s box %s active=%s outs=%s" % [node.volume.kind, node.volume.classname, node.volume.targetname, nb, node.active(), (ent.links if ent != null else node.volume.outputs).map(func(l): return "%s>%s:%s" % [l["output"], l["target"], l["input"]])])
 		for ent in game.stage.io.world.io.entities:
@@ -246,6 +251,9 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 	print("  fired %d, taken %d  %s" % [fired, taken, game._io_bot.describe()])
 	_check(fired == int(plan.get("fired", 0)) and taken == int(plan.get("taken", 0)), "it fired %d buttons or triggers and took %d teleports" % [plan.get("fired", 0), plan.get("taken", 0)],
 		"fired %d, taken %d" % [fired, taken])
+	var route_done: int = game._io_bot.route_done
+	_check(route_done == int(plan.get("route", 0)) and game._io_bot.route_skipped == 0, "it walked %d scripted route steps, none given up" % int(plan.get("route", 0)),
+		"done %d, given up %d" % [route_done, game._io_bot.route_skipped])
 	_check(not bot.finished or finished_at < limit, "inside %d seconds" % int(limit), "%.1f s" % finished_at)
 	_finished_count += 1
 

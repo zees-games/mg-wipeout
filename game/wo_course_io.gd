@@ -57,6 +57,14 @@ func build(spec: Dictionary, p_stage_id: StringName, hooks: Dictionary, p_author
 	return world
 
 
+## Switches the map's brushes to their state again: the world layer put on every body after the map's start
+## undid the ones it had switched off (a spawn wall that is off until a timer closes it).
+func reseat_brushes() -> void:
+	for e: DotMapEntity in world.io.entities:
+		if e is DotMapToggleBrush and e.node != null:
+			e._view_changed("enabled", e.enabled)
+
+
 ## Names the movers' bodies, once the world is in the tree.
 func index_movers() -> void:
 	_movers.clear()

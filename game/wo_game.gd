@@ -2682,7 +2682,8 @@ func _bot_run_io(player: WoPlayer, command: DotFpsCommand) -> void:
 		_io_bot = WoIoBot.new()
 		stage.io.touch_doors = true
 		_io_bot.setup(stage.io, stage.io.world, stage.finish_box(), {
-			"radius": tunables.radius if tunables != null else 0.35, "height": 0.9, "climb": 0.42}, stage.io.links())
+			"radius": tunables.radius if tunables != null else 0.35, "height": 0.9, "climb": 0.42}, stage.io.links(),
+			stage.doc.get("io_route", []))
 
 	_io_bot.steer(player.controller.state.position, player.controller.state.mode == DotFpsState.Mode.GROUND,
 		_tick, player.player_id, command)
