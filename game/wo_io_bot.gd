@@ -37,6 +37,9 @@ const DOCK_REACH := 1.4
 const HOP_REACH := 0.7
 ## Metres ahead of the feet a hurt volume is looked for.
 const KILL_LOOK := 1.3
+## Ticks held at a kill edge before the edge is given up, and ticks another mesh point is walked to in its place.
+const EDGE_PATIENCE := 96
+const WANDER_TICKS := 64 * 12
 ## Flat metres within which a route point is reached, and ticks one step may take before it is given up.
 const ROUTE_REACH := 0.8
 const ROUTE_PATIENCE := 64 * 25
@@ -65,6 +68,11 @@ var route_done := 0
 var route_skipped := 0
 ## Strides held back for a hurt volume ahead.
 var _avoided := 0
+## Consecutive ticks held at a kill edge, and the mesh point walked to instead once that passes EDGE_PATIENCE.
+var _edge := 0
+var _wander := Vector3.INF
+var _wander_until := 0
+var _wander_rng := DotRandomStream.new(900).stream(&"wo_io_bot_wander")
 
 ## The platform leg being ridden (a link of [member DotBotLinks.platform_links]) and the ticks spent on it.
 var _clock := 0
@@ -175,7 +183,14 @@ func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, comm
 	command.move = Vector2(0.0, 1.0)
 	if grounded and _kill_ahead(feet, toward):
 		command.move = Vector2.ZERO
+		_edge += 1
+		if _edge >= EDGE_PATIENCE:
+			_edge = 0
+			_wander = nav.random_point(_wander_rng)
+			_wander_until = tick + WANDER_TICKS
+			_path_tick = -REPATH_TICKS
 		return
+	_edge = 0
 
 	var mark: Dictionary = _mark.get(player_id, {"tick": tick, "at": feet})
 	if tick - int(mark["tick"]) >= STUCK_TICKS:
@@ -340,6 +355,9 @@ func _replan(feet: Vector3) -> void:
 	var world: Object = source.get("world") if source != null else null
 	if links != null and world != null and links.refresh(nav, world.get("io").get("destinations")) > 0:
 		_errand = {}
+	if _clock < _wander_until:
+		_path = nav.path(feet, _wander)
+		return
 	_path = nav.path(feet, _goal)
 	if links == null or _reaches(_path):
 		_errand = {}
@@ -431,6 +449,8 @@ func clear() -> void:
 	_mark.clear()
 	_rebakes.clear()
 	_avoided = 0
+	_edge = 0
+	_wander_until = 0
 	_route = []
 	_route_at = 0
 	_route_since = 0

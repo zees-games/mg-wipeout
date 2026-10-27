@@ -2153,6 +2153,7 @@ func _step_io() -> void:
 			if player.is_alive() and not player.watching and not player.finished:
 				bodies.append(io_body(player))
 
+	_release_hurt_grace()
 	stage.io.step(_tick, bodies)
 
 
@@ -2203,8 +2204,60 @@ func _use_io() -> void:
 			var _used := stage.io.world.io.use(mover.index, String(id))
 
 
-func _io_damage(body: Variant, amount: float, _kind: String, _attacker: Variant) -> void:
+## player id -> `{DotMapHurt: true}`: the hurt volumes a respawned body stands in, which do not hurt it until it
+## has left them. A map's anti-camp volume (switched on 30 s in around its spawn) would otherwise kill each
+## respawn in the same place, forever.
+var _hurt_grace: Dictionary = {}
+
+
+## Spawn protection from the hurt volumes round [param player]'s feet, for as long as it stays in them.
+func _protect_from_hurts(player: WoPlayer) -> void:
+	_hurt_grace.erase(player.player_id)
+
+	if stage == null or stage.io == null or not authoritative:
+		return
+
+	var feet := player.controller.state.position
+	var tall := player.controller.tunables.stand_height if player.controller.tunables != null else 1.8
+	var held := {}
+
+	for node: DotMapVolumeNode in stage.io.world.volumes.nodes:
+		if node.volume.kind == "hurt" and node.entity != null and node.volume.touches_column(feet, tall):
+			held[node.entity] = true
+
+	if not held.is_empty():
+		_hurt_grace[player.player_id] = held
+
+
+## Drops each protection whose body has left the volume it covered.
+func _release_hurt_grace() -> void:
+	if _hurt_grace.is_empty():
+		return
+
+	for id: StringName in _hurt_grace.keys():
+		var player: WoPlayer = players.get(id)
+
+		if player == null:
+			_hurt_grace.erase(id)
+			continue
+
+		var feet := player.controller.state.position
+		var tall := player.controller.tunables.stand_height if player.controller.tunables != null else 1.8
+		var held: Dictionary = _hurt_grace[id]
+
+		for node: DotMapVolumeNode in stage.io.world.volumes.nodes:
+			if held.has(node.entity) and not node.volume.touches_column(feet, tall):
+				held.erase(node.entity)
+
+		if held.is_empty():
+			_hurt_grace.erase(id)
+
+
+func _io_damage(body: Variant, amount: float, _kind: String, attacker: Variant) -> void:
 	var player := body as WoPlayer
+
+	if player != null and _hurt_grace.has(player.player_id) and (_hurt_grace[player.player_id] as Dictionary).has(attacker):
+		return
 
 	if player == null or player.health == null or not authoritative or stage == null \
 			or not stage.is_course() or phase != Phase.COURSE or player.finished or not player.is_alive() or amount <= 0.0:
@@ -2501,6 +2554,7 @@ func _fell(player: WoPlayer) -> void:
 	else:
 		var spot := stage.respawn_point(player.checkpoint, player.falls % 5)
 		player.place_at(spot[0], spot[1])
+		_protect_from_hurts(player)
 
 		# [b]Back at the checkpoint healed, as crossing it heals.[/b] A knock that throws you in
 		# has already cost the time back to the checkpoint; on the longer courses the health it
@@ -3980,6 +4034,7 @@ func _on_player_died(player: WoPlayer, damage: DotDamage) -> void:
 		else:
 			var spot := stage.respawn_point(player.checkpoint, player.falls % 5)
 			player.place_at(spot[0], spot[1])
+			_protect_from_hurts(player)
 
 	DotLog.debug(CHANNEL, "player died", {
 		"id": String(player.player_id), "by": String(by), "why": String(why),
