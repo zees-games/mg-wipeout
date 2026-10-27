@@ -514,7 +514,10 @@ func _start_workbench(world: WoGame) -> void:
 	if ambient_set != null:
 		workbench.add_set(ambient_set, "Ambience (wo_ambient*)")
 	add_child(workbench)
-	var started := workbench.start()
+	var started := workbench.start(world.ensure_runtime())
+	# Off until the owner sets sv_workbench_remote 1; then flagged admins edit from a client.
+	if started.ok and net != null:
+		var _served := workbench.serve_remote(net)
 	if not started.ok:
 		log_info("the workbench did not start", {"why": started.error.message})
 		return

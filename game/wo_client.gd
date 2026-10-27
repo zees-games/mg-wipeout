@@ -95,6 +95,10 @@ var weapons: ZeeWeaponRig = null
 var view_model: ZeeViewModel = null
 
 var net: DotNetManager = null
+## Asks a server whether this player may edit it (sv_workbench_remote); null offline.
+var workbench_remote: DotGameWorkbenchRemoteClient = null
+## The tuning panel's host: F9 solo, the admin's remote panel on a server that allows it.
+var workbench: DotGameWorkbench = null
 var bridge: WoNetBridge = null
 var link: Node = null
 
@@ -219,7 +223,10 @@ func _ready() -> void:
 		# adds this scene and tells the server it has loaded on the next line, so the netcode
 		# is up before the server has been told there is anybody to send to — which is the
 		# order that leaves nothing to be missed.
-		DotLog.result(CHANNEL, "the netcode", _build_netcode())
+		var netted := _build_netcode()
+		DotLog.result(CHANNEL, "the netcode", netted)
+		if netted.ok:
+			_start_remote_workbench()
 
 
 # --- The load gate ---------------------------------------------------------
@@ -381,6 +388,28 @@ func _add_noblock_and_workbench() -> void:
 	platform.add_workbench(wb)
 
 
+## Online: no local trust and no panel until the server names this player an admin (sv_workbench_remote). The rows are the server's, through the bridge's profile link.
+func _start_remote_workbench() -> void:
+	if workbench_remote == null:
+		return
+	var wb := DotGameWorkbench.new()
+	wb.name = "Workbench"
+	wb.remote_client = workbench_remote
+	wb.remote_fn = func() -> bool: return true
+	wb.config = {"enabled": false}
+	if game.config_binder != null:
+		for set: DotProfileSet in game.config_binder.profile_sets():
+			wb.add_set(set, "Game settings: %s" % set.rel_path.trim_prefix("config_"))
+	add_child(wb)
+	var started := wb.start(game.ensure_runtime())
+	DotLog.result(CHANNEL, "the remote workbench", started)
+	if not started.ok:
+		wb.queue_free()
+		return
+	workbench = wb
+	platform.add_workbench(wb)
+
+
 # --- Connected -------------------------------------------------------------
 
 func _build_netcode() -> DotResult:
@@ -446,6 +475,8 @@ func _build_netcode() -> DotResult:
 	bridge.open_link(link)
 	# Before the seal and in the server's order (after the bridge), or the actions stay local.
 	DotLog.result(CHANNEL, "avatar action message", DotGameAvatarActionMessage.register(net))
+	# The server's order again (after the avatar frame): the remote workbench's frame.
+	workbench_remote = DotGameWorkbenchRemoteClient.attach(net)
 	net.messages.seal()
 
 	bridge.hello_received.connect(_on_hello)
@@ -489,6 +520,8 @@ func _build_netcode() -> DotResult:
 
 
 func _say_ready() -> void:
+	if workbench_remote != null:
+		workbench_remote.ask()
 	if bridge != null:
 		bridge.ask_ready()
 
