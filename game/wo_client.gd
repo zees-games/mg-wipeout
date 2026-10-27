@@ -2,6 +2,7 @@ extends Node
 
 const WoAnnouncer := preload("wo_announcer.gd")
 const WoAudio := preload("wo_audio.gd")
+const WoWeaponIcons := preload("wo_weapon_icons.gd")
 const WoBindings := preload("wo_bindings.gd")
 const WoFigure := preload("wo_figure.gd")
 const WoKillcam := preload("wo_killcam.gd")
@@ -343,6 +344,10 @@ func _start_offline() -> void:
 ## server has; `-- --bot_difficulty hard` at launch. Connected, the server's console holds them
 ## and a local copy would shadow it.
 func _bind_bot_console() -> void:
+	if console != null:
+		var local: Array = console.sources()
+		if not local.is_empty() and local[0] is DotConsoleLocal:
+			var _icons := WoWeaponIcons.shared.bind_console(local[0])
 	if not _offline or console == null or game == null:
 		return
 	var sources: Array = console.sources()
