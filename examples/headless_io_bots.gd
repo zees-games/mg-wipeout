@@ -20,10 +20,10 @@ const COURSES := {
 	&"wo_scary_course": {"floor": false, "finish": false, "limit": 90, "fired": 1, "why": "fires one trigger but the mesh still ends 47 m out (movers are not in the bake), then the map's AFK_KILLER trigger_hurt kills the idle stand-in (121 'falls', not edge falls); no teleport"},
 	&"wo_lego_course": {"floor": false, "finish": false, "limit": 90, "fired": 1, "why": "fires one trigger but the mesh still ends 96 m out (movers are not in the bake), then the map's 'afk' trigger_hurt kills the idle stand-in (91 'falls', not edges); no teleport"},
 	&"wo_dc_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 292 m out; two teleports join but the stand-in is killed (99) by the 'spawnkill' trigger_hurt around its spawn, not at an edge, before reaching one"},
-	&"wo_waytobar_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 25 m out at the glass slab, a lethal trigger_hurt carved out of the mesh; the six teleports are on islands cut off from the start, and the AFK_KILLER trigger_hurt kills the idle stand-in (121)"},
+	&"wo_waytobar_course": {"floor": false, "finish": false, "limit": 90, "why": "hop edges across the start pool (stepping pads 1.9 m wide) join 8 islands to the start, ending 26 m out at the glass slab, a lethal trigger_hurt carved out of the mesh; the six teleports are on islands the pads do not reach, and the AFK_KILLER trigger_hurt kills the idle stand-in (121)"},
 	&"wo_dans_course": {"floor": false, "finish": false, "limit": 90, "fired": 1, "why": "presses the door button (23) but stalls 96 m out; of three teleports one joins and two lie off the mesh with nothing found to enable them"},
-	&"wo_office_course": {"floor": false, "finish": false, "limit": 90, "fired": 1, "why": "presses one button and ends 2 m from the finish, but the map's own timer kills the stand-in, so it never finishes; 2 of 5 teleports are disabled until then"},
-	&"wo_labo_course": {"floor": false, "finish": false, "limit": 90, "fired": 2, "why": "presses two buttons (423, 460) but the mesh still ends 128 m out; the three teleports lie off the mesh and 14 touch doors stand between"},
+	&"wo_office_course": {"floor": false, "finish": false, "limit": 90, "why": "walks 67 m, presses nothing now (the hop and drop edges found a way round the button) and ends 2 m from the finish, but the map's own timer kills the stand-in, so it never finishes; 2 of 5 teleports are disabled until then"},
+	&"wo_labo_course": {"floor": false, "finish": false, "limit": 90, "fired": 5, "why": "presses five buttons and doors but the mesh still ends 131 m out; the three teleports lie off the mesh and 14 touch doors stand between"},
 	&"wo_sweet_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 251 m out; three of five teleports join, one is disabled with no button found, and the stand-in stalls after 27 m"},
 }
 const CHECKS_PER_COURSE := 7
@@ -133,6 +133,23 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 		for t in game._io_bot.links.teleports:
 			var tf: Variant = t.get("from")
 			print("   tp %s from-island %s reachable-from-start %s | dest %s island %s reaches-goal %s" % [t["entity"], gnav.island_at(tf) if tf is Vector3 else "-", gnav.joined(start, tf) if tf is Vector3 else "-", t["to"], gnav.island_at(t["to"]), gnav.joined(t["to"], goal)])
+		var si := gnav.island_at(start)
+		for isl in gnav.islands():
+			if isl["index"] == si:
+				print("   START island %d area %.0f bounds %s" % [si, isl["area"], isl["bounds"]])
+		for k in game._io_bot.links.kills:
+			if k.grow(3.0).has_point(start):
+				print("   kill box around start %s" % [k])
+		for r in gnav.rides():
+			if gnav.island_at(r["from"]) == si:
+				print("   ride from start island id %d from %s to %s (island %d)" % [r["id"], r["from"], r["to"], gnav.island_at(r["to"])])
+		var reach := 0
+		for isl in gnav.islands():
+			if OS.get_cmdline_user_args().has("--reach") and gnav.joined(start, isl["centre"]):
+				reach += 1
+				if reach < 12:
+					print("   reachable island %d area %.0f bounds %s" % [isl["index"], isl["area"], isl["bounds"]])
+		print("   islands reachable from start: %d" % reach)
 		for isl in gnav.islands().slice(0, 12):
 			print("   island %d area %.0f bounds %s joined-from-start %s" % [isl["index"], isl["area"], isl["bounds"], gnav.joined(start, isl["centre"])])
 	var tracing := OS.get_cmdline_user_args().has("--trace")
@@ -192,6 +209,17 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 				var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(top, top + Vector3(0, -30, 0)))
 				line += " %.0f:%s%s" % [dist, "W" if not wall.is_empty() else "", "%.1f" % (hit["position"].y - here.y) if not hit.is_empty() else "-"]
 			print("   dir %3d%s" % [deg, line])
+	if OS.get_cmdline_user_args().has("--locks"):
+		for ent in game.stage.io.world.io.entities:
+			for l in ent.links:
+				if str(l["input"]).to_lower() in ["unlock", "lock", "open", "toggle", "close"]:
+					var kind := ""
+					var at := Vector3.INF
+					if ent.get("mover") != null:
+						kind = "mover/" + str(ent.mover.kind)
+					if ent.get("hit_frame") != null:
+						at = ent.hit_frame.origin
+					print("    LINK %s %s (%s) name=%s at %s: %s > %s:%s" % [ent.index, ent.classname, kind, ent.targetname, at, l["output"], l["target"], l["input"]])
 	if OS.get_cmdline_user_args().has("--paths"):
 		for ent in game.stage.io.world.io.entities:
 			var mv = ent.get("mover")

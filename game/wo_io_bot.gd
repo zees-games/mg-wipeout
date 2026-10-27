@@ -21,6 +21,8 @@ const STUCK_TICKS := 64
 const STUCK_METRES := 0.5
 ## Metres from the end of the path at which the floor has nothing more to offer.
 const STALLED := 2.0
+## Metres (flat) from the finish within which the end of the floor is dived off, straight at it.
+const DIVE_REACH := 80.0
 ## Ticks standing where a button or trigger fires before it counts as fired (a box test is looser than the brush).
 const HOLD_TICKS := 24
 ## Replans (32 ticks each) an errand may take before it is given up.
@@ -143,7 +145,9 @@ func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, comm
 
 	var target := _into_teleport(_next_point(feet), feet)
 	if target == Vector3.INF:
-		return
+		target = _dive(feet)
+		if target == Vector3.INF:
+			return
 
 	var toward := target - feet
 	toward.y = 0.0
@@ -278,6 +282,19 @@ func _arrived() -> void:
 
 func _reaches(points: PackedVector3Array) -> bool:
 	return not points.is_empty() and _finish.grow(1.0).has_point(points[points.size() - 1])
+
+
+## At the end of the floor with the finish near and no errand left: walk straight at it. A finish is often a pool or a
+## drop below the last ledge, with no floor under it for the mesh to lead to, so the last leg is a step off the edge.
+func _dive(feet: Vector3) -> Vector3:
+	if not _errand.is_empty() or _path.is_empty():
+		return Vector3.INF
+	var end := _path[_path.size() - 1]
+	if Vector2(end.x - _goal.x, end.z - _goal.z).length() > DIVE_REACH or Vector2(feet.x - end.x, feet.z - end.z).length() > REACHED + 1.0:
+		return Vector3.INF
+	if Vector2(_goal.x - feet.x, _goal.z - feet.z).length() < 0.5:
+		return Vector3.INF
+	return Vector3(_goal.x, feet.y, _goal.z)
 
 
 ## A teleport the path crosses may sit a step off the mesh: walk into its box rather than to its edge point.
