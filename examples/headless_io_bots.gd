@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoConfig := preload("../game/wo_config.gd")
@@ -32,11 +32,8 @@ const TICK := 1.0 / float(TICK_RATE)
 ## Seconds the bake may take before the suite gives up.
 const BAKE_WAIT := 90.0
 
-var _passed := 0
-var _failed := 0
 var _entered := 0
 var _finished_count := 0
-var _failures := PackedStringArray()
 var _world: WoGame = null
 
 
@@ -64,15 +61,7 @@ func _run() -> void:
 		expected += 1
 		await _course(catalogue.courses[id], id, COURSES[id])
 
-	print("")
-	print("%d passed, %d failed" % [_passed, _failed])
-	for line in _failures:
-		print("  FAIL  %s" % line)
-	var code := 1 if _failed > 0 else 0
-	if _entered != _finished_count or _entered != expected or _passed + _failed != expected * CHECKS_PER_COURSE:
-		print("ERROR: %d of %d courses finished, %d checks ran, %d expected." % [_finished_count, _entered, _passed + _failed, expected * CHECKS_PER_COURSE])
-		code = 1
-	get_tree().quit(code)
+	_report_sections(_entered, _finished_count, expected, expected * CHECKS_PER_COURSE)
 
 
 func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
@@ -207,6 +196,23 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 			var mv = ent.get("mover")
 			if mv != null and ent.hit_half != Vector3.ZERO and ent.hit_frame.origin.distance_to(here) < 20.0:
 				print("    mover %s %s kind=%s name=%s at %s half %s use=%s touch=%s locked=%s outs=%s" % [ent.index, ent.classname, mv.kind, ent.targetname, ent.hit_frame.origin, ent.hit_half, mv.use, mv.touch, ent.locked, ent.links.map(func(l): return "%s>%s:%s" % [l["output"], l["target"], l["input"]])])
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--ent="):
+			for ent in game.stage.io.world.io.entities:
+				if str(ent.targetname).contains(a.substr(6)):
+					print("    ENT %s %s name=%s origin %s half %s outs=%s" % [ent.index, ent.classname, ent.targetname, ent.hit_frame.origin if ent.get("hit_frame") != null else null, ent.hit_half if ent.get("hit_half") != null else null, ent.links.map(func(l): return "%s>%s:%s" % [l["output"], l["target"], l["input"]])])
+	if OS.get_cmdline_user_args().has("--bodies"):
+		var here := bot.controller.state.position
+		var stack: Array = [game.stage.io.world]
+		while not stack.is_empty():
+			var n: Node = stack.pop_back()
+			stack.append_array(n.get_children())
+			if n is CollisionObject3D:
+				for c in n.get_children():
+					if c is CollisionShape3D and c.shape != null:
+						var wb: AABB = (c as CollisionShape3D).global_transform * c.shape.get_debug_mesh().get_aabb()
+						if wb.grow(3.0).has_point(here) or n.collision_layer == 0:
+							print("    BODY %s %s layer %d aabb %s" % [n.get_class(), n.name, n.collision_layer, wb])
 	if OS.get_cmdline_user_args().has("--ring"):
 		var here := bot.controller.state.position
 		var space := game.stage.io.world.get_world_3d().direct_space_state
@@ -308,12 +314,5 @@ func _fresh_world(doc: Dictionary) -> WoGame:
 	return game
 
 
-func _check(ok: bool, what: String, detail: String = "") -> void:
-	if ok:
-		_passed += 1
-		print("  ok    %s%s" % [what, "" if detail == "" else "  (%s)" % detail])
-		return
-	_failed += 1
-	var line := "%s: %s%s" % [_world.config.course_ids[0] if _world != null else "?", what, "" if detail == "" else "  (%s)" % detail]
-	_failures.append(line)
-	print("  FAIL  %s" % line)
+func _failure_prefix() -> String:
+	return "%s: " % (_world.config.course_ids[0] if _world != null else "?")

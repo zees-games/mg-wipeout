@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoConfig := preload("../game/wo_config.gd")
@@ -41,11 +41,8 @@ const RELAXED_DROP := 30.0
 const DIRS := [Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1),
 	Vector2(0.7071, 0.7071), Vector2(-0.7071, 0.7071), Vector2(0.7071, -0.7071), Vector2(-0.7071, -0.7071)]
 
-var _passed := 0
-var _failed := 0
 var _entered := 0
 var _finished_count := 0
-var _failures := PackedStringArray()
 var _world: WoGame = null
 var _expected_sections := 0
 var _debug := ""
@@ -94,18 +91,7 @@ func _run() -> void:
 		print("  %s" % line)
 
 	print("")
-	print("%d passed, %d failed" % [_passed, _failed])
-	for line in _failures:
-		print("  FAIL  %s" % line)
-
-	var code := 1 if _failed > 0 else 0
-	if _entered != _finished_count or _entered != _expected_sections:
-		print("ERROR: %d of %d sections finished, %d expected." % [_finished_count, _entered, _expected_sections])
-		code = 1
-	if only == "" and _passed + _failed != _expected_sections * CHECKS_PER_COURSE:
-		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [_passed + _failed, _expected_sections * CHECKS_PER_COURSE])
-		code = 1
-	get_tree().quit(code)
+	_report_sections(_entered, _finished_count, _expected_sections, -1 if only != "" else _expected_sections * CHECKS_PER_COURSE)
 
 
 func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> String:
@@ -935,12 +921,5 @@ func _fresh_world(doc: Dictionary) -> WoGame:
 	return game
 
 
-func _check(ok: bool, what: String, detail: String = "") -> void:
-	if ok:
-		_passed += 1
-		print("  ok    %s%s" % [what, "" if detail == "" else "  (%s)" % detail])
-		return
-	_failed += 1
-	var line := "%s: %s%s" % [_world.config.course_ids[0] if _world != null else "?", what, "" if detail == "" else "  (%s)" % detail]
-	_failures.append(line)
-	print("  FAIL  %s" % line)
+func _failure_prefix() -> String:
+	return "%s: " % (_world.config.course_ids[0] if _world != null else "?")

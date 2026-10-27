@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoConfig := preload("../game/wo_config.gd")
@@ -34,11 +34,8 @@ const CHECKS := 222
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
 
-var _passed := 0
-var _failed := 0
 var _sections_entered := 0
 var _sections_finished := 0
-var _failures := PackedStringArray()
 
 var _worlds: Array[WoGame] = []
 
@@ -100,28 +97,7 @@ func _run() -> void:
 
 	await get_tree().process_frame
 
-	print("")
-	print("%d sections entered, %d finished" % [_sections_entered, _sections_finished])
-	print("%d passed, %d failed" % [_passed, _failed])
-
-	for line in _failures:
-		print("  FAIL  %s" % line)
-
-	var code := 1 if _failed > 0 else 0
-
-	if _sections_entered != _sections_finished or _sections_entered != SECTIONS:
-		print("ERROR: %d of %d sections finished, %d expected." % [
-			_sections_finished, _sections_entered, SECTIONS
-		])
-		code = 1
-
-	if _passed + _failed != CHECKS:
-		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [
-			_passed + _failed, CHECKS
-		])
-		code = 1
-
-	get_tree().quit(code)
+	_report_sections(_sections_entered, _sections_finished, SECTIONS, CHECKS)
 
 
 # --- Without a world ------------------------------------------------------------
@@ -1794,18 +1770,6 @@ func _section(name: String) -> void:
 
 func _finished() -> void:
 	_sections_finished += 1
-
-
-func _check(ok: bool, what: String, detail: String = "") -> void:
-	if ok:
-		_passed += 1
-		print("  ok    %s%s" % [what, "" if detail == "" else "  (%s)" % detail])
-		return
-
-	_failed += 1
-	var line := "%s%s" % [what, "" if detail == "" else "  (%s)" % detail]
-	_failures.append(line)
-	print("  FAIL  %s" % line)
 
 
 ## A world on the practice course (or on [param course]), stepped by hand.

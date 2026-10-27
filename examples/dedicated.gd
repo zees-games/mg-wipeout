@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
@@ -25,11 +25,8 @@ const PORT := 28931
 const QUERY_PORT := 28932
 const TICK_RATE := 60
 
-var _passed := 0
-var _failed := 0
 var _sections_entered := 0
 var _sections_finished := 0
-var _failures := PackedStringArray()
 
 var server: DotServer = null
 var game: WoGame = null
@@ -66,26 +63,9 @@ func _run() -> void:
 
 	_test_no_message_preloads_itself()
 
-	print("")
-	print("%d sections entered, %d finished" % [_sections_entered, _sections_finished])
-	print("%d passed, %d failed" % [_passed, _failed])
-
-	for line in _failures:
-		print("  FAIL  %s" % line)
-
-	var code := 1 if _failed > 0 else 0
-
-	if _sections_entered != _sections_finished or _sections_entered != SECTIONS:
-		print("ERROR: %d of %d sections finished, %d declared." % [_sections_finished, _sections_entered, SECTIONS])
-		code = 1
-
-	if _passed + _failed != CHECKS:
-		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [_passed + _failed, CHECKS])
-		code = 1
-
 	await _shut_down()
 	DotPaths.remove_tree(SERVER_DIR)
-	get_tree().quit(code)
+	_report_sections(_sections_entered, _sections_finished, SECTIONS, CHECKS)
 
 
 ## Takes the server down before quitting: a booted [DotServer]'s listener holds the main loop,
@@ -1086,15 +1066,3 @@ func _section(name: String) -> void:
 
 func _finished() -> void:
 	_sections_finished += 1
-
-
-func _check(ok: bool, what: String, detail: String = "") -> void:
-	if ok:
-		_passed += 1
-		print("  ok    %s%s" % [what, "" if detail == "" else "  (%s)" % detail])
-		return
-
-	_failed += 1
-	var line := "%s%s" % [what, "" if detail == "" else "  (%s)" % detail]
-	_failures.append(line)
-	print("  FAIL  %s" % line)
