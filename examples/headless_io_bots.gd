@@ -15,7 +15,7 @@ const WoGame := preload("../game/wo_game.gd")
 ## somebody looks. headless_routes finds which teleports and doors a walk can fire.
 
 const COURSES := {
-	&"wo_oaks_course": {"floor": false, "finish": false, "limit": 90, "why": "13 m on the floor ends at the pit past the start door; no teleport is read at all (the chain behind the door is not a teleport the links see), so there is no button to press"},
+	&"wo_oaks_course": {"floor": false, "finish": false, "limit": 90, "why": "13 m on the floor ends at the pit past the start door; dot-map's nav export lists the start door (SpawnDoorT) with no opener, only the round's own logic moves it, so there is no button to press"},
 	&"wo_pauls_course": {"floor": false, "finish": false, "limit": 90, "fired": 3, "taken": 1, "why": "presses three buttons, which enables two teleports, and takes one; it lands on an island 16 m above the finish with no drop edge down, so it stalls short"},
 	&"wo_scary_course": {"floor": false, "finish": false, "limit": 90, "fired": 1, "why": "fires one trigger but the mesh still ends 47 m out (movers are not in the bake), then the map's AFK_KILLER trigger_hurt kills the idle stand-in (121 'falls', not edge falls); no teleport"},
 	&"wo_lego_course": {"floor": false, "finish": false, "limit": 90, "fired": 1, "why": "fires one trigger but the mesh still ends 96 m out (movers are not in the bake), then the map's 'afk' trigger_hurt kills the idle stand-in (91 'falls', not edges); no teleport"},
@@ -108,6 +108,12 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 		"path ends %.1f m from it" % [(path[path.size() - 1] if not path.is_empty() else start).distance_to(finish.get_center())])
 
 	print("  links %s" % [game._io_bot.links.describe()])
+	if OS.get_cmdline_user_args().has("--export"):
+		var ex := DotMapNavLinks.read(game.stage.io.world)
+		for d: Dictionary in ex["doors"]:
+			print("    door %s %s %s %s opens=%s by=%s" % [d["entity"], d["classname"], d["name"], d["box"], d["opens"], (d["opened_by"] as Array).map(func(o: Dictionary) -> String: return "%s#%d/%s/%dh" % [o["kind"], o["index"], o["name"], o["hops"]])])
+		for t: Dictionary in ex["teleports"]:
+			print("    teleport %s %s enabled=%s to %s by=%s" % [t["entity"], t["name"], t["enabled"], t["to"], (t["opened_by"] as Array).map(func(o: Dictionary) -> String: return "%s#%d/%s/%dh" % [o["kind"], o["index"], o["name"], o["hops"]])])
 	if OS.get_cmdline_user_args().has("--dump"):
 		var lk: DotBotLinks = game._io_bot.links
 		for o in lk.off_mesh:

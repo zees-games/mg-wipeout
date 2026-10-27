@@ -95,7 +95,7 @@ func step(tick: int, bodies: Array) -> void:
 ## What the map's entities say about where a body can go and what opens by touch.
 func links() -> DotBotLinks:
 	if _links == null:
-		_links = DotBotLinks.read(world)
+		_links = DotBotLinks.read(world, {"nav_export": DotMapNavLinks.read(world)})
 	return _links
 
 

@@ -347,3 +347,5 @@ static func _statics(node: Node, into: Array) -> void:
 		into.append(node)
 	for child in node.get_children():
 		_statics(child, into)
+	elif _errand["kind"] == "shoot":
+		var _shot: Variant = source.get("world").get("io").call("hurt", int(_errand["index"]), 1000.0)
