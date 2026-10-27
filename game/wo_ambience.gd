@@ -4,8 +4,8 @@ extends RefCounted
 
 const PREFIX := "wo"
 ## The crowd and the machinery are the show; the layer sits under them.
-const LEVEL := 0.35
-const RATE := 0.6
+const LEVEL := 0.15
+const RATE := 0.4
 const DEFAULT_MOOD := &"swamp"
 
 ## By course id prefix (lower case); a course not listed takes the default.
