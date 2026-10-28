@@ -13,8 +13,6 @@ game/wo_game.gd::_finish::string_build	1
 game/wo_game.gd::_lay_out_course::alloc_dict	1
 game/wo_game.gd::_lay_out_course::duplicate	1
 game/wo_game.gd::_lay_out_course::string_build	2
-game/wo_game.gd::_racer_of::alloc_dict	1
-game/wo_game.gd::_tile_claims::alloc_array	1
 game/wo_game.gd::_weapon_pool::alloc_array	1
 game/wo_game.gd::_weather_route::alloc_array	1
 game/wo_game.gd::build_stage::string_build	1

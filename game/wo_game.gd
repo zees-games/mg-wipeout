@@ -1220,18 +1220,19 @@ static func _vec(value: Variant) -> Vector3:
 ## is built without a start pen and a client, sent the document, builds the same. Solo has no
 ## console to apply the cfg, so this reads it itself.
 func _with_course_rules(doc: Dictionary) -> Dictionary:
-	if catalogue == null or str(doc.get("kind", "")) != "course" or doc.has("instant"):
+	if catalogue == null or doc.get("kind", "") != "course" or doc.has("instant"):
 		return doc
 
-	var path := str(catalogue.course_cfg.get(StringName(str(doc.get("id", ""))), ""))
+	var path: String = catalogue.course_cfg.get(StringName(doc.get("id", "")), "")
 
 	if path == "":
 		return doc
 
 	for pair: Array in WoCourseCfg.parse(FileAccess.get_file_as_string(path)):
-		if pair[0] == "wo_instant_death" and str(pair[1]).to_float() > 0.5:
-			var marked := doc.duplicate()
-			marked["instant"] = true
+		if pair[0] == "wo_instant_death" and float(pair[1]) > 0.5:
+			var marked: Dictionary
+			marked = {"instant": true}
+			marked.merge(doc)
 			return marked
 
 	return doc
@@ -2077,23 +2078,26 @@ var io_log: Dictionary = {"teleports": 0, "pushes": 0, "hurts": 0, "uses": 0}
 ## Where the map teleported whom, in order: `{"body": WoPlayer, "to": Vector3}`. Capped.
 var io_teleported: Array = []
 
+## Reused each tick by [method _step_io].
+var _io_bodies: Array = []
+
 
 ## Once a tick, after everybody moved: the map's entity logic and volumes see who is where.
 func _step_io() -> void:
 	if stage == null or stage.io == null or not authoritative:
 		return
 
-	var bodies: Array = []
+	_io_bodies.clear()
 
 	if phase == Phase.COURSE:
 		for id: StringName in players:
 			var player: WoPlayer = players[id]
 
 			if player.is_alive() and not player.watching and not player.finished:
-				bodies.append(io_body(player))
+				_io_bodies.append(io_body(player))
 
 	_release_hurt_grace()
-	stage.io.step(_tick, bodies)
+	stage.io.step(_tick, _io_bodies)
 
 
 ## The body a map's volumes and filters see for [param player]. On no Source team (0): a map's team filter then
@@ -2158,10 +2162,13 @@ func _protect_from_hurts(player: WoPlayer) -> void:
 
 	var feet := player.controller.state.position
 	var tall := player.controller.tunables.stand_height if player.controller.tunables != null else 1.8
-	var held := {}
+	var held: Dictionary
 
 	for node: DotMapVolumeNode in stage.io.world.volumes.nodes:
 		if node.volume.kind == "hurt" and node.entity != null and node.volume.touches_column(feet, tall):
+			if held.is_empty():
+				held = {}
+
 			held[node.entity] = true
 
 	if not held.is_empty():
