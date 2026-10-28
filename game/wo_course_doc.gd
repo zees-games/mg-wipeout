@@ -631,6 +631,7 @@ static func _is_id(id: String) -> bool:
 
 
 static func _refuse(why: String, doc: Dictionary) -> DotResult:
+	DotLog.debug(CHANNEL, "a course document was refused", {"id": str(doc.get("id", "?")), "why": why})
 	return DotResult.fail(
 		DotError.CODE_INVALID, "The document is refused: %s." % why, str(doc.get("id", "?"))
 	)

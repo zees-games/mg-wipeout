@@ -107,6 +107,8 @@ func build(height: float, atlas_path: String, colour: Color) -> void:
 	add_child(person)
 	person.build(look, height)
 	from_art = person.from_art
+	if not from_art:
+		DotLog.warn(CHANNEL, "the person's art did not load; a capsule stands in", {"atlas": atlas.get_file()})
 
 
 ## The drawn model, for a death that breaks it apart or falls. Null before [method build].

@@ -452,6 +452,7 @@ func aim_direction() -> Vector3:
 ## (the motor taking the yaw back on the next tick from a command that still said north).
 func place_at(at: Vector3, yaw_degrees: float) -> void:
 	warps += 1
+	DotLog.debug(CHANNEL, "placed", {"player": String(player_id), "at": at, "warps": warps})
 	global_position = at
 	# Put somewhere new, the next knock is a new one: [WoGame] charges a knock at most once a
 	# second, which is about a ram pinning somebody, not about the next obstacle.
