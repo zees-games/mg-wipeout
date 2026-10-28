@@ -1,7 +1,6 @@
 extends RefCounted
 
 const WoPaths := preload("wo_paths.gd")
-const WoLightBalance := preload("wo_light_balance.gd")
 
 ## A course's imported geometry: a `world` piece names a dot-bsp-mesh (`worlds/<mesh>.json` and
 ## `.bin` beside the courses) that dot-map's converter wrote, and this builds it: the faces
@@ -18,6 +17,9 @@ const CLOUD_SERVICE := &"dot_cloud_client"
 ## Hull kinds a player is stopped by. A piece's `skip` lists model numbers the course replaces
 ## with its own scripted pieces.
 const SOLID_KINDS := ["solid", "clip", "glass"]
+
+## Brightest to dimmest channel an imported bake may keep, on every surface and an actor's ambient (dot-map's shader limit); tighter than its floor's 2.5 because a blue author bake tinted every wall.
+const MAX_CHROMA_RATIO := 1.6
 
 ## Directories that hold `<mesh>.json`; the catalogue adds `<courses>/../worlds`.
 static var dirs: PackedStringArray = PackedStringArray()
@@ -166,6 +168,7 @@ static func build_io(spec: Dictionary, hooks: Dictionary, authoritative: bool, d
 		_surfaces = DotMapSurfaces.new()
 		_surfaces.path_fn = WoPaths.rebase
 
+	DotMapBspMesh.set_lightmap_max_chroma_ratio(MAX_CHROMA_RATIO)
 	var wired := hooks.duplicate()
 	var built := DotMapWorld.build(prefix, wired, {
 		"authoritative": authoritative, "rate": rate, "map_id": mesh_id,
@@ -177,6 +180,4 @@ static func build_io(spec: Dictionary, hooks: Dictionary, authoritative: bool, d
 		DotLog.warn(CHANNEL, "an io world would not build", {"mesh": mesh_id, "why": built.error.message})
 		return null
 
-	if draw and built.value.visual != null:
-		WoLightBalance.apply(built.value.visual)
 	return built.value

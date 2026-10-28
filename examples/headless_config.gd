@@ -8,7 +8,7 @@ extends DotGameCheckSuite
 
 const WoConfig := preload("../game/wo_config.gd")
 const WoBlurb := preload("../game/wo_blurb.gd")
-const WoLightBalance := preload("../game/wo_light_balance.gd")
+const WoWorld := preload("../game/wo_world.gd")
 const ROOT := "user://wo_cfgtest"
 const GAME := "mg-wipeout"
 const CHECKS := 36
@@ -100,12 +100,11 @@ func _check_look() -> void:
 		var rect := WoBlurb.rect_for(view)
 		var centre := Rect2(view * Vector2(0.3, 0.2), view * Vector2(0.4, 0.7))
 		_check(not rect.intersects(centre) and rect.end.x <= view.x * 0.3 and rect.position.y < view.y * 0.2 + 100.0, "the blurb clears the middle at %dx%d" % [view.x, view.y], str(rect))
-	var cast := WoLightBalance.tint_for(Color(0.192, 0.206, 0.877))
-	var after := Color(0.192 * cast.r, 0.206 * cast.g, 0.877 * cast.b)
-	var ratio := maxf(after.r, maxf(after.g, after.b)) / minf(after.r, minf(after.g, after.b))
-	_check(ratio <= WoLightBalance.MAX_RATIO + 0.01 and maxf(cast.r, maxf(cast.g, cast.b)) <= 1.0, "a saturated blue bake (Destiny Course) is brought within the ratio", "%s %.2f" % [cast, ratio])
-	_check(WoLightBalance.tint_for(Color(0.2, 0.21, 0.19)) == Color.WHITE, "a neutral bake is left alone")
-	_check(WoLightBalance.tint_for(Color.BLACK) == Color.WHITE, "a black page is left alone")
+	var blue := DotMapSurfaces.limit_chroma(Vector3(0.192, 0.206, 0.877), WoWorld.MAX_CHROMA_RATIO)
+	var ratio := maxf(blue.x, maxf(blue.y, blue.z)) / minf(blue.x, minf(blue.y, blue.z))
+	_check(ratio <= WoWorld.MAX_CHROMA_RATIO + 0.01, "a saturated blue bake (Destiny Course) is brought within the ratio", "%s %.2f" % [blue, ratio])
+	_check(DotMapSurfaces.limit_chroma(Vector3(0.2, 0.21, 0.19), WoWorld.MAX_CHROMA_RATIO) == Vector3(0.2, 0.21, 0.19), "a neutral bake is left alone")
+	_check(DotMapSurfaces.limit_chroma(Vector3.ZERO, WoWorld.MAX_CHROMA_RATIO) == Vector3.ZERO, "a black page is left alone")
 
 
 ## Child process: loads the layers strictly over the test root and prints what the live config holds.
