@@ -1230,10 +1230,7 @@ func _with_course_rules(doc: Dictionary) -> Dictionary:
 
 	for pair: Array in WoCourseCfg.parse(FileAccess.get_file_as_string(path)):
 		if pair[0] == "wo_instant_death" and float(pair[1]) > 0.5:
-			var marked: Dictionary
-			marked = {"instant": true}
-			marked.merge(doc)
-			return marked
+			return {"instant": true}.merged(doc)
 
 	return doc
 
@@ -2078,7 +2075,6 @@ var io_log: Dictionary = {"teleports": 0, "pushes": 0, "hurts": 0, "uses": 0}
 ## Where the map teleported whom, in order: `{"body": WoPlayer, "to": Vector3}`. Capped.
 var io_teleported: Array = []
 
-## Reused each tick by [method _step_io].
 var _io_bodies: Array = []
 
 
@@ -2166,9 +2162,6 @@ func _protect_from_hurts(player: WoPlayer) -> void:
 
 	for node: DotMapVolumeNode in stage.io.world.volumes.nodes:
 		if node.volume.kind == "hurt" and node.entity != null and node.volume.touches_column(feet, tall):
-			if held.is_empty():
-				held = {}
-
 			held[node.entity] = true
 
 	if not held.is_empty():
