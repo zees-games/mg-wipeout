@@ -1,9 +1,7 @@
-extends Node3D
+extends "wo_course_asks.gd"
 
 const WoCourseDoc := preload("wo_course_doc.gd")
-const WoTextures := preload("wo_textures.gd")
 const WoWorld := preload("wo_world.gd")
-const WoCourseIo := preload("wo_course_io.gd")
 
 ## A course, or an arena, built from its document: the pieces, where each one is at a given
 ## tick, and the four questions a player's movement asks of them.
@@ -38,27 +36,6 @@ const CHANNEL := "wo.course"
 ## dot-lighting's contact shade, loaded by path (API 4): see [method _add_contact_shade].
 const CONTACT_SHADE_SCRIPT := "res://addons/dot_lighting/runtime/dot_contact_shade.gd"
 
-## The capsule a player is measured as, in metres. Matches [WoPlayer]'s tunables.
-const PLAYER_RADIUS := 0.35
-const PLAYER_HEIGHT := 1.8
-const PLAYER_CROUCHED := 0.9
-
-## How far a dropped tile goes, in metres. Out of the way, and back on the same schedule.
-const TILE_DROP := 60.0
-
-## Seconds before a tile drops that it shakes and changes colour. See [method tile_warning].
-const TILE_WARN_SECONDS := 0.6
-
-## Seconds either side of a stand-in's time on a tile that the tile must be up too
-## ([method tile_crossing_clear]): a run is not quite the model's.
-const TILE_MARGIN_SECONDS := 0.08
-
-## The margin in force; [member WoConfig.bot_tile_margin_seconds] on the server.
-var tile_margin_seconds: float = TILE_MARGIN_SECONDS
-
-## The slowest share of the given speeds a stand-in crossing tiles is reckoned to go at.
-const TILE_SLOW := 0.9
-
 ## How far below a start gate goes when it opens.
 const GATE_DROP := 80.0
 
@@ -70,9 +47,6 @@ signal io_message(peer: Variant, msg: Dictionary)
 
 ## The game's callables for an io world (`damage_fn`, `move_fn`, `event_fn`...), set before [method build].
 var io_hooks: Dictionary = {}
-
-## The map's own entity logic when a `world` piece says `"io": true`; else null.
-var io: WoCourseIo = null
 
 ## Whether to draw the sky, the sun and the water. A client sets this; a server need not.
 @export var draw_world: bool = false
@@ -87,9 +61,6 @@ var physics: DotPhysicsLayout = null
 ## The normalised document this was built from. See [WoCourseDoc].
 var doc: Dictionary = {}
 
-## Ticks a second, for turning a tick into the time every formula is written in.
-var tick_rate: int = 64
-
 ## Whether the start gate stands. [WoGame] closes it for the countdown.
 var gate_closed: bool = false:
 	set(value):
@@ -102,24 +73,11 @@ var _ladders: Array[AABB] = []
 ## which an imported level's finish box otherwise leaves invisible.
 var instant: bool = false
 
-## One per piece, in document order. See [method _make_piece].
-var pieces: Array[Dictionary] = []
-
 ## The round's weather, from `doc["weather"]` (drawn by the server and sent with the course,
 ## so every machine reads the same gusts and strikes): gusts as {from, to, dir, strength}
 ## and strikes as {tick, at, radius}, in game ticks. Empty is a calm course.
 var gusts: Array[Dictionary] = []
 var strikes: Array[Dictionary] = []
-
-## Collider instance id -> [code][piece index, sub-index][/code], for the carry and the bounce.
-var _by_collider: Dictionary = {}
-
-## "piece/col" to whether that column of tiles can be crossed at all. See [method tile_column_crossable].
-var _crossable: Dictionary = {}
-
-## The tick the moving pieces were last posed at, so a second call for the same tick is free.
-var _posed_tick: int = -2147483648
-var _posed_time: float = -1.0
 
 var _gate: StaticBody3D = null
 var _gate_rest: Transform3D = Transform3D.IDENTITY
@@ -225,6 +183,12 @@ func is_arena() -> bool:
 	return str(doc.get("kind", "")) == WoCourseDoc.KIND_ARENA
 
 
+## Which kinds of piece move, carry a player along, or knock one about.
+const PIECES_THAT_MOVE: Array[String] = ["mover", "turntable", "roller", "seesaw", "conveyor", "tiles", "spinner", "pendulum", "pusher", "fall"]
+const PIECES_THAT_CARRY: Array[String] = ["mover", "turntable", "roller", "seesaw", "conveyor"]
+const PIECES_THAT_HURT: Array[String] = ["spinner", "pendulum", "pusher", "fall"]
+
+
 func _make_piece(index: int, spec: Dictionary) -> void:
 	var kind := str(spec["kind"])
 	var role := _role(str(spec.get("role", "deck")))
@@ -240,7 +204,7 @@ func _make_piece(index: int, spec: Dictionary) -> void:
 	}
 
 	match kind:
-		"box":
+		"box", "bouncer", "teleport":
 			piece["node"] = _static_box(spec["at"], spec["size"], spec["yaw"], 0.0, role)
 		"ramp":
 			piece["node"] = _static_box(spec["at"], spec["size"], spec["yaw"], float(spec["pitch"]), role)
@@ -248,30 +212,17 @@ func _make_piece(index: int, spec: Dictionary) -> void:
 			piece["node"] = _static_round(spec, role, true)
 		"cylinder":
 			piece["node"] = _static_round(spec, role, false)
-		"mover":
+		"mover", "seesaw":
 			piece["node"] = _moving_box(spec["size"], role)
-			piece["moving"] = true
-			piece["carrier"] = true
 		"turntable":
 			piece["node"] = _moving_disc(float(spec["radius"]), float(spec.get("thickness", 0.6)), role)
-			piece["moving"] = true
-			piece["carrier"] = true
 		"roller":
 			piece["node"] = _moving_log(float(spec["length"]), float(spec["radius"]), role)
-			piece["moving"] = true
-			piece["carrier"] = true
-		"seesaw":
-			piece["node"] = _moving_box(spec["size"], role)
-			piece["moving"] = true
-			piece["carrier"] = true
 		"conveyor":
 			piece["node"] = _conveyor(spec, role)
-			piece["moving"] = true
-			piece["carrier"] = true
 		"world":
 			if bool(spec.get("io", false)):
 				piece["node"] = _make_io_world(spec)
-				piece["carrier"] = true
 			else:
 				piece["node"] = WoWorld.build(spec, physics)
 		"ladder":
@@ -285,27 +236,20 @@ func _make_piece(index: int, spec: Dictionary) -> void:
 			_not_collided(volume)
 			volume.transform = Transform3D(_yaw_basis(float(spec["yaw"])), spec["at"])
 			piece["node"] = volume
-		"bouncer", "teleport":
-			piece["node"] = _static_box(spec["at"], spec["size"], spec["yaw"], 0.0, role)
 		"tiles":
 			piece["node"] = _tiles(spec, role)
-			piece["moving"] = true
 		"spinner":
 			piece["node"] = _spinner(spec, role)
-			piece["moving"] = true
-			piece["hazard"] = true
 		"pendulum":
 			piece["node"] = _pendulum(spec, role)
-			piece["moving"] = true
-			piece["hazard"] = true
 		"pusher":
 			piece["node"] = _pusher(spec, role)
-			piece["moving"] = true
-			piece["hazard"] = true
 		"fall":
 			piece["node"] = _fall(spec)
-			piece["moving"] = true
-			piece["hazard"] = true
+
+	piece["moving"] = kind in PIECES_THAT_MOVE
+	piece["carrier"] = kind in PIECES_THAT_CARRY or (kind == "world" and bool(spec.get("io", false)))
+	piece["hazard"] = kind in PIECES_THAT_HURT
 
 	var node: Node3D = piece["node"]
 
@@ -443,9 +387,6 @@ static func _role(name: String) -> WoTextures.Role:
 			return WoTextures.Role.DECK
 
 
-static func _yaw_basis(yaw_degrees: float) -> Basis:
-	return Basis(Vector3.UP, deg_to_rad(yaw_degrees))
-
 
 func _static_box(at: Vector3, size: Vector3, yaw: float, pitch: float, role: WoTextures.Role) -> StaticBody3D:
 	var body := StaticBody3D.new()
@@ -535,22 +476,6 @@ static func _not_collided(node: Node) -> void:
 static func _animatable() -> StaticBody3D:
 	return StaticBody3D.new()
 
-
-## Puts [param body] at [param at] in the node AND in the physics server, now.
-##
-## [b]Both, and the node alone is a tick late.[/b] A node's new transform reaches the physics
-## server through the scene tree's transform notifications, which are flushed at the next
-## frame boundary — so a client replaying past ticks would sweep every one of them against
-## obstacles where they were a frame ago. With [method _animatable]'s static bodies the
-## server applies it at once.
-static func _place(body: Node3D, at: Transform3D) -> void:
-	body.transform = at
-
-	if body is CollisionObject3D and body.is_inside_tree():
-		PhysicsServer3D.body_set_state(
-			(body as CollisionObject3D).get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM,
-			body.global_transform
-		)
 
 
 func _moving_box(size: Vector3, role: WoTextures.Role) -> StaticBody3D:
@@ -657,9 +582,6 @@ func _conveyor(spec: Dictionary, role: WoTextures.Role) -> StaticBody3D:
 
 	return body
 
-
-static func _conveyor_basis(spec: Dictionary) -> Basis:
-	return _yaw_basis(float(spec.get("yaw", 0.0))) * Basis(Vector3.RIGHT, deg_to_rad(float(spec.get("pitch", 0.0))))
 
 
 func _tiles(spec: Dictionary, role: WoTextures.Role) -> Node3D:
@@ -855,13 +777,6 @@ func _fall(spec: Dictionary) -> Node3D:
 
 ## The default colour of a fall: water. A mapper's `tint` makes it slime, or paint.
 const FALL_WATER := Color(0.55, 0.80, 0.98)
-
-## Seconds a curtain takes to reach the deck once it starts, and to clear once it stops.
-## Drawing only: the knock is on for exactly `duty` of the period.
-const FALL_SHEET_SECONDS := 0.3
-
-## Seconds of drips before a curtain comes down: its tell, like a tile's red.
-const FALL_WARN_SECONDS := 0.7
 
 static var _streaks: ImageTexture = null
 
@@ -1611,1054 +1526,6 @@ static func light_profile() -> DotLightProfile:
 	var p := DotLightProfile.painted()
 	p.sun_shadows = true
 	return p
-
-
-# --- Where everything is ------------------------------------------------------
-
-## Poses every moving piece at [param tick]. Idempotent per tick.
-func pose_at(tick: int) -> void:
-	if io != null:
-		io.pose_at(tick)
-
-	if tick == _posed_tick:
-		return
-
-	pose_at_time(float(tick) / float(maxi(tick_rate, 1)))
-	_posed_tick = tick
-
-
-## Poses every moving piece at [param seconds]. What a client draws between two ticks.
-##
-## [b]Forgets which tick it was posed at.[/b] A frame posed between ticks N and N+1 has moved
-## every collider off tick N, so the next [method pose_at] for N must not take the shortcut —
-## or a client's prediction sweeps tick N against tick N-and-a-half.
-func pose_at_time(seconds: float) -> void:
-	_posed_time = seconds
-	_posed_tick = -2147483648
-
-	for piece in pieces:
-		if bool(piece["moving"]):
-			_pose_piece(piece, seconds)
-
-
-func _pose_piece(piece: Dictionary, t: float) -> void:
-	var node: Node3D = piece["node"]
-	var spec: Dictionary = piece["spec"]
-
-	if node == null or not is_instance_valid(node):
-		return
-
-	match str(piece["kind"]):
-		"mover", "turntable", "roller", "seesaw":
-			# Local, and that is world: a course is built at the origin of its world and never
-			# moved, which [WoGame] keeps true.
-			_place(node, transform_of(piece, t))
-		"conveyor":
-			var slats := node.get_node_or_null(^"Slats") as Node3D
-
-			if slats != null:
-				var size: Vector3 = spec["size"]
-				var count := slats.get_child_count()
-				var spacing := size.z / float(maxi(count, 1))
-				var run := fposmod(float(spec["speed"]) * t, spacing)
-
-				for i in range(count):
-					var slat := slats.get_child(i) as Node3D
-					var z := fposmod(-size.z * 0.5 + float(i) * spacing - run + size.z * 0.5, size.z) \
-						- size.z * 0.5
-					slat.position = Vector3(0.0, size.y * 0.5 + 0.03, z)
-		"tiles":
-			var index := 0
-
-			for child in node.get_children():
-				var tile := child as Node3D
-
-				if tile == null:
-					continue
-
-				var rest: Vector3 = tile.get_meta(&"rest", Vector3.ZERO)
-				_place(tile, Transform3D(tile.transform.basis,
-					rest - Vector3(0.0, TILE_DROP if tile_down(piece, index, t) else 0.0, 0.0)))
-				_warn_tile(tile, tile_warning(spec, index, t), t)
-				index += 1
-		"spinner":
-			var arms := node.get_node_or_null(^"Arms") as Node3D
-
-			if arms != null:
-				arms.rotation = Vector3(0.0, spinner_angle(spec, t), 0.0)
-		"pendulum":
-			var arm := node.get_node_or_null(^"Arm") as Node3D
-
-			if arm != null:
-				arm.rotation = Vector3(0.0, 0.0, pendulum_angle(spec, t))
-		"pusher":
-			var ram := node.get_node_or_null(^"Ram") as Node3D
-
-			if ram != null:
-				ram.transform = pusher_transform(spec, t)
-		"fall":
-			_pose_fall(node, spec, t)
-
-
-## Whether a fall is coming down at [param t]: for `duty` of every `period`, from `phase`.
-static func fall_on(spec: Dictionary, t: float) -> bool:
-	return fall_cycle(spec, t) < clampf(float(spec.get("duty", 0.4)), 0.05, 0.95)
-
-
-static func fall_cycle(spec: Dictionary, t: float) -> float:
-	return fposmod(t / float(spec["period"]) + float(spec.get("phase", 0.0)), 1.0)
-
-
-## How close a fall is to coming down, 0 (not soon) to 1 (now). See [constant FALL_WARN_SECONDS].
-static func fall_warning(spec: Dictionary, t: float) -> float:
-	if fall_on(spec, t):
-		return 0.0
-	var period := float(spec["period"])
-	var left := (1.0 - fall_cycle(spec, t)) * period
-	return clampf(1.0 - left / FALL_WARN_SECONDS, 0.0, 1.0) if left < FALL_WARN_SECONDS else 0.0
-
-
-## The part of the curtain drawn at [param t], as [code][bottom, top][/code] fractions of its
-## height: falling from the sluice as it starts, the top clearing first as it stops.
-static func fall_sheet(spec: Dictionary, t: float) -> Vector2:
-	var period := float(spec["period"])
-	var duty := clampf(float(spec.get("duty", 0.4)), 0.05, 0.95)
-	var u := fall_cycle(spec, t)
-
-	if u < duty:
-		return Vector2(1.0 - clampf(u * period / FALL_SHEET_SECONDS, 0.0, 1.0), 1.0)
-
-	var gone := clampf((u - duty) * period / FALL_SHEET_SECONDS, 0.0, 1.0)
-	return Vector2(0.0, 1.0 - gone) if gone < 1.0 else Vector2(0.0, 0.0)
-
-
-func _pose_fall(node: Node3D, spec: Dictionary, t: float) -> void:
-	var size: Vector3 = spec["size"]
-	var sheet := fall_sheet(spec, t)
-	var curtain := node.get_node_or_null(^"Curtain") as MeshInstance3D
-	var drips := node.get_node_or_null(^"Drips") as MeshInstance3D
-	var splash := node.get_node_or_null(^"Splash") as MeshInstance3D
-	var shown := sheet.y - sheet.x
-
-	if curtain != null:
-		curtain.visible = shown > 0.01
-		if curtain.visible:
-			curtain.scale = Vector3(1.0, shown, 1.0)
-			curtain.position = Vector3(0.0, size.y * (sheet.x + sheet.y) * 0.5, 0.0)
-			var material := curtain.material_override as StandardMaterial3D
-			if material != null:
-				material.uv1_offset = Vector3(0.0, fposmod(-t * 2.4, 1.0), 0.0)
-
-	if drips != null:
-		var warning := fall_warning(spec, t)
-		drips.visible = warning > 0.0
-		if drips.visible:
-			var material := drips.material_override as StandardMaterial3D
-			if material != null:
-				material.uv1_offset = Vector3(0.0, fposmod(-t * 1.6, 1.0), 0.0)
-				material.albedo_color.a = 0.15 + 0.35 * warning
-
-	if splash != null:
-		splash.visible = sheet.x < 0.05 and shown > 0.01
-
-
-## Where a carrier is at [param t], as a world transform. The one formula per kind.
-func transform_of(piece: Dictionary, t: float) -> Transform3D:
-	var spec: Dictionary = piece["spec"]
-	var yaw := _yaw_basis(float(spec.get("yaw", 0.0)))
-
-	match str(piece["kind"]):
-		"mover":
-			var from: Vector3 = spec["from"]
-			var to: Vector3 = spec["to"]
-			return Transform3D(yaw, from.lerp(to, mover_fraction(spec, t)))
-		"turntable":
-			var angle := deg_to_rad(float(spec.get("phase", 0.0)) + float(spec["speed"]) * t)
-			return Transform3D(yaw * Basis(Vector3.UP, angle), spec["at"])
-		"roller":
-			var angle := deg_to_rad(float(spec.get("phase", 0.0)) + float(spec["speed"]) * t)
-			return Transform3D(yaw * Basis(Vector3.RIGHT, angle), spec["at"])
-		"seesaw":
-			return Transform3D(yaw * Basis(Vector3.RIGHT, seesaw_angle(spec, t)), spec["at"])
-		_:
-			return (piece["node"] as Node3D).transform
-
-
-## How far along its track a mover is, 0 at `from` and 1 at `to`. Eased at both ends, so a
-## player riding one is not thrown off by a reversal at full speed.
-static func mover_fraction(spec: Dictionary, t: float) -> float:
-	var cycle := t / float(spec["period"]) + float(spec.get("phase", 0.0))
-	return 0.5 - 0.5 * cos(TAU * cycle)
-
-
-static func seesaw_angle(spec: Dictionary, t: float) -> float:
-	var cycle := t / float(spec["period"]) + float(spec.get("phase", 0.0))
-	return deg_to_rad(float(spec["amplitude"])) * sin(TAU * cycle)
-
-
-static func spinner_angle(spec: Dictionary, t: float) -> float:
-	return deg_to_rad(float(spec.get("phase", 0.0)) + float(spec["speed"]) * t)
-
-
-static func pendulum_angle(spec: Dictionary, t: float) -> float:
-	var cycle := t / float(spec["period"]) + float(spec.get("phase", 0.0))
-	return deg_to_rad(float(spec["swing"])) * sin(TAU * cycle)
-
-
-## How far out a pusher's ram is, 0 at rest and 1 at full reach.
-##
-## [b]Fast out, a hold, slower back, and a rest — and the rest is the part a player uses.[/b]
-## A ram that went in and out on a sine would be a hazard with no gap to time; this one is
-## home for the part of its period after `duty` plus its return, which is the window a player
-## runs through.
-static func pusher_extension(spec: Dictionary, t: float) -> float:
-	var u := fposmod(t / float(spec["period"]) + float(spec.get("phase", 0.0)), 1.0)
-	var duty := clampf(float(spec.get("duty", 0.35)), 0.1, 0.8)
-	var out_time := 0.08
-
-	if u < out_time:
-		return smoothstep(0.0, 1.0, u / out_time)
-
-	if u < duty:
-		return 1.0
-
-	var back := minf(0.2, 1.0 - duty)
-
-	if u < duty + back:
-		return 1.0 - smoothstep(0.0, 1.0, (u - duty) / back)
-
-	return 0.0
-
-
-## The ram's transform at [param t], in the course's frame. The ram travels along its own
-## -Z, which is the way `yaw` faces.
-static func pusher_transform(spec: Dictionary, t: float) -> Transform3D:
-	var basis := _yaw_basis(float(spec.get("yaw", 0.0)))
-	var out := pusher_extension(spec, t) * float(spec["reach"])
-	return Transform3D(basis, (spec["at"] as Vector3) + basis * Vector3(0.0, 0.0, -out))
-
-
-## Whether tile [param index] of a tiles piece is gone at [param t].
-##
-## Each tile has its own offset into the cycle, drawn from the piece's seed by a hash rather
-## than a random stream, so it is the same on every machine and does not depend on how many
-## times anything else has drawn.
-static func tile_down(piece: Dictionary, index: int, t: float) -> bool:
-	return tile_cycle(piece["spec"], index, t) < float((piece["spec"] as Dictionary)["down"])
-
-
-## Where tile [param index] is in its cycle, 0..1. It drops at 0 and comes back at `down`.
-static func tile_cycle(spec: Dictionary, index: int, t: float) -> float:
-	var seed := int(spec.get("seed", 1))
-	var offset := float(_mix(seed * 7919 + index * 104729) % 1000) / 1000.0
-	return fposmod(t / float(spec["period"]) + offset, 1.0)
-
-
-## How close tile [param index] is to dropping, 0 (not soon) to 1 (now).
-##
-## [b]A tile that drops with no tell is a coin toss, not an obstacle.[/b] The schedule is a
-## hash of the tile's index, which nobody can read off a floor; what a player CAN read is a
-## tile shaking and turning the hazard colour for the last [constant TILE_WARN_SECONDS]
-## before it goes. A function of the tick like everything else here, so every client shows
-## the same warning at the same moment without being told.
-static func tile_warning(spec: Dictionary, index: int, t: float) -> float:
-	var period := float(spec["period"])
-	var warn := clampf(TILE_WARN_SECONDS / period, 0.0, 0.5)
-	var cycle := tile_cycle(spec, index, t)
-
-	if cycle < float(spec["down"]) or cycle < 1.0 - warn:
-		return 0.0
-
-	return (cycle - (1.0 - warn)) / maxf(warn, 0.0001)
-
-
-## The tell, on the MESH only: the collider stays put, so a warned tile is still exactly as
-## solid as it was and nobody is shaken off it by the warning itself.
-func _warn_tile(tile: Node3D, warning: float, t: float) -> void:
-	var mesh: MeshInstance3D = null
-
-	for child in tile.get_children():
-		if child is MeshInstance3D:
-			mesh = child
-			break
-
-	if mesh == null:
-		return
-
-	if warning <= 0.0:
-		mesh.position = Vector3.ZERO
-		if mesh.get_meta(&"warned", false):
-			mesh.material_override = mesh.get_meta(&"rest_material")
-			mesh.set_meta(&"warned", false)
-		return
-
-	var shake := 0.04 + 0.06 * warning
-	mesh.position = Vector3(sin(t * 61.0) * shake, 0.0, cos(t * 53.0) * shake)
-
-	if not mesh.get_meta(&"warned", false):
-		mesh.set_meta(&"rest_material", mesh.material_override)
-		mesh.material_override = WoTextures.surface(WoTextures.Role.HAZARD, true)
-		mesh.set_meta(&"warned", true)
-
-
-static func _mix(value: int) -> int:
-	# A small integer hash, the same on every platform: no `hash()`, whose output on a
-	# built-in is not promised to be stable across engine versions.
-	var x := (value ^ 0x5bd1e995) & 0x7fffffff
-	x = ((x >> 15) ^ x) * 0x2c1b3c6d & 0x7fffffff
-	x = ((x >> 12) ^ x) * 0x297a2d39 & 0x7fffffff
-	return ((x >> 15) ^ x) & 0x7fffffff
-
-
-# --- What a player's movement asks ----------------------------------------------
-
-## How far whatever [param ground_id] is moves a point at [param at] between [param tick]
-## and the next one. Zero for anything that is not a carrier.
-##
-## [b]The exact displacement, not a velocity times a step.[/b] A point on a turntable moves
-## along an arc; a velocity taken at the start of the tick moves it along the tangent, which
-## is outward by a little every tick, and a player standing still on a turntable spirals off
-## it. `pose(t + dt) * pose(t)⁻¹` applied to the point is the arc.
-func carry(ground_id: int, at: Vector3, tick: int) -> Vector3:
-	var found: Variant = _by_collider.get(ground_id)
-
-	if found == null:
-		return Vector3.ZERO
-
-	var piece: Dictionary = pieces[int((found as Array)[0])]
-
-	if not bool(piece["carrier"]):
-		return Vector3.ZERO
-
-	if io != null and str(piece["kind"]) == "world":
-		return io.carry(ground_id, at, tick)
-
-	var dt := 1.0 / float(maxi(tick_rate, 1))
-	var t := float(tick) * dt
-
-	if str(piece["kind"]) == "conveyor":
-		var spec: Dictionary = piece["spec"]
-		return _conveyor_basis(spec) * Vector3(0.0, 0.0, -float(spec["speed"]) * dt)
-
-	var now := transform_of(piece, t)
-	var next := transform_of(piece, t + dt)
-	return (next * now.affine_inverse()) * at - at
-
-
-## Whether whatever [param ground_id] is moves whoever stands on it.
-func carries(ground_id: int) -> bool:
-	var found: Variant = _by_collider.get(ground_id)
-	return found != null and bool(pieces[int((found as Array)[0])]["carrier"]) \
-		and (io == null or str(pieces[int((found as Array)[0])]["kind"]) != "world" or io.carries(ground_id))
-
-
-## The kind of piece [param ground_id] belongs to (`turntable`, `seesaw`, `box`…), or "".
-func ground_kind(ground_id: int) -> String:
-	var found: Variant = _by_collider.get(ground_id)
-	return str(pieces[int((found as Array)[0])]["kind"]) if found != null else ""
-
-
-## Where a teleport pad under [param feet] sends whoever stands on it, as `[position, heading]`,
-## or an empty array when they are on none. Feet within the pad's footprint and between a
-## little under its top and a metre over it: a runner jumping across the pad's corner is
-## still sent, one a long way under it (falling past) is not.
-func teleport_at(feet: Vector3) -> Array:
-	for piece in pieces:
-		if str(piece["kind"]) != "teleport":
-			continue
-
-		var spec: Dictionary = piece["spec"]
-		var size: Vector3 = spec["size"]
-		var local := _yaw_basis(float(spec["yaw"])).inverse() * (feet - (spec["at"] as Vector3))
-
-		if absf(local.x) <= size.x * 0.5 and absf(local.z) <= size.z * 0.5 \
-				and local.y >= size.y * 0.5 - 0.3 and local.y <= size.y * 0.5 + 1.0:
-			return [spec["to"], float(spec.get("heading", 0.0))]
-
-	return []
-
-
-## The upward speed a bouncer under [param ground_id] gives, or 0.
-func bounce(ground_id: int) -> float:
-	var found: Variant = _by_collider.get(ground_id)
-
-	if found == null:
-		return 0.0
-
-	var piece: Dictionary = pieces[int((found as Array)[0])]
-
-	if str(piece["kind"]) != "bouncer":
-		return 0.0
-
-	return float((piece["spec"] as Dictionary)["power"])
-
-
-## The velocity an obstacle throws a player standing at [param feet] with, on [param tick],
-## or zero if nothing is touching them.
-##
-## [param crouched] shortens the capsule, which is what lets a player duck under a high arm.
-## [param limits] is `[minimum speed, maximum speed, lift]`, from the configuration.
-func knock(feet: Vector3, crouched: bool, tick: int, limits: Vector3) -> Vector3:
-	var t := float(tick) / float(maxi(tick_rate, 1))
-	var top := feet + Vector3(0.0, (PLAYER_CROUCHED if crouched else PLAYER_HEIGHT) - PLAYER_RADIUS, 0.0)
-	var bottom := feet + Vector3(0.0, PLAYER_RADIUS, 0.0)
-
-	for piece in pieces:
-		if not bool(piece["hazard"]):
-			continue
-
-		if cull_hazards and feet.distance_to(_hazard_centre(piece)) > _hazard_reach(piece) + PLAYER_HEIGHT + 1.0:
-			continue
-
-		var thrown := Vector3.ZERO
-
-		match str(piece["kind"]):
-			"spinner":
-				thrown = _knock_spinner(piece, bottom, top, t)
-			"pendulum":
-				thrown = _knock_pendulum(piece, bottom, top, t)
-			"pusher":
-				thrown = _knock_pusher(piece, bottom, top, t)
-			"fall":
-				thrown = _knock_fall(piece, bottom, top, t)
-
-		if thrown != Vector3.ZERO:
-			var flat := Vector3(thrown.x, 0.0, thrown.z)
-			var speed := clampf(flat.length(), limits.x, limits.y)
-			flat = flat.normalized() * speed if flat.length() > 0.001 else Vector3.ZERO
-			return Vector3(flat.x, maxf(thrown.y, limits.z), flat.z)
-
-	return Vector3.ZERO
-
-
-## Whether [method knock] skips a hazard too far from the feet to touch them; off only for the check
-## that the shortcut answers the same.
-var cull_hazards := true
-
-
-## The middle of the sphere that holds everything [param piece] can reach, for [method knock]'s cull.
-func _hazard_centre(piece: Dictionary) -> Vector3:
-	var spec: Dictionary = piece["spec"]
-
-	if str(piece["kind"]) == "pendulum":
-		return spec["pivot"]
-
-	var root: Node3D = piece["node"]
-
-	if str(piece["kind"]) == "pusher":
-		return root.transform * (spec["at"] as Vector3)
-
-	return root.transform.origin
-
-
-## The radius of that sphere, worked out once per piece: a bound with a margin, never the exact reach.
-func _hazard_reach(piece: Dictionary) -> float:
-	if piece.has("cull_reach"):
-		return piece["cull_reach"]
-
-	var spec: Dictionary = piece["spec"]
-	var reach := 0.0
-
-	match str(piece["kind"]):
-		"spinner":
-			reach = float(spec.get("arm_height", 1.0)) + float(spec["arm_length"]) + float(spec.get("arm_thickness", 0.35))
-		"pendulum":
-			reach = float(spec["length"]) + float(spec["radius"])
-		"pusher":
-			reach = (spec["size"] as Vector3).length() + absf(float(spec["reach"]))
-		"fall":
-			reach = (spec["size"] as Vector3).length()
-
-	piece["cull_reach"] = reach * 1.25 + 1.0
-	return piece["cull_reach"]
-
-
-func _knock_spinner(piece: Dictionary, bottom: Vector3, top: Vector3, t: float) -> Vector3:
-	var spec: Dictionary = piece["spec"]
-	var root: Node3D = piece["node"]
-	var arm_height := float(spec.get("arm_height", 1.0))
-	var length := float(spec["arm_length"])
-	var hub_radius := float(spec.get("hub_radius", 0.6))
-	var thickness := float(spec.get("arm_thickness", 0.35))
-	var count := maxi(int(spec.get("arms", 1)), 1)
-	var angle := spinner_angle(spec, t)
-	var omega := deg_to_rad(float(spec["speed"]))
-	var frame := root.transform
-	var hub := frame * Vector3(0.0, arm_height, 0.0)
-
-	for arm in range(count):
-		var heading := Basis(Vector3.UP, angle + TAU * float(arm) / float(count))
-		var tip := frame * (Vector3(0.0, arm_height, 0.0) + heading * Vector3(length, 0.0, 0.0))
-		var start := hub + (tip - hub).normalized() * hub_radius
-		var closest := _segments(start, tip, bottom, top)
-
-		if closest[2] > thickness * 0.5 + PLAYER_RADIUS:
-			continue
-
-		# The arm's own speed where it touched them: tangent to the circle at that radius,
-		# in the direction it turns.
-		var on_arm: Vector3 = closest[0]
-		var radial := on_arm - hub
-		radial.y = 0.0
-		var tangent := Vector3.UP.cross(radial).normalized() * signf(omega)
-		var push := tangent * absf(omega) * radial.length() * 1.25
-		# And a little outward, so the knock carries somebody off the side of the platform
-		# rather than along the arm's own path, where the next arm meets them.
-		push += radial.normalized() * 2.0
-		return push
-
-	return Vector3.ZERO
-
-
-func _knock_pendulum(piece: Dictionary, bottom: Vector3, top: Vector3, t: float) -> Vector3:
-	var spec: Dictionary = piece["spec"]
-	var frame := Transform3D(_yaw_basis(float(spec.get("yaw", 0.0))), spec["pivot"])
-	var length := float(spec["length"])
-	var radius := float(spec["radius"])
-	var angle := pendulum_angle(spec, t)
-	var centre := frame * (Basis(Vector3.BACK, angle) * Vector3(0.0, -length, 0.0))
-	var distance := _point_segment(centre, bottom, top)
-
-	if distance > radius + PLAYER_RADIUS:
-		return Vector3.ZERO
-
-	# The ball's velocity, from the derivative of the swing: the speed of a point at the end
-	# of the rod is the angular rate times the length, along the tangent of the arc.
-	var dt := 0.001
-	var ahead := frame * (Basis(Vector3.BACK, pendulum_angle(spec, t + dt)) * Vector3(0.0, -length, 0.0))
-	var velocity := (ahead - centre) / dt
-	velocity.y = 0.0
-
-	if velocity.length() < 0.5:
-		# At the top of its swing it is barely moving; it still shoves somebody out of the
-		# way it came, which is the direction from the ball to them.
-		var away := ((bottom + top) * 0.5) - centre
-		away.y = 0.0
-		return away.normalized() * 3.0
-
-	return velocity * 1.3
-
-
-func _knock_pusher(piece: Dictionary, bottom: Vector3, top: Vector3, t: float) -> Vector3:
-	var spec: Dictionary = piece["spec"]
-	var root: Node3D = piece["node"]
-	var frame := root.transform * pusher_transform(spec, t)
-	var half := (spec["size"] as Vector3) * 0.5
-	var inverse := frame.affine_inverse()
-
-	var hit := false
-
-	for step in range(5):
-		var point := bottom.lerp(top, float(step) / 4.0)
-		var local := inverse * point
-		var clamped := Vector3(
-			clampf(local.x, -half.x, half.x),
-			clampf(local.y, -half.y, half.y),
-			clampf(local.z, -half.z, half.z)
-		)
-
-		if local.distance_to(clamped) <= PLAYER_RADIUS:
-			hit = true
-			break
-
-	if not hit:
-		return Vector3.ZERO
-
-	var forward := frame.basis * Vector3(0.0, 0.0, -1.0)
-	var dt := 0.02
-	var moving := (pusher_extension(spec, t + dt) - pusher_extension(spec, t)) / dt * float(spec["reach"])
-
-	if moving > 0.5:
-		return forward * maxf(moving * 1.2, 14.0)
-
-	# Out and holding, or going home: it still will not let anybody stand inside it.
-	return forward * 4.0
-
-
-## A falling curtain pushes whoever is in it off the side it pours toward (`push` m/s along
-## the piece's +X), whatever way they were going: a person cannot run through falling water
-## and stay on a six-metre deck. Only while it is on; its drips are a warning, never a push.
-func _knock_fall(piece: Dictionary, bottom: Vector3, top: Vector3, t: float) -> Vector3:
-	var spec: Dictionary = piece["spec"]
-
-	if not fall_on(spec, t):
-		return Vector3.ZERO
-
-	var root: Node3D = piece["node"]
-	var inverse := root.transform.affine_inverse()
-	var half := (spec["size"] as Vector3) * 0.5
-	var height := (spec["size"] as Vector3).y
-
-	for step in range(3):
-		var local := inverse * bottom.lerp(top, float(step) / 2.0)
-
-		if absf(local.x) <= half.x + PLAYER_RADIUS * 0.5 and absf(local.z) <= half.z + PLAYER_RADIUS \
-				and local.y > -1.0 and local.y < height:
-			return root.transform.basis * Vector3(float(spec.get("push", 9.0)), -1.0, 0.0)
-
-	return Vector3.ZERO
-
-
-## The closest points between two segments, and the distance between them.
-##
-## Returns `[point on the first, point on the second, distance]`. The standard clamped
-## solution; written out rather than taken from `Geometry3D` so the arithmetic is the same
-## on every build this runs on.
-static func _segments(p1: Vector3, q1: Vector3, p2: Vector3, q2: Vector3) -> Array:
-	var d1 := q1 - p1
-	var d2 := q2 - p2
-	var r := p1 - p2
-	var a := d1.dot(d1)
-	var e := d2.dot(d2)
-	var f := d2.dot(r)
-	var s := 0.0
-	var u := 0.0
-
-	if a <= 0.000001 and e <= 0.000001:
-		return [p1, p2, p1.distance_to(p2)]
-
-	if a <= 0.000001:
-		u = clampf(f / e, 0.0, 1.0)
-	else:
-		var c := d1.dot(r)
-
-		if e <= 0.000001:
-			s = clampf(-c / a, 0.0, 1.0)
-		else:
-			var b := d1.dot(d2)
-			var denom := a * e - b * b
-			s = clampf((b * f - c * e) / denom, 0.0, 1.0) if denom > 0.000001 else 0.0
-			u = (b * s + f) / e
-
-			if u < 0.0:
-				u = 0.0
-				s = clampf(-c / a, 0.0, 1.0)
-			elif u > 1.0:
-				u = 1.0
-				s = clampf((b - c) / a, 0.0, 1.0)
-
-	var c1 := p1 + d1 * s
-	var c2 := p2 + d2 * u
-	return [c1, c2, c1.distance_to(c2)]
-
-
-static func _point_segment(point: Vector3, a: Vector3, b: Vector3) -> float:
-	var ab := b - a
-	var length := ab.length_squared()
-
-	if length <= 0.000001:
-		return point.distance_to(a)
-
-	var s := clampf((point - a).dot(ab) / length, 0.0, 1.0)
-	return point.distance_to(a + ab * s)
-
-
-# --- What a stand-in asks -------------------------------------------------------
-
-## Whether an arm at head height — one to duck, not jump — turns within [param radius] of
-## [param at]. Only a spinner is ducked: a pendulum's ball sweeps up through crouching height
-## at the ends of its swing, so a duck under one is a slow crawl into it.
-func high_arm_near(at: Vector3, radius: float) -> bool:
-	for piece in pieces:
-		if str(piece["kind"]) != "spinner":
-			continue
-
-		var spec: Dictionary = piece["spec"]
-
-		if float(spec.get("arm_height", 1.0)) < 1.1:
-			continue
-
-		var hub: Vector3 = spec["at"]
-
-		if Vector2(at.x - hub.x, at.z - hub.z).length() <= float(spec["arm_length"]) + radius:
-			return true
-
-	return false
-
-
-## Whether running straight from [param from] to [param to] at [param speed], starting on
-## [param tick], meets no hazard on the way.
-##
-## [b]The answer is exact, and that is what an obstacle being a function of the tick buys.[/b]
-## A bot does not guess when an arm will come round: it asks [method knock] about every point
-## of the run at the tick it will be there, the same question its own movement will be asked
-## when it gets there. A course a stand-in cannot cross is therefore a course whose timing
-## really has no window, which is a finding about the course.
-func path_clear(from: Vector3, to: Vector3, tick: int, speed: float, margin_seconds: float = 0.5) -> bool:
-	# Four fifths of the run speed: whoever asks is standing still, and the first few metres
-	# are spent getting up to speed.
-	speed *= 0.8
-	var distance := Vector2(to.x - from.x, to.z - from.z).length()
-	var seconds := distance / maxf(speed, 0.5) + margin_seconds
-	var steps := maxi(int(seconds * 16.0), 1)
-	var ticks_per_step := float(tick_rate) / 16.0
-	var limits := Vector3(1.0, 1.0, 1.0)
-
-	for step in range(steps + 1):
-		var along := clampf(float(step) / 16.0 * speed / maxf(distance, 0.01), 0.0, 1.0)
-		var at := from.lerp(to, along)
-
-		if knock(at, false, tick + int(float(step) * ticks_per_step), limits) != Vector3.ZERO:
-			return false
-
-	return true
-
-
-## Whether something solid is under [param point] on [param tick]: what a stand-in asks
-## before jumping for a mover or a tile.
-func supported(point: Vector3, tick: int) -> bool:
-	var t := float(tick) / float(maxi(tick_rate, 1))
-
-	for piece in pieces:
-		var spec: Dictionary = piece["spec"]
-
-		match str(piece["kind"]):
-			"box", "ramp", "bouncer", "teleport", "conveyor", "mover", "seesaw":
-				var frame: Transform3D = transform_of(piece, t) if bool(piece["moving"]) else (piece["node"] as Node3D).transform
-				var local := frame.affine_inverse() * point
-				var half := (spec["size"] as Vector3) * 0.5
-
-				if absf(local.x) <= half.x - 0.3 and absf(local.z) <= half.z - 0.3 and local.y > -1.0 and local.y < 3.0:
-					return true
-			"turntable", "cylinder":
-				var at: Vector3 = spec["at"]
-
-				if Vector2(point.x - at.x, point.z - at.z).length() <= float(spec["radius"]) - 0.4 \
-						and point.y > at.y - 1.0 and point.y < at.y + 3.0:
-					return true
-			"ball":
-				var at: Vector3 = spec["at"]
-
-				if Vector2(point.x - at.x, point.z - at.z).length() <= float(spec["radius"]) * 0.45:
-					return true
-			"tiles":
-				var root: Node3D = piece["node"]
-				var local := root.transform.affine_inverse() * point
-				var cols := int(spec["cols"])
-				var rows := int(spec["rows"])
-				var pitch := float(spec["tile"]) + float(spec.get("gap", 0.25))
-				var col := int(roundf(local.x / pitch + float(cols - 1) * 0.5))
-				var row := int(roundf(local.z / pitch + float(rows - 1) * 0.5))
-
-				if col >= 0 and col < cols and row >= 0 and row < rows and absf(local.y) < 3.0:
-					if not tile_down(piece, row * cols + col, t):
-						return true
-
-	return false
-
-
-## The offsets, across the course, from [param point] to the middle of every column of the
-## tiles under it (nearest first), or empty when no tiles are under it. What a stand-in asks
-## to step to a column whose tile is up, rather than only ever running down the middle.
-func tile_columns(point: Vector3) -> Array[Vector3]:
-	var out: Array[Vector3] = []
-
-	for piece in pieces:
-		if str(piece["kind"]) != "tiles":
-			continue
-
-		var spec: Dictionary = piece["spec"]
-		var root: Node3D = piece["node"]
-		var local := root.transform.affine_inverse() * point
-		var cols := int(spec["cols"])
-		var rows := int(spec["rows"])
-		var pitch := float(spec["tile"]) + float(spec.get("gap", 0.25))
-		var row := int(roundf(local.z / pitch + float(rows - 1) * 0.5))
-
-		if row < 0 or row >= rows or absf(local.y) > 3.0 \
-				or absf(local.x) > float(cols) * pitch * 0.5 + 0.5:
-			continue
-
-		for col in range(cols):
-			var x := (float(col) - float(cols - 1) * 0.5) * pitch
-			out.append(root.transform.basis * Vector3(x - local.x, 0.0, 0.0))
-
-		out.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.length() < b.length())
-		return out
-
-	return out
-
-
-## The grid of tiles under [param point] and the cell there, as `{piece, row, col}` (`piece` an
-## index into [member pieces]), or empty off every grid. A point in the gap between two rows
-## counts as the nearer one, as [method supported] counts it.
-func tile_cell(point: Vector3) -> Dictionary:
-	for index in range(pieces.size()):
-		var piece: Dictionary = pieces[index]
-
-		if str(piece["kind"]) != "tiles":
-			continue
-
-		var spec: Dictionary = piece["spec"]
-		var local := (piece["node"] as Node3D).transform.affine_inverse() * point
-		var cols := int(spec["cols"])
-		var rows := int(spec["rows"])
-		var pitch := float(spec["tile"]) + float(spec.get("gap", 0.25))
-		var col := int(roundf(local.x / pitch + float(cols - 1) * 0.5))
-		var row := int(roundf(local.z / pitch + float(rows - 1) * 0.5))
-
-		if col >= 0 and col < cols and row >= 0 and row < rows and absf(local.y) < 3.0:
-			return {"piece": index, "row": row, "col": col}
-
-	return {}
-
-
-## The cell of the tile [param ground_id] is, as [method tile_cell] gives it, or empty when it
-## is not a tile. Where a runner actually landed, which is not always the column it aimed at.
-func tile_under(ground_id: int) -> Dictionary:
-	var found: Variant = _by_collider.get(ground_id)
-
-	if found == null:
-		return {}
-
-	var index := int((found as Array)[0])
-	var piece: Dictionary = pieces[index]
-
-	if str(piece["kind"]) != "tiles":
-		return {}
-
-	var cols := int((piece["spec"] as Dictionary)["cols"])
-	var sub := int((found as Array)[1])
-	return {"piece": index, "row": sub / cols, "col": sub % cols}
-
-
-## The offset, across the grid of tiles [param piece_index], from [param point] to the middle
-## of column [param col]: what moves a route point down the middle onto that column.
-func tile_column_shift(piece_index: int, point: Vector3, col: int) -> Vector3:
-	var piece: Dictionary = pieces[piece_index]
-	var spec: Dictionary = piece["spec"]
-	var root: Node3D = piece["node"]
-	var local := root.transform.affine_inverse() * point
-	var pitch := float(spec["tile"]) + float(spec.get("gap", 0.25))
-	var x := (float(col) - float(int(spec["cols"]) - 1) * 0.5) * pitch
-	return root.transform.basis * Vector3(x - local.x, 0.0, 0.0)
-
-
-## Whether a runner at [param from] that sets off on [param tick] toward [param to] (a tile, in
-## the column it crosses in) can get over every row from there to the grid's far side without
-## standing on, or coming down on, a tile that is down — stopping in the middle of a tile to
-## wait for the next row where it has to, for as long as the tile under it stays up.
-## [param approach_speed] until it is on the first row (a walk off a deck, which is what the
-## jump onto the first row is taken at), then [param tile_speed] across them, with
-## [param start_delay] seconds of getting going reckoned onto every set-off from a stand.
-## [param line] is the way the route crosses the grid; [param slack] (0..1) how much of the
-## slow speed and margin to allow for.
-##
-## [b]The whole crossing, not the next tile.[/b] A runner who asked only whether the tile it
-## jumped for would be there a quarter of a second after landing then stood on it waiting for
-## the next row, and went down with it: a mistake-free nightmare field fell 1.2 times a run on
-## Trapdoor Run's tiles that way. And not a straight run either: at honest margins a column
-## of four was clear end to end too seldom to wait for. Every tile is a function of the tick,
-## so the crossing is searched forward (where the runner can be standing, when) before it sets
-## off, the way a person watches the column and goes.
-func tile_crossing_clear(from: Vector3, to: Vector3, tick: int, approach_speed: float,
-		tile_speed: float, start_delay: float, line: Vector3 = Vector3.ZERO, slack: float = 1.0) -> bool:
-	# How much of the slow speed and the margin to reckon with: all of it before setting off,
-	# less once on the tiles, where the runner is already on a crossing that was clear.
-	var slow := lerpf(1.0, TILE_SLOW, slack)
-	var margin := tile_margin_seconds * slack
-	var target := tile_cell(to)
-
-	if target.is_empty():
-		return supported(to, tick)
-
-	var piece: Dictionary = pieces[int(target["piece"])]
-	var spec: Dictionary = piece["spec"]
-	var local_from := (piece["node"] as Node3D).transform.affine_inverse() * from
-	var cols := int(spec["cols"])
-	var rows := int(spec["rows"])
-	var tile := float(spec["tile"])
-	var pitch := tile + float(spec.get("gap", 0.25))
-	var col := int(target["col"])
-	var target_row := int(target["row"])
-	var target_z := (float(target_row) - float(rows - 1) * 0.5) * pitch
-
-	# Which way the rows are crossed: [param line], the way the route runs, or else away from
-	# the runner toward the target row (which on the target row past its middle is backwards).
-	# Distances below are along that way, `along` the runner's own.
-	var local_line := (piece["node"] as Node3D).transform.basis.inverse() * line
-	var step := 1 if target_z > local_from.z else -1
-	if absf(local_line.z) > 0.01:
-		step = 1 if local_line.z > 0.0 else -1
-	var along := local_from.z * float(step)
-	var here := int(roundf(local_from.z / pitch + float(rows - 1) * 0.5))
-	var on_tile := here >= 0 and here < rows \
-		and absf(along - (float(here) - float(rows - 1) * 0.5) * pitch * float(step)) <= pitch * 0.5
-
-	# The rows still to cross from the target row on, nearest first, and where each one's
-	# middle is along the way.
-	var order: Array[int] = []
-	var middles: Array[float] = []
-	var row := target_row
-	while row >= 0 and row < rows:
-		order.append(row * cols + col)
-		middles.append((float(row) - float(rows - 1) * 0.5) * pitch * float(step))
-		row += step
-
-	var now := float(tick) / float(maxi(tick_rate, 1))
-	var slots := TILE_PLAN_SLOTS
-	var dt := 1.0 / float(TILE_PLAN_RATE)
-	var half := tile * 0.5
-
-	# The first leg is the question asked: setting off NOW, from where the runner is, for the
-	# middle of the target row. Off a deck at the approach speed until over the row; off the
-	# tile underfoot, which has to stay up until the runner is off it.
-	# Off a deck the way there may be slantwise, to a column beside the runner.
-	var near := middles[0] - half
-	var across := absf(local_from.x - (float(col) - float(cols - 1) * 0.5) * pitch) if not on_tile else 0.0
-	var walked := Vector2(maxf(near - along, 0.0), across).length() if not on_tile else 0.0
-	var speed_on := approach_speed if not on_tile else tile_speed
-	var fast_on := now + Vector2(maxf(near - PLAYER_RADIUS - along, 0.0), across).length() / speed_on
-	var slow_mid := now + start_delay + walked / (approach_speed * slow) \
-		+ maxf(middles[0] - maxf(near, along), 0.0) / (tile_speed * slow)
-
-	if on_tile and here != target_row:
-		var here_index := here * cols + col
-		var leaves := (float(here) - float(rows - 1) * 0.5) * pitch * float(step) + half + PLAYER_RADIUS
-		var off := now + start_delay + maxf(leaves - along, 0.0) / (tile_speed * slow)
-		if not _tile_up_over(piece, here_index, now, off + margin):
-			return false
-	elif on_tile:
-		fast_on = now
-
-	if not _tile_up_over(piece, order[0], fast_on - margin, slow_mid + margin):
-		return false
-
-	# Where the runner can be standing in the middle of each row, by slot from now: from the
-	# moment it gets there for as long as the tile stays up.
-	# 1 where it can be, 2 where it gets there (and runs on without stopping).
-	var standing := PackedByteArray()
-	standing.resize(slots)
-	_tile_stand(piece, order[0], standing, slow_mid - now, now, dt)
-
-	# Leaving a middle: on the next row from the moment the body's edge can be over it at
-	# full speed (from a little short of the middle, where the route lets it go), off this one
-	# once the body's edge is past it at the slow speed. The getting going only after a stop:
-	# reckoned onto a runner going straight through, four rows of it added up to more than
-	# the time some columns are clear for (Trapdoor Run's last grid was never crossable).
-	var to_next_fast := maxf(pitch - half - PLAYER_RADIUS - 0.6, 0.0) / tile_speed
-
-	for i in range(order.size()):
-		var last := i == order.size() - 1
-		var next_standing := PackedByteArray()
-		next_standing.resize(slots)
-		var any := false
-
-		for k in range(slots):
-			if standing[k] == 0:
-				continue
-			var t := now + float(k) * dt
-			var delay := 0.0 if standing[k] == 2 else start_delay
-			var off_slow := delay + (half + PLAYER_RADIUS) / (tile_speed * slow)
-			var to_mid_slow := delay + pitch / (tile_speed * slow)
-
-			if not _tile_up_over(piece, order[i], t, t + off_slow + margin):
-				continue
-
-			if last:
-				return true
-
-			if not _tile_up_over(piece, order[i + 1], t + to_next_fast - margin,
-					t + to_mid_slow + margin):
-				continue
-
-			any = true
-			_tile_stand(piece, order[i + 1], next_standing, float(k) * dt + to_mid_slow, now, dt)
-
-		if not any:
-			return false
-		standing = next_standing
-
-	return false
-
-
-## Whether column [param col] of the grid of tiles [param piece_index] can be crossed at all,
-## setting off from a deck at [param from] for [param to] (a point on the grid), at any
-## moment of the tiles' cycle: [method tile_crossing_clear] asked at every sixteenth of a
-## second of one period. Worked out once per column and kept.
-##
-## [b]Some columns never are.[/b] Where one row comes back up just as the row before it
-## drops, no runner who keeps to the column gets over: Trapdoor Run's last grid has two
-## such columns. A stand-in that claimed one waited its six seconds and went anyway.
-func tile_column_crossable(piece_index: int, col: int, from: Vector3, to: Vector3, approach_speed: float,
-		tile_speed: float, start_delay: float, line: Vector3) -> bool:
-	var key := "%d/%d" % [piece_index, col]
-
-	if _crossable.has(key):
-		return bool(_crossable[key])
-
-	var piece: Dictionary = pieces[piece_index]
-	var lined := from + tile_column_shift(piece_index, from, col)
-	var there := to + tile_column_shift(piece_index, to, col)
-	var steps := maxi(int(float((piece["spec"] as Dictionary)["period"]) * float(TILE_PLAN_RATE)), 1)
-	var found := false
-
-	for step in range(steps):
-		var tick := int(float(step) / float(TILE_PLAN_RATE) * float(tick_rate))
-		if tile_crossing_clear(lined, there, tick, approach_speed, tile_speed, start_delay, line):
-			found = true
-			break
-
-	_crossable[key] = found
-	return found
-
-
-## How many slots ahead, and how many a second, [method tile_crossing_clear] looks.
-const TILE_PLAN_RATE := 16
-const TILE_PLAN_SLOTS := 128
-
-
-## Whether tile [param index] of [param piece] is up for the whole of [param from]..[param until].
-func _tile_up_over(piece: Dictionary, index: int, from: float, until: float) -> bool:
-	var spec: Dictionary = piece["spec"]
-	var cycle := tile_cycle(spec, index, from)
-
-	if cycle < float(spec["down"]):
-		return false
-
-	return (1.0 - cycle) * float(spec["period"]) > until - from
-
-
-## Marks in [param standing] every slot from [param arrive] seconds after [param now] for as
-## long as tile [param index] stays up after it.
-func _tile_stand(piece: Dictionary, index: int, standing: PackedByteArray, arrive: float, now: float, dt: float) -> void:
-	var spec: Dictionary = piece["spec"]
-	var from := maxi(int(ceilf(arrive / dt)), 0)
-
-	if from >= standing.size():
-		return
-
-	var at := now + float(from) * dt
-	var cycle := tile_cycle(spec, index, at)
-
-	if cycle < float(spec["down"]):
-		return
-
-	var up_for := (1.0 - cycle) * float(spec["period"])
-	var until := mini(from + int(up_for / dt), standing.size())
-
-	for k in range(from, until):
-		standing[k] = maxi(standing[k], 1)
-
-	if until > from:
-		standing[from] = 2
-
-
-## Whether the tile [param ground_id] is, if it is one, is about to drop (its warning is on).
-func tile_dropping(ground_id: int, at: Vector3, tick: int) -> bool:
-	var found: Variant = _by_collider.get(ground_id)
-
-	if found == null:
-		return false
-
-	var piece: Dictionary = pieces[int((found as Array)[0])]
-
-	if str(piece["kind"]) != "tiles":
-		return false
-
-	var t := float(tick) / float(maxi(tick_rate, 1))
-	return tile_warning(piece["spec"], int((found as Array)[1]), t) > 0.0 \
-		or tile_down(piece, int((found as Array)[1]), t + 0.3)
 
 
 # --- Weather -------------------------------------------------------------------
