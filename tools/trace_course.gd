@@ -28,14 +28,7 @@ func _ready() -> void:
 		elif arg.begins_with("--seconds="):
 			seconds = arg.trim_prefix("--seconds=").to_float()
 
-	var config := WoConfig.new()
-	config.warmup_seconds = 0.0
-	config.countdown_seconds = 0.5
-	config.minimum_players = 0
-	config.bot_mistakes = 0.0
-	config.keep_progress = false
-	config.course_seconds = seconds
-	config.course_ids = PackedStringArray([course])
+	var config := _config(course, seconds)
 
 	var game := WoGame.new()
 	game.config = config
@@ -88,11 +81,7 @@ func _ready() -> void:
 					int(game._bot_route.get(bot.player_id, -1)), game.course_elapsed])
 
 		if i == 200 and OS.get_environment("WO_PROBE") != "":
-			var space := game.get_world_3d().direct_space_state
-			for h in [0.1, 0.5, 1.0]:
-				var q := PhysicsRayQueryParameters3D.create(Vector3(1, h, -7), Vector3(1, h, 0))
-				var hit := space.intersect_ray(q)
-				print("probe h=%.1f -> %s %s" % [h, hit.get("position"), (hit.get("collider") as Node).get_path() if hit.has("collider") else ""])
+			_probe(game)
 
 		if bot.finished:
 			print("FINISHED in %.1f s, %d falls, %d knocks" % [bot.finish_seconds, bot.falls, bot.knocks])
@@ -102,6 +91,26 @@ func _ready() -> void:
 		print("did not finish: %d falls, %d knocks, at %s" % [bot.falls, bot.knocks, bot.controller.state.position])
 
 	get_tree().quit()
+
+
+func _config(course: String, seconds: float) -> WoConfig:
+	var config := WoConfig.new()
+	config.warmup_seconds = 0.0
+	config.countdown_seconds = 0.5
+	config.minimum_players = 0
+	config.bot_mistakes = 0.0
+	config.keep_progress = false
+	config.course_seconds = seconds
+	config.course_ids = PackedStringArray([course])
+	return config
+
+
+func _probe(game: Node3D) -> void:
+	var space := game.get_world_3d().direct_space_state
+	for h in [0.1, 0.5, 1.0]:
+		var q := PhysicsRayQueryParameters3D.create(Vector3(1, h, -7), Vector3(1, h, 0))
+		var hit := space.intersect_ray(q)
+		print("probe h=%.1f -> %s %s" % [h, hit.get("position"), (hit.get("collider") as Node).get_path() if hit.has("collider") else ""])
 
 
 ## `--heights=x0,x1,z0,z1`: the floor under every half metre of a box, one row per z and one digit per x:
