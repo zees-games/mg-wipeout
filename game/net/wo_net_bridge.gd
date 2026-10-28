@@ -32,37 +32,21 @@ const WoPlayer := preload("../wo_player.gd")
 ## bridge.client_tick(tick, command, slot)
 ## [/codeblock]
 ##
-## [b]What crosses, and the course is not on the list.[/b] A player's own movement is
-## predicted, like every first-person game in this family; the props are server-authoritative
-## mirrors, as everywhere. The course is neither: it arrives ONCE, as a document in `STAGE`,
-## and after that nothing about it is sent, because every obstacle on it is a function of the
-## tick (see [WoCourse]) — a client predicting tick N poses the course at tick N itself and
-## gets the server's answer without being told it.
-##
-## [b]The ordering is the other half of the file.[/b] dot-net drives simulation per entity;
-## this game's tick is a whole-world property — the course is posed, every player moves, then
-## falls, checkpoints and the finish are decided. [method ensure_game_ticked] reconciles the
-## two: the first behaviour through on a tick runs the whole world and the rest find it done.
+## The course is not replicated: it arrives once in `STAGE` and every obstacle is a function
+## of the tick, so a client poses it itself. The world ticks as a whole (course, movement,
+## falls, finish): [method ensure_game_ticked] runs it on the first behaviour through.
 
 const CHANNEL := "wo.net"
 
 ## Bytes of acknowledgement in front of every input packet. [method DotNetManager.encode_ack].
 const ACK_BYTES := 4
 
-## Commands in every input packet: this tick's and the four before it, so a lost packet
-## costs the server no tick unless the next four are lost too. Over WebSocket nothing is
-## ever lost; over ENet (the desktop client, since servers went dual-stack) one command a
-## packet was a tick the server ran on the previous command for every packet dropped.
-## game-arena measured it first: 80% of ticks with the right command at 20% loss with one
-## copy, 99-100% with three, and five closed the rest (2026-10-09).
+## Commands per input packet: this tick's and the four before it, so a lost packet costs no
+## tick over ENet unless the next four are lost too (WebSocket never loses one).
 const INPUT_COPIES := 5
 
-## How often the round clock and the numbers behind it go out, in ticks.
-##
-## [b]Twice a second, not per tick and not per snapshot.[/b] What it carries changes when
-## somebody finishes or a second passes, and a client told sixty-four times a second would be
-## paying for sixty-two copies of the same numbers. The clock itself is advanced on the
-## client between messages — see [method _apply_clock].
+## How often the round clock goes out, in ticks: twice a second, since what it carries
+## changes once a second; the client advances the clock between messages.
 const CLOCK_EVERY := 32
 
 ## The client has been told who it is. [param player_id] is the session id.
@@ -135,13 +119,8 @@ var link: WoNetLink = null
 ## Which session this process is. Zero on a server.
 var local_player_id: int = 0
 
-## Where the clock learns how long the link is, in milliseconds.
-##
-## dot-net never touches a transport and cannot measure it; dot-server's heartbeat already
-## does ([method DotClientLink.ping_ms]). A client that feeds nothing has a clock that
-## assumes an instant connection and stamps every command for a tick the server has already
-## simulated — and the symptom is every command being discarded as late. Two games in this
-## family shipped without a sample and read a median of an empty set.
+## Where the clock learns the link's length in ms ([method DotClientLink.ping_ms]).
+## Fed nothing, it assumes an instant link and every command is discarded as late.
 var rtt_source: Callable = Callable()
 
 ## Where a voice frame goes on the server. Assigned by [DotGameModule] to the services
@@ -158,12 +137,8 @@ var _entities: Node = null
 ## session id -> [WoPlayerNet].
 var _behaviours: Dictionary = {}
 
-## The next session id handed to somebody the world made itself.
-##
-## [b]Well above anything dot-server will issue, and a bot needs one at all because of how a
-## player id is written.[/b] Every id on the wire is `u<session>`, and a player called `bot`
-## parses back to session ZERO — so two bots are one entry in [member _behaviours], and
-## their JOIN carries a player id that is also dot-net's broadcast address.
+## The next session id for a bot, kept well above dot-server's: a player called `bot` parses
+## back to session zero, which is dot-net's broadcast address.
 const FIRST_BOT_SESSION := 900000
 
 var _next_bot_session: int = FIRST_BOT_SESSION
@@ -193,16 +168,8 @@ var _ready_unseated: Dictionary = {}
 var _tick: int = 0
 var _game_ticked_for: int = -1
 
-## Server only: whether [method DotNetManager.server_tick] is on the stack, and the net ids
-## let go of while it was.
-##
-## [b]A round re-laid mid-tick leaks a lag-compensation track per body, for ever.[/b]
-## mg-smash-copter's finding: the world ticks inside the first player behaviour's
-## `_net_simulate`, so a round that ends there unregisters every prop while `server_tick` is still holding the identity list
-## it took before simulating — and then records history for that list. The registry has
-## already told the history to forget each id; the record makes a fresh track for it again,
-## and nothing ever forgets it a second time.
-## Forgotten again here once the manager has let go of its list.
+## Server only: whether `server_tick` is on the stack, and the net ids released during it.
+## A round re-laid mid-tick would otherwise let `record` recreate a history track per body.
 var _in_server_tick := false
 var _unregistered_in_tick: Array[int] = []
 var _client_ticked_for: int = -1
@@ -291,69 +258,60 @@ func attach(p_game: Object, p_net: DotNetManager) -> DotResult:
 		game.world_rebuilt.connect(_pair_pending_toys)
 
 	if net.is_server:
-		game.stage.io_message.connect(func(peer: Variant, msg: Dictionary) -> void:
-			_tell(int(peer), WoEvents.Kind.WORLD_IO, WoEvents.write_world_io(msg)))
-		game.player_added.connect(_on_player_added)
-		game.player_removed.connect(_on_player_removed)
-		game.world_clearing.connect(_on_world_clearing)
-		game.world_rebuilt.connect(_on_world_rebuilt)
-		game.props.spawned.connect(_on_prop_spawned)
-		game.props.removed.connect(_on_prop_removed)
-		game.round_began.connect(_on_round_began)
-		# To the shooter alone: a hit marker is that player's business.
-		game.hit_landed.connect(func(id: StringName, point: Vector3, killed: bool, headshot: bool) -> void:
-			var hit_peer := peer_for_player(session_of(id))
-			if hit_peer > 0:
-				_tell(hit_peer, WoEvents.Kind.HIT, WoEvents.write_hit(point, killed, headshot)))
-		game.round_over.connect(_on_round_over)
-		game.phase_changed.connect(_on_phase_changed)
-		game.player_died.connect(_on_player_died)
-		game.blast.connect(_on_blast)
-		game.player_fell.connect(func(id: StringName, checkpoint: int) -> void:
-			_broadcast(WoEvents.Kind.PROGRESS, WoEvents.write_progress(
-				session_of(id), WoEvents.Progress.FELL, checkpoint + 1, 0.0))
-		)
-		game.checkpoint_reached.connect(func(id: StringName, index: int) -> void:
-			_broadcast(WoEvents.Kind.PROGRESS, WoEvents.write_progress(
-				session_of(id), WoEvents.Progress.CHECKPOINT, index, game.course_elapsed))
-		)
-		game.player_finished.connect(func(id: StringName, place: int, seconds: float) -> void:
-			_broadcast(WoEvents.Kind.PROGRESS, WoEvents.write_progress(
-				session_of(id), WoEvents.Progress.FINISHED, place, seconds))
-		)
-		game.pickup_placed.connect(func(pickup_id: int, weapon_id: StringName, at: Vector3) -> void:
-			_broadcast(WoEvents.Kind.PICKUP, WoEvents.write_pickup(pickup_id, weapon_id, at))
-		)
-		game.pickup_taken.connect(func(pickup_id: int, by: StringName) -> void:
-			_broadcast(WoEvents.Kind.PICKUP_GONE, WoEvents.write_pickup_gone(
-				pickup_id, session_of(by) if by != &"" else 0))
-		)
-
-		if game.spectate != null:
-			game.spectate.view_changed.connect(_on_spectate_changed)
-
-		_wire_lag_compensation()
+		_wire_server()
 
 	return DotResult.success(true)
 
 
-## Hands dot-combat the two callables that make lag compensation real.
-##
-## [b]Two lines, and without them the setting is a lie.[/b] dot-combat names no dot-net type
-## — the whole point of the seam — so it takes a rewind and a restore as [Callable]s and,
-## unset, says so once at boot and then resolves every shot against the present anyway. A
-## game that left the flag on and the callables unset would report lag compensation as
-## enabled, do nothing, and cost the next reader an afternoon; this family calls that
-## "produced correctly and consumed by nothing" and it is its second most repeated bug.
-##
-## dot-net already records the history: `DotNetManager.server_tick` calls
-## `history.record(identities, tick)` once a snapshot. There is nothing to build.
-##
-## [b]The shooter is not excluded, and that is safe here rather than an oversight.[/b]
-## `DotNetHistory.rewind` can leave one entity alone so that rewinding does not move the
-## shooter's own muzzle — but `resolve_shot` fixes `shot.origin` before it rewinds anything,
-## so the muzzle has already been decided, and the resolver refuses self damage separately.
-## What excluding would buy is one fewer entity moved and put back.
+## Connects the server's game signals to the events that tell the clients.
+func _wire_server() -> void:
+	game.stage.io_message.connect(func(peer: Variant, msg: Dictionary) -> void:
+		_tell(int(peer), WoEvents.Kind.WORLD_IO, WoEvents.write_world_io(msg)))
+	game.player_added.connect(_on_player_added)
+	game.player_removed.connect(_on_player_removed)
+	game.world_clearing.connect(_on_world_clearing)
+	game.world_rebuilt.connect(_on_world_rebuilt)
+	game.props.spawned.connect(_on_prop_spawned)
+	game.props.removed.connect(_on_prop_removed)
+	game.round_began.connect(_on_round_began)
+	# To the shooter alone: a hit marker is that player's business.
+	game.hit_landed.connect(func(id: StringName, point: Vector3, killed: bool, headshot: bool) -> void:
+		var hit_peer := peer_for_player(session_of(id))
+		if hit_peer > 0:
+			_tell(hit_peer, WoEvents.Kind.HIT, WoEvents.write_hit(point, killed, headshot)))
+	game.round_over.connect(_on_round_over)
+	game.phase_changed.connect(_on_phase_changed)
+	game.player_died.connect(_on_player_died)
+	game.blast.connect(_on_blast)
+	game.player_fell.connect(func(id: StringName, checkpoint: int) -> void:
+		_broadcast(WoEvents.Kind.PROGRESS, WoEvents.write_progress(
+			session_of(id), WoEvents.Progress.FELL, checkpoint + 1, 0.0))
+	)
+	game.checkpoint_reached.connect(func(id: StringName, index: int) -> void:
+		_broadcast(WoEvents.Kind.PROGRESS, WoEvents.write_progress(
+			session_of(id), WoEvents.Progress.CHECKPOINT, index, game.course_elapsed))
+	)
+	game.player_finished.connect(func(id: StringName, place: int, seconds: float) -> void:
+		_broadcast(WoEvents.Kind.PROGRESS, WoEvents.write_progress(
+			session_of(id), WoEvents.Progress.FINISHED, place, seconds))
+	)
+	game.pickup_placed.connect(func(pickup_id: int, weapon_id: StringName, at: Vector3) -> void:
+		_broadcast(WoEvents.Kind.PICKUP, WoEvents.write_pickup(pickup_id, weapon_id, at))
+	)
+	game.pickup_taken.connect(func(pickup_id: int, by: StringName) -> void:
+		_broadcast(WoEvents.Kind.PICKUP_GONE, WoEvents.write_pickup_gone(
+			pickup_id, session_of(by) if by != &"" else 0))
+	)
+
+	if game.spectate != null:
+		game.spectate.view_changed.connect(_on_spectate_changed)
+
+	_wire_lag_compensation()
+
+
+## Hands dot-combat the rewind and restore callables; unset, it resolves every shot against
+## the present while the setting still reports lag compensation as on.
+## The shooter is not excluded: `resolve_shot` fixes the muzzle before it rewinds anything.
 func _wire_lag_compensation() -> void:
 	if game.combat == null or net == null:
 		return
@@ -374,12 +332,8 @@ func _wire_lag_compensation() -> void:
 	})
 
 
-## Opens the link under [param parent], whose NAME is half the RPC routing.
-##
-## A [DotServer] on one end and a [DotClientLink] on the other, both called `Server`, with
-## this node under each: Godot routes an RPC by the receiver's node path, so a link opened
-## anywhere else is addressed by a path the other end does not have and every message lands
-## nowhere, with no error on either side.
+## Opens the link under [param parent], whose NAME is half the RPC routing: Godot routes an
+## RPC by node path, so a link opened elsewhere delivers nowhere, with no error.
 func open_link(parent: Node) -> void:
 	if parent == null or link != null:
 		return
@@ -392,13 +346,8 @@ func open_link(parent: Node) -> void:
 	DotGameLink.attach(link, parent, self, WoNetLink.NODE_NAME)
 
 
-## How every dot-net message reaches a peer.
-##
-## [b]Routed by DELIVERY, not by kind.[/b] Snapshots are unreliable and go on the snapshot
-## call; everything else is reliable, and which reliable call it is depends on which end is
-## sending — the server has events, the client has requests. Sending them all as events
-## works on a server and silently drops every client request, which is a client that
-## connects, draws, and can never ask for anything.
+## How every dot-net message reaches a peer, routed by DELIVERY: snapshots on the snapshot
+## call, the rest reliable (events from the server, requests from the client).
 func _send(peer_id: int, payload: PackedByteArray, delivery: int) -> void:
 	if link == null:
 		return
@@ -717,12 +666,8 @@ func _release_toys() -> void:
 	_toy_nets.clear()
 
 
-## Client, on TOYS: a mirror for every id at once, under the holder, whether this end has built
-## that stage or not. [b]A client must know every entity a snapshot carries[/b]: dot-net stops
-## reading a snapshot at the first one it does not know (a body cannot be skipped without its
-## declarations), so a mirror missing while the client's stage is not that one (a STAGE refused
-## by a format behind, or never delivered) stops every entity after it. Paired with this end's
-## toys by index as soon as both are here.
+## Client, on TOYS: a mirror for every id at once. A client must know every entity a snapshot
+## carries, as dot-net stops reading at the first unknown one. Paired with this end's toys by index.
 func _apply_toys(told: Dictionary) -> void:
 	if net == null or net.is_server:
 		return
@@ -772,13 +717,8 @@ func toy_entities() -> int:
 	return _toy_nets.size()
 
 
-## Every prop the world puts out becomes a replicated entity.
-##
-## [b]Announced reliably AND replicated by snapshot, and it needs both.[/b] The snapshot
-## moves it; the event says what it IS, because a client cannot build a barrel from a
-## position. A spawner factory would have to name a script, and this game's content is named
-## by PATH precisely so a dot-cloud pack can deliver it — a mounted pack's `class_name`
-## globals are not registered in the host.
+## Every prop the world puts out becomes a replicated entity, announced reliably (what it IS,
+## by path so a pack can deliver it) and moved by snapshot.
 func _on_prop_spawned(prop: DotPropInstance) -> void:
 	if net == null or not net.is_server or prop == null or prop.node == null:
 		return
@@ -1497,33 +1437,9 @@ func _on_event(message: DotNetMessage) -> void:
 		WoEvents.Kind.CLOCK:
 			_apply_clock(reader)
 		WoEvents.Kind.ROUND:
-			var round_info := WoEvents.read_round(reader)
-
-			if bool(round_info["ok"]):
-				game.round_number = int(round_info["round"])
-
-				if bool(round_info["began"]):
-					game.phase_elapsed = 0.0
-					game.course_elapsed = 0.0
-
-				round_changed.emit(
-					int(round_info["round"]),
-					bool(round_info["began"]),
-					int(round_info["winner"]),
-					str(round_info["why"])
-				)
+			_apply_round(reader)
 		WoEvents.Kind.PHASE:
-			var moved := WoEvents.read_phase(reader)
-
-			if bool(moved["ok"]):
-				game.phase = int(moved["phase"])
-				game.phase_elapsed = 0.0
-
-				if game.stage != null and game.stage.is_course():
-					game.stage.gate_closed = game.phase == game.Phase.COUNTDOWN \
-						or game.phase == game.Phase.IDLE
-
-				phase_received.emit(int(moved["phase"]))
+			_apply_phase(reader)
 		WoEvents.Kind.DEATH:
 			var death := WoEvents.read_death(reader)
 
@@ -1569,19 +1485,7 @@ func _on_event(message: DotNetMessage) -> void:
 			if bool(text["ok"]):
 				notice_received.emit(str(text["text"]))
 		WoEvents.Kind.SPECTATE:
-			var view := WoEvents.read_spectate(reader)
-
-			if bool(view["ok"]) and game.spectate != null:
-				game.spectate.apply_view(
-					player_key(int(view["viewer"])),
-					int(view["mode"]),
-					player_key(int(view["target"])) if int(view["target"]) != 0 else &"",
-					player_key(int(view["killer"])) if int(view["killer"]) != 0 else &"",
-					view["death_at"]
-				)
-				spectate_received.emit(
-					int(view["viewer"]), int(view["mode"]), int(view["target"])
-				)
+			_apply_spectate(reader)
 		WoEvents.Kind.PROGRESS:
 			var moved := WoEvents.read_progress(reader)
 
@@ -1600,6 +1504,54 @@ func _on_event(message: DotNetMessage) -> void:
 			if bool(gone["ok"]):
 				game.pickups.erase(int(gone["pickup_id"]))
 				pickup_gone_received.emit(int(gone["pickup_id"]), int(gone["by"]))
+
+
+func _apply_round(reader: DotNetReader) -> void:
+	var round_info := WoEvents.read_round(reader)
+
+	if bool(round_info["ok"]):
+		game.round_number = int(round_info["round"])
+
+		if bool(round_info["began"]):
+			game.phase_elapsed = 0.0
+			game.course_elapsed = 0.0
+
+		round_changed.emit(
+			int(round_info["round"]),
+			bool(round_info["began"]),
+			int(round_info["winner"]),
+			str(round_info["why"])
+		)
+
+
+func _apply_phase(reader: DotNetReader) -> void:
+	var moved := WoEvents.read_phase(reader)
+
+	if bool(moved["ok"]):
+		game.phase = int(moved["phase"])
+		game.phase_elapsed = 0.0
+
+		if game.stage != null and game.stage.is_course():
+			game.stage.gate_closed = game.phase == game.Phase.COUNTDOWN \
+				or game.phase == game.Phase.IDLE
+
+		phase_received.emit(int(moved["phase"]))
+
+
+func _apply_spectate(reader: DotNetReader) -> void:
+	var view := WoEvents.read_spectate(reader)
+
+	if bool(view["ok"]) and game.spectate != null:
+		game.spectate.apply_view(
+			player_key(int(view["viewer"])),
+			int(view["mode"]),
+			player_key(int(view["target"])) if int(view["target"]) != 0 else &"",
+			player_key(int(view["killer"])) if int(view["killer"]) != 0 else &"",
+			view["death_at"]
+		)
+		spectate_received.emit(
+			int(view["viewer"]), int(view["mode"]), int(view["target"])
+		)
 
 
 func _apply_hello(reader: DotNetReader) -> void:
