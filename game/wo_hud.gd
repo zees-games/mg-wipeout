@@ -226,6 +226,41 @@ func _build() -> void:
 	_root.add_child(_hurt_wash)
 
 
+	_build_gun(size)
+
+	# Bottom middle, above where the chat box's input line opens, and under nothing else:
+	# the health number is bottom-left and the field bottom-right, and a player who is out
+	# has no use for either.
+	watching_label = _label(size)
+	watching_label.name = "Watching"
+	watching_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	watching_label.offset_left = -520.0
+	watching_label.offset_right = 520.0
+	watching_label.offset_top = -140.0
+	watching_label.offset_bottom = -104.0
+	watching_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	watching_label.add_theme_color_override("font_color", Color(0.80, 0.90, 1.0))
+
+	_build_tilt()
+
+	# Over the progress bar: where you are in the race, the number a runner glances for.
+	_place = _label(size)
+	_place.name = "Place"
+	_place.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_place.offset_left = -150.0
+	_place.offset_right = 150.0
+	_place.offset_top = -82.0
+	_place.offset_bottom = -50.0
+	_place.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	# A dot rather than a cross. For the whole first half there is nothing to aim at, and in
+	# the second half every weapon in the pack has its own spread — so what a player needs is
+	# "the point I am looking at", which is one pixel.
+	_root.add_child(_make_crosshair())
+
+
+## The bottom-right widgets: ammo, weapon icon, hit marker and the field line.
+func _build_gun(size: int) -> void:
 	# Bottom right, above the field line: what is in hand and how much is in it. The play test
 	# found a gun with no counter anywhere; dot-ui's DotAmmoCounter is the family's one.
 	ammo = DotAmmoCounter.new()
@@ -264,36 +299,6 @@ func _build() -> void:
 	_field.offset_top = -80.0
 	_field.offset_bottom = -26.0
 	_field.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-
-	# Bottom middle, above where the chat box's input line opens, and under nothing else:
-	# the health number is bottom-left and the field bottom-right, and a player who is out
-	# has no use for either.
-	watching_label = _label(size)
-	watching_label.name = "Watching"
-	watching_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	watching_label.offset_left = -520.0
-	watching_label.offset_right = 520.0
-	watching_label.offset_top = -140.0
-	watching_label.offset_bottom = -104.0
-	watching_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	watching_label.add_theme_color_override("font_color", Color(0.80, 0.90, 1.0))
-
-	_build_tilt()
-
-	# Over the progress bar: where you are in the race, the number a runner glances for.
-	_place = _label(size)
-	_place.name = "Place"
-	_place.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	_place.offset_left = -150.0
-	_place.offset_right = 150.0
-	_place.offset_top = -82.0
-	_place.offset_bottom = -50.0
-	_place.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-	# A dot rather than a cross. For the whole first half there is nothing to aim at, and in
-	# the second half every weapon in the pack has its own spread — so what a player needs is
-	# "the point I am looking at", which is one pixel.
-	_root.add_child(_make_crosshair())
 
 
 ## dot-ui's DotCrosshair as a plain dot (no arms, no spread) where the host has it (API 14), else the old square.
