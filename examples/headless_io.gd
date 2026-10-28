@@ -1,11 +1,8 @@
-extends DotGameCheckSuite
+extends "headless_io_rig.gd"
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
-const WoConfig := preload("../game/wo_config.gd")
 const WoCourseIo := preload("../game/wo_course_io.gd")
 const WoEvents := preload("../game/net/wo_events.gd")
-const WoGame := preload("../game/wo_game.gd")
-const WoPlayer := preload("../game/wo_player.gd")
 
 ## A course that runs its map's own entities (dot-map's DotMapWorld), played on the server's step.
 ## A bot cannot finish such a course (its buttons and doors are the puzzle), so this checks the machinery on the real
@@ -26,15 +23,9 @@ const COURSES := {
 	&"wo_labo_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
 	&"wo_sweet_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
 }
-const TICK_RATE := 64
-const TICK := 1.0 / float(TICK_RATE)
 
-var _sections_entered := 0
-var _sections_finished := 0
-var _world: WoGame = null
 var _expect_sections := 0
 var _expect_checks := 0
-var _shot_could_hurt := false
 
 
 func _ready() -> void:
@@ -68,7 +59,6 @@ func _run() -> void:
 func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 	var lava: bool = plan.get("lava", false)
 	var ladders: bool = plan.get("ladders", false)
-	var wants_push: bool = plan.get("push", true)
 	var wants_button: bool = plan.get("button", true)
 	var doc: Dictionary = catalogue.courses[id]
 
@@ -85,6 +75,52 @@ func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 	await _until(game, WoGame.Phase.COURSE)
 	var io := game.stage.io
 	var world := io.world
+
+	_world_section(game, world, runner, plan)
+
+	await _spawn_section(game, runner, plan)
+
+	_section("the machinery moves")
+	var movers := 0
+	var moving := 0
+
+	for e: DotMapEntity in world.io.entities:
+		if e is DotMapMoverNode and (e as DotMapMoverNode).node != null:
+			var mover := e as DotMapMoverNode
+			movers += 1
+			if not mover.pose_delta(0, TICK_RATE).is_equal_approx(mover.pose_delta(300, TICK_RATE)):
+				moving += 1
+
+	_check(movers > 0, "the map has movers", str(movers))
+	_check(moving > 0, "some are in a different place five seconds on", "%d of %d" % [moving, movers])
+	_finished()
+
+	await _volume_section(game, world, doc, runner, plan)
+
+	if lava:
+		await _lava_room(game, world)
+
+	if ladders:
+		await _ladder(game, world)
+
+	_section("the finish")
+	var finisher := game.add_player(&"u6", "Finisher")
+	await _steps(game, 2)
+	_check(not finisher.finished, "a body on the spawn has not finished")
+	var finish: Vector3 = (doc["finish"] as Dictionary)["at"]
+	finisher.place_at(finish + Vector3(0.0, 0.1, 0.0), 0.0)
+	await _steps(game, 4)
+	_check(finisher.finished, "standing in the last room ends the course for the runner")
+	_finished()
+
+	await _map_end(game, world, doc)
+
+	await _client_section(game, io, doc, id)
+	await _button_section(game, game.stage.io.world, wants_button)
+
+
+## The map loads: its arch, spawns, entity coverage, team filters and a shot.
+func _world_section(game: WoGame, world: DotMapWorld, runner: WoPlayer, plan: Dictionary) -> void:
 	var manifest: Dictionary = world.mesh.manifest
 
 	_section("the world loads")
@@ -115,6 +151,9 @@ func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 	print("    shoot: entity %d (-1 none shootable, -2 none answered)" % shot_at)
 	_finished()
 
+
+## Where the runner stands after the start, and that it stays there.
+func _spawn_section(game: WoGame, runner: WoPlayer, plan: Dictionary) -> void:
 	_section("a runner spawns")
 	# A start-line teleport (Sweet's) moves everybody on the first ticks: where the runner is after them is the start.
 	# (a countdown the map runs itself may come first: wait for it, four seconds at most).
@@ -142,21 +181,10 @@ func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 		"%s to %s" % [from, rest])
 	_finished()
 
-	_section("the machinery moves")
-	var movers := 0
-	var moving := 0
 
-	for e: DotMapEntity in world.io.entities:
-		if e is DotMapMoverNode and (e as DotMapMoverNode).node != null:
-			var mover := e as DotMapMoverNode
-			movers += 1
-			if not mover.pose_delta(0, TICK_RATE).is_equal_approx(mover.pose_delta(300, TICK_RATE)):
-				moving += 1
-
-	_check(movers > 0, "the map has movers", str(movers))
-	_check(moving > 0, "some are in a different place five seconds on", "%d of %d" % [moving, movers])
-	_finished()
-
+## A push moves a body and a hurt volume strikes one.
+func _volume_section(game: WoGame, world: DotMapWorld, doc: Dictionary, runner: WoPlayer, plan: Dictionary) -> void:
+	var wants_push: bool = plan.get("push", true)
 	# What the course's own cfg turns on when it loads (headless_mapcfg checks that it does).
 	game.config.instant_death = true
 	_section("a body in a volume")
@@ -223,24 +251,9 @@ func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 		_check(survived, "while the runner is still in the round")
 	_finished()
 
-	if lava:
-		await _lava_room(game, world)
 
-	if ladders:
-		await _ladder(game, world)
-
-	_section("the finish")
-	var finisher := game.add_player(&"u6", "Finisher")
-	await _steps(game, 2)
-	_check(not finisher.finished, "a body on the spawn has not finished")
-	var finish: Vector3 = (doc["finish"] as Dictionary)["at"]
-	finisher.place_at(finish + Vector3(0.0, 0.1, 0.0), 0.0)
-	await _steps(game, 4)
-	_check(finisher.finished, "standing in the last room ends the course for the runner")
-	_finished()
-
-	await _map_end(game, world, doc)
-
+## A joiner is sent the world state and a client applies it.
+func _client_section(game: WoGame, io: WoCourseIo, doc: Dictionary, id: StringName) -> void:
 	_section("the state reaches a client")
 	var inbox: Array = []
 	game.stage.io_message.connect(func(peer: Variant, msg: Dictionary) -> void: inbox.append([peer, msg]))
@@ -274,7 +287,6 @@ func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 	remove_child(client_world)
 	client_world.free()
 	_finished()
-	await _button_section(game, game.stage.io.world, wants_button)
 
 
 ## Last, because a button may do what the map means by it, which can end the course for everybody (a teleport to
@@ -309,38 +321,7 @@ func _button_section(game: WoGame, world: DotMapWorld, wants_button: bool) -> vo
 
 			var was_in: bool = button._in
 
-			for side in [Vector2(0, 1), Vector2(1, 0), Vector2(0, -1), Vector2(-1, 0)]:
-				# At the height the button's own eyes would be, and at floor level with the head tipped down
-				# to it (a button low on a wall is pressed looking down).
-				for drop in [1.6, 1.1, 0.6]:
-					if game.phase != WoGame.Phase.COURSE:
-						break
-
-					var feet := Vector3(box.x + side.x * 1.2, box.y - drop, box.z + side.y * 1.2)
-					var yaw := rad_to_deg(atan2(side.x, side.y))
-					presser.place_at(feet, yaw)
-					var to := box - presser.eye_position()
-					var pitch := rad_to_deg(atan2(to.y, Vector2(to.x, to.z).length()))
-					var look := DotFpsCommand.new()
-					look.yaw = yaw
-					look.pitch = pitch
-					presser.controller.apply_command(look)
-					baseline = int(world.io.delivered_from.get(button.index, 0))
-					presser.wants_grab = true
-					await _steps(game, 1)
-
-					if game.phase != WoGame.Phase.COURSE:
-						break
-
-					presser.wants_grab = false
-					presser.controller.apply_command(look)
-					await _steps(game, 1)
-
-					if int(game.io_log["uses"]) > seen:
-						break
-
-				if int(game.io_log["uses"]) > seen:
-					break
+			baseline = await _press_from_sides(game, world, presser, button, box, seen, baseline)
 
 			trail += " [%d locked %s in %s->%s uses %d->%d]" % [button.index, button.locked, was_in, button._in, seen, int(game.io_log["uses"])]
 			# This button went from released to pressed in this press; the delivery that counts follows it.
@@ -370,6 +351,43 @@ func _button_section(game: WoGame, world: DotMapWorld, wants_button: bool) -> vo
 		_check(followed, "and its outputs are delivered after that press, by that button",
 			"%d delivered from the last button pressed" % sent_by_it)
 	_finished()
+
+
+## Presses `button` from each side at three heights, until a use is counted; returns the delivered count it started from.
+func _press_from_sides(game: WoGame, world: DotMapWorld, presser: WoPlayer, button: DotMapMoverNode, box: Vector3, seen: int, baseline: int) -> int:
+	for side in [Vector2(0, 1), Vector2(1, 0), Vector2(0, -1), Vector2(-1, 0)]:
+		# At the height the button's own eyes would be, and at floor level with the head tipped down
+		# to it (a button low on a wall is pressed looking down).
+		for drop in [1.6, 1.1, 0.6]:
+			if game.phase != WoGame.Phase.COURSE:
+				break
+
+			var feet := Vector3(box.x + side.x * 1.2, box.y - drop, box.z + side.y * 1.2)
+			var yaw := rad_to_deg(atan2(side.x, side.y))
+			presser.place_at(feet, yaw)
+			var to := box - presser.eye_position()
+			var pitch := rad_to_deg(atan2(to.y, Vector2(to.x, to.z).length()))
+			var look := DotFpsCommand.new()
+			look.yaw = yaw
+			look.pitch = pitch
+			presser.controller.apply_command(look)
+			baseline = int(world.io.delivered_from.get(button.index, 0))
+			presser.wants_grab = true
+			await _steps(game, 1)
+
+			if game.phase != WoGame.Phase.COURSE:
+				break
+
+			presser.wants_grab = false
+			presser.controller.apply_command(look)
+			await _steps(game, 1)
+
+			if int(game.io_log["uses"]) > seen:
+				break
+
+		if int(game.io_log["uses"]) > seen:
+			break
+	return baseline
 
 
 ## The hurt that a trigger enables three seconds after somebody steps in (the lava room's own links): quiet
@@ -628,232 +646,3 @@ func _named_volume(world: DotMapWorld, kind: String, target: String) -> Dictiona
 			var box := _widest(node.volume)
 			return {"centre": box.get_center(), "floor": box.position.y}
 	return {}
-
-
-func _io_piece(doc: Dictionary) -> bool:
-	for piece: Dictionary in doc["pieces"]:
-		if str(piece["kind"]) == "world" and bool(piece.get("io", false)):
-			return true
-	return false
-
-
-## The metres to the nearest of the map's own spawn points.
-func _nearest_spawn(game: WoGame, at: Vector3) -> float:
-	var best := INF
-
-	for spawn: Dictionary in game.stage.io_spawns():
-		var origin: Vector3 = spawn["origin"]
-		best = minf(best, origin.distance_to(at))
-
-	return best
-
-
-## Where the map's teleports sent [param player], in order.
-func _sent_to(game: WoGame, player: WoPlayer) -> Array:
-	var out: Array = []
-
-	for entry: Dictionary in game.io_teleported:
-		if entry["body"] == player:
-			out.append(entry["to"])
-
-	return out
-
-
-## The volumes with a team filter that turns a body of no team away, by name: what a runner can never trigger.
-func _rejected(game: WoGame, world: DotMapWorld, who: WoPlayer) -> Array:
-	var body := game.io_body(who)
-	var out: Array = []
-
-	for node: DotMapVolumeNode in world.volumes.nodes:
-		if node.volume.filter != "" and DotMapVolumeNode.TRIGGER_KINDS.has(node.volume.kind) and not node._filter_passes(world.io, body):
-			var found := world.io.find(node.volume.filter)
-			var by: String = found[0].classname if not found.is_empty() else "?"
-			out.append("%s %s (%s %s)" % [node.volume.kind, node.volume.targetname if node.volume.targetname != "" else "#%d" % node.volume.entity,
-				node.volume.filter, by])
-
-	return out
-
-
-## The volumes of [param kind] that are on now and would act on a player, above [param floor_y] (a body below the
-## water is out of the round, as on a map's side arena), roomiest first, each with its middle (a thin slab is no
-## place to stand a body for a check). At most eight.
-func _live(world: DotMapWorld, kind: String, damage: float, floor_y: float) -> Array:
-	var found: Array = []
-
-	for node: DotMapVolumeNode in world.volumes.nodes:
-		var v := node.volume
-
-		if v.kind != kind or not node.active() or float(v.record.get("damage", 0.0)) < damage:
-			continue
-		if kind == "push" and ((v.spawnflags & 1) == 0 or _push_velocity(node) == Vector3.ZERO):
-			continue
-
-		var box := _widest(v)
-
-		if box.size.is_finite() and box.get_center().y > floor_y:
-			found.append({"node": node, "centre": box.get_center(), "room": box.size.x * box.size.y * box.size.z})
-
-	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["room"]) > float(b["room"]))
-	return found.slice(0, 8)
-
-
-func _push_velocity(node: DotMapVolumeNode) -> Vector3:
-	if node.entity is DotMapPush:
-		return (node.entity as DotMapPush).velocity()
-
-	return node.volume.push_velocity()
-
-
-## The roomiest of a volume's brush boxes.
-func _widest(v: DotMapVolume) -> AABB:
-	var best := AABB(Vector3.ZERO, Vector3(INF, INF, INF))
-	var room := -1.0
-
-	for box: AABB in v.brush_boxes():
-		var size := box.size.x * box.size.y * box.size.z
-
-		if size > room:
-			room = size
-			best = box
-
-	return best
-
-
-## The volumes of [param kind] that hold [param who] now.
-func _inside_of(world: DotMapWorld, kind: String, who: String) -> Array:
-	var out: Array = []
-
-	for node: DotMapVolumeNode in world.volumes.nodes:
-		if node.volume.kind == kind and node.inside.has(who):
-			out.append(node)
-
-	return out
-
-
-## The longest delay of a button's OnPressed outputs, in seconds.
-func _press_delay(button: DotMapMoverNode) -> float:
-	var longest := 0.0
-
-	for link: Dictionary in button.links:
-		if str(link["output"]).to_lower() == "onpressed":
-			longest = maxf(longest, float(link["delay"]))
-
-	return longest
-
-
-func _on_pressed(button: DotMapMoverNode) -> bool:
-	for link: Dictionary in button.links:
-		if str(link["output"]).to_lower() == "onpressed":
-			return true
-
-	return false
-
-
-func _buttons(world: DotMapWorld) -> Array[DotMapMoverNode]:
-	var out: Array[DotMapMoverNode] = []
-	for e: DotMapEntity in world.io.entities:
-		if e.classname == "func_button" and e is DotMapMoverNode and (e as DotMapMoverNode).node != null:
-			out.append(e as DotMapMoverNode)
-	return out
-
-
-## Fires `DotMapWorld.shoot` at every shootable thing's middle from outside along each axis. -1: the map has none;
-## the entity index of one that answered; -2: it has some and none answered.
-func _shoot_something(game: WoGame, world: DotMapWorld) -> int:
-	var space := game.stage.get_world_3d().direct_space_state
-	var any := false
-	for e: DotMapEntity in world.io.entities:
-		var node: Node3D = null
-		if e is DotMapMoverNode:
-			node = (e as DotMapMoverNode).node as Node3D
-		elif e is DotMapBreakable:
-			node = (e as DotMapBreakable).node as Node3D
-		if node == null or not e.key("model").begins_with("*"):
-			continue
-		var box := AABB()
-		var found := false
-		for shape: CollisionShape3D in node.find_children("*", "CollisionShape3D", true, false):
-			if shape.shape != null:
-				var part: AABB = shape.global_transform * shape.shape.get_debug_mesh().get_aabb()
-				box = box.merge(part) if found else part
-				found = true
-		if not found:
-			continue
-		any = true
-		_shot_could_hurt = e is DotMapBreakable and (e as DotMapBreakable).is_breakable() and (e as DotMapBreakable).min_damage <= 10.0
-		var centre := box.get_center()
-		for axis in [Vector3.UP, Vector3.DOWN, Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]:
-			var from: Vector3 = centre + (axis as Vector3) * (box.size.length() * 0.5 + 0.3)
-			if world.shoot(space, from, centre, 10.0) == e.index:
-				return e.index
-	return -2 if any else -1
-
-
-func _centre_of(mover: DotMapMoverNode) -> Vector3:
-	for shape: CollisionShape3D in mover.node.find_children("*", "CollisionShape3D", true, false):
-		if shape.shape != null:
-			return (shape.global_transform * shape.shape.get_debug_mesh().get_aabb()).get_center()
-	return (mover.node as Node3D).global_position
-
-
-func _until(game: WoGame, phase: int) -> void:
-	for i in range(int(8.0 * TICK_RATE)):
-		game.simulate(TICK)
-
-		if i % 64 == 0:
-			await get_tree().process_frame
-
-		if game.phase == phase:
-			break
-
-
-func _steps(game: WoGame, count: int) -> void:
-	for i in range(count):
-		game.simulate(TICK)
-
-		if i % 64 == 63:
-			await get_tree().process_frame
-
-	await get_tree().physics_frame
-
-
-func _fresh_world(doc: Dictionary) -> WoGame:
-	if _world != null:
-		remove_child(_world)
-		_world.free()
-		await get_tree().process_frame
-
-	var config := WoConfig.new()
-	config.knock_damage_per_speed = 0.0
-	config.fall_damage_per_metre = 0.0
-	config.courses_per_round = 1
-	config.wind_chance = 0.0
-	config.storm_chance = 0.0
-	config.warmup_seconds = 0.0
-	config.intermission_seconds = 0.0
-	config.countdown_seconds = 0.5
-	config.minimum_players = 0
-	config.keep_progress = false
-	config.course_ids = PackedStringArray([str(doc["id"])])
-
-	var game := WoGame.new()
-	game.name = "World"
-	game.config = config
-	game.tick_rate = TICK_RATE
-	game.register_service = false
-	game.draw_world = true
-	add_child(game)
-	game.set_physics_process(false)
-	_world = game
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	return game
-
-
-func _section(name: String) -> void:
-	_sections_entered += 1
-	print(name)
-
-
-func _finished() -> void:
-	_sections_finished += 1
