@@ -1,15 +1,12 @@
-extends DotGameModule
+extends "wo_module_commands.gd"
 
 const WoNetBridge := preload("net/wo_net_bridge.gd")
-const WoServices := preload("wo_services.gd")
-
-const WoGame := preload("wo_game.gd")
 const WoPlayer := preload("wo_player.gd")
 const WoAvatars := preload("wo_avatars.gd")
-const WoVote := preload("wo_vote.gd")
 const WoCourseCfg := preload("wo_course_cfg.gd")
 const WoMapConfig := preload("wo_map_config.gd")
 const WoAmbience := preload("wo_ambience.gd")
+
 ## The workbench kind of the ambience cvar set (saved to cfg/.../ambience/server.yml).
 const AMBIENT_KIND := "ambience"
 
@@ -87,9 +84,6 @@ var _since_roster_check: float = 0.0
 
 ## How many stand-ins this module has put in, so it can take them out again.
 var _bot_ids: Array[StringName] = []
-
-## The players' vote for the next course; null when it could not be built.
-var vote: WoVote = null
 
 ## The last course's own settings, put back when the next course is laid out.
 var _course_cfg: WoCourseCfg = null
@@ -201,65 +195,14 @@ func _game_load() -> DotResult:
 	_wire_armed(world)
 	_wire_map(world)
 	_wire_progress(world)
-	# wo_ambient*: REPLICATED, because each client plays its own ambience under the server's intent; the directory cvar stays local.
+	# wo_ambient*: REPLICATED (each client plays its own ambience under it); the directory cvar stays local.
 	var _ambient := world.ambient_rules.bind_cvars(
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED,
 		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
 	)
 	_add_tunables(world)
 
-	# Whether shots pass through team-mates: `mp_teammate_passthrough` 0 never, 1 a team-mate
-	# holding the muzzle (the default), 2 every team-mate in the line. dot-combat's cvar,
-	# defined there once for every game; live from the next shot, and a value the operator set
-	# first (argv, content.yml) is read back. NOTIFY, because players should know; REPLICATED,
-	# because every client's own manager predicts its tracers under it (the client follows it
-	# through its link, see the client's _build_netcode).
-	if world.combat != null:
-		var _passthrough := world.combat.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)
-
-	# Dead bodies: dot-player-char's sv_ragdoll* set. The server only picks each death's reaction
-	# from them; REPLICATED, because the clients draw the bodies (see the client's _build_netcode).
-	var _ragdolls := world.ragdoll_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
-
-	# REPLICATED: the client plays the killcam and needs the length the server added to the intermission.
-	_killcam_cvar = add_cvar("mp_killcam_time", _number(world.config.killcam_seconds),
-		"Seconds the final killcam plays at a round's end, added to the intermission (0 for none)",
-		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)
-	if _killcam_cvar != null:
-		_killcam_cvar.changed.connect(func(_old: String, new_value: String) -> void:
-			world.set_killcam_seconds(new_value.to_float())
-			var field := world.config_binder.cvar_for("killcam_seconds") if world.config_binder != null else null
-			if field != null:
-				var _set: Variant = field.set_value(new_value))
-		world.set_killcam_seconds(_killcam_cvar.get_float())
-
-	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: dot-spectate's rules, so spectators
-	# free-roam unless an operator says otherwise. REPLICATED, because each client flies its
-	# own spectator camera under them (WoClient.toggle_roam).
-	for made: Object in world.spectate_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	):
-		if str(made.get(&"name")) == DotSpectatorRules.CVAR_FORCE_CAMERA:
-			_force_camera_cvar = made
-
-	# dot-player-controller's mp_forceview (first or third person: the player's choice, or one
-	# held) and mp_solidplayers (players and stand-ins block each other, 1 by default).
-	# REPLICATED: the client places its own camera under the first and predicts its own
-	# player under the second.
-	var _views := world.view_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
-	var _bodies := world.body_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
-
-	# The stage's toys: dot-props' sv_toys* set. REPLICATED, because a client hides the toys the
-	# server took away.
-	var _toys := world.toy_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
+	_bind_rule_cvars(world)
 
 	_build_vote(world)
 
@@ -268,28 +211,19 @@ func _game_load() -> DotResult:
 		"Automatic stand-ins: 1 keeps as many as bot_quota and bot_quota_mode say, 0 none at all."
 	)
 
-	# dot-game's "still loading": a seat behind its client's cover is neither hurt, eliminated
-	# nor counted across (see WoGame.harm_gate). Asked by player id, resolved to a peer through
-	# the bridge.
+	# dot-game's "still loading": a seat behind its client's cover is neither hurt, eliminated nor counted across.
 	world.harm_gate = func(player_id: StringName) -> bool:
 		if bridge == null:
 			return true
 		var peer := int((bridge as WoNetBridge).peer_for_player(WoNetBridge.session_of(player_id)))
 		return peer <= 0 or can_peer_be_harmed(peer)
 
-	# [b]How many is dot-server's [DotBotQuota], so `bot_quota` and `bot_quota_mode` mean the
-	# same thing on every server in the family.[/b] The default is this game's own minimum
-	# (`minimum_players`, from the config file) in fill mode, which is the rule it ran before
-	# the policy was shared: stand-ins top the round up to that many players, a person who
-	# joins takes a stand-in's place, and the stand-in comes back when they leave. `wo_bots`
-	# stays the switch it always was, so a server config that sets it means what it meant.
+	# dot-server's DotBotQuota: `bot_quota` means the same on every server; the default is this
+	# game's `minimum_players` in fill mode, and `wo_bots` stays the switch.
 	_quota = DotBotQuota.install(self, world.config.minimum_players)
 
-	# [b]Started here and not in the world's own `_ready`.[/b] `start()` lays the field out
-	# and puts everybody on it, and a world that did that before the bridge existed would
-	# have built a dozen platforms with nothing listening to `world_rebuilt` — a field the
-	# server knows about and no client is ever told about. They would be invisible floors:
-	# a player stands on nothing and the server says they are fine.
+	# Started here, not in the world's _ready: a start() before the bridge existed built a field
+	# nothing told any client about, invisible floors the server says are fine.
 	var _delivered: int = await _add_delivered_courses(world)
 
 	if vote != null:
@@ -301,35 +235,42 @@ func _game_load() -> DotResult:
 	return DotResult.success(null)
 
 
-## The courses the SERVER names for this game, fetched and added to the catalogue. Returns how
-## many documents they held.
-##
-## [b]The server's list, not this game's.[/b] A course pack used to be a `server_dependencies`
-## entry in `game.yml`, which travels in this game's own pack — so a new course meant a release
-## of the game, and a server owner could not choose which courses to run. The owner names them
-## now in their deployment's map config (dot-server-deploy's `cfg/content.yml`, which fills
-## [member DotGameDescriptor.maps]); [DotGameContent] fetches each pack and hands back its
-## `courses/` directory. A server that still names one under `server_dependencies` keeps working,
-## because DotGameContent reads those too.
-##
-## [b]Documents on the wire, meshes in the pack.[/b] The server sends the course it is playing in
-## STAGE, so a client needs no course file; `maps_delivery: client` still mounts the pack on it for
-## an imported course's `worlds/` mesh. With nothing named, this
-## game plays its built-in course.
-##
-## [b]Called after EVERY catalogue load[/b], not only the first: `load_from` forgets everything
-## read before, and a reload that did not come back here dropped every delivered course — which
-## is what mg-wipeout and mg-deathrun did until the three were moved onto DotGameContent.
-func _add_delivered_courses(world: WoGame) -> int:
-	if server == null or world.catalogue == null:
-		return 0
+## The addons' rule sets as cvars; REPLICATED where the client acts under the value.
+func _bind_rule_cvars(world: WoGame) -> void:
+	var replicated := DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 
-	var read := 0
+	# `mp_teammate_passthrough`: dot-combat's, live from the next shot; the client predicts its
+	# tracers under it (see the client's _build_netcode).
+	if world.combat != null:
+		var _passthrough := world.combat.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)
 
-	for root in await DotGameContent.map_dirs(server, "courses"):
-		read += world.catalogue.add_directory(root)
+	# Dead bodies (sv_ragdoll*): the server picks each death's reaction, the clients draw it.
+	var _ragdolls := world.ragdoll_rules.bind_cvars(add_cvar, replicated)
 
-	return read
+	# REPLICATED: the client plays the killcam and needs the length added to the intermission.
+	_killcam_cvar = add_cvar("mp_killcam_time", _number(world.config.killcam_seconds),
+		"Seconds the final killcam plays at a round's end, added to the intermission (0 for none)",
+		replicated)
+	if _killcam_cvar != null:
+		_killcam_cvar.changed.connect(func(_old: String, new_value: String) -> void:
+			world.set_killcam_seconds(new_value.to_float())
+			var field := world.config_binder.cvar_for("killcam_seconds") if world.config_binder != null else null
+			if field != null:
+				var _set: Variant = field.set_value(new_value))
+		world.set_killcam_seconds(_killcam_cvar.get_float())
+
+	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: each client flies its own spectator
+	# camera under them (WoClient.toggle_roam).
+	for made: Object in world.spectate_rules.bind_cvars(add_cvar, replicated):
+		if str(made.get(&"name")) == DotSpectatorRules.CVAR_FORCE_CAMERA:
+			_force_camera_cvar = made
+
+	# mp_forceview and mp_solidplayers: the client places its camera and predicts its player under them.
+	var _views := world.view_rules.bind_cvars(add_cvar, replicated)
+	var _bodies := world.body_rules.bind_cvars(add_cvar, replicated)
+
+	# sv_toys*: a client hides the toys the server took away.
+	var _toys := world.toy_rules.bind_cvars(add_cvar, replicated)
 
 
 ## Who somebody is reaches the world: a face as they are seated, and the real name and
@@ -714,14 +655,6 @@ func _wire_chat() -> void:
 	services.connect("command_entered", _on_chat_command)
 
 
-## A round's layout is what a server listing prints as the map.
-##
-## The layout is this game's map: the field the round is played on, picked per round. Said
-## on every round rather than once, because dot-server forgets the map whenever a game
-## unloads and a layout changes between rounds.
-## The map a server browser shows is the stage: the course, and the arena while a final
-## death is on. Reported on every rebuild, because the server forgets it whenever a game
-## unloads and a browser showing last round's course is a browser lying.
 ## The players' vote for the next course, over dot-vote: `!vote`, `!rtv`, `!nominate`.
 ##
 ## [b]Opened [member WoVote.open_after_sec] into every course and applied when the round ends[/b],
@@ -827,10 +760,12 @@ func _build_vote(world: WoGame) -> void:
 			if vote != null:
 				vote.open_after_sec = maxf(value, 0.0))
 
-	# No note_course for the course already built: start() builds it again, which is a
-	# world_rebuilt, and two begin()s for one play is one play counted twice in the cooldowns.
-	# Not for a final death's arena either: that is the same round, on the same course's
-	# ballot, and a begin() on the arena's id would put an arena in the course history.
+	_vote_follows_world(world)
+
+## The ballot's clock: note each course and round end, drop a leaver's ballot.
+func _vote_follows_world(world: WoGame) -> void:
+	# Not the course already built (start() rebuilds it: two begin()s for one play), nor a final
+	# death's arena (the same round, on the same ballot).
 	world.world_rebuilt.connect(func() -> void:
 		if vote != null and world.stage != null and not world.stage.is_arena():
 			vote.note_course(world.stage.id())
@@ -923,148 +858,6 @@ func _wire_progress(world: WoGame) -> void:
 		if peer_id > 0:
 			bridge.call("notice", peer_id, "Achievement: %s (+%d)" % [title, points])
 	)
-
-
-func _on_say_requested(peer_id: int, channel_id: StringName, text: String) -> void:
-	var said: DotResult = services.call("say", peer_id, channel_id, text)
-
-	if said.ok:
-		return
-
-	# Back to the one person who asked. A refusal broadcast would be a rate limit announced
-	# to the server.
-	bridge.call("notice", peer_id, said.error.message)
-
-
-## A `!command` typed into chat. Run through the console as the person who typed it.
-##
-## [b]As THEM, not as the server.[/b] `run_command_as_uid` builds a context with that
-## player's own flags, so `!kick` from somebody without the flag is refused by the same file
-## that refuses it at the console — rather than by this function having an opinion.
-func _on_chat_command(peer_id: int, command: String, args: PackedStringArray) -> void:
-	if server == null:
-		return
-
-	var session := server.session_of(peer_id)
-
-	if session == null:
-		return
-
-	for reply in server.run_command_as_uid(
-		session.uid(), command, args, DotCmdContext.Source.CHAT
-	):
-		bridge.call("notice", peer_id, reply)
-
-
-func _cmd_say(ctx: DotCmdContext) -> void:
-	var text := ctx.rest()
-
-	if text.strip_edges() == "":
-		ctx.reply("Say what?")
-		return
-
-	if services == null or services.get("chat") == null:
-		ctx.reply("This server has no chat.")
-		return
-
-	var announced: Variant = services.get("chat").call("announce", text, WoServices.CH_ALL)
-
-	if announced is DotResult and not (announced as DotResult).ok:
-		ctx.reply_error(announced)
-		return
-
-	ctx.reply("Said: %s" % text)
-
-
-func _cmd_status(ctx: DotCmdContext) -> void:
-	var world := game as WoGame
-
-	if world == null:
-		ctx.reply("No world.")
-		return
-
-	ctx.reply_lines(world.describe_lines())
-
-
-func _cmd_net(ctx: DotCmdContext) -> void:
-	if bridge == null:
-		ctx.reply("No bridge; this server is not replicating anything.")
-		return
-
-	ctx.reply_lines(bridge.call("describe_lines"))
-
-	if services != null:
-		ctx.reply_lines(services.call("describe_lines"))
-
-
-func _cmd_courses(ctx: DotCmdContext) -> void:
-	var world := game as WoGame
-
-	if world == null or world.catalogue == null:
-		ctx.reply("No world.")
-		return
-
-	ctx.reply_lines(world.catalogue.describe_lines())
-	ctx.reply("playing: %s" % str(world.course_doc.get("id", "-")))
-
-
-func _cmd_rotation(ctx: DotCmdContext) -> void:
-	var world := game as WoGame
-
-	if world == null or world.catalogue == null or not world.catalogue.has_rotation_file():
-		ctx.reply("There is no maps.yml; every course rotates.")
-		return
-
-	var file := world.catalogue.rotation_file
-
-	if ctx.argc() == 0:
-		ctx.reply("Rotations: %s (active: %s)" % [", ".join(file.rotation_names()), file.active_name()])
-		return
-
-	var wanted := ctx.arg(0)
-	var switched := world.catalogue.switch_rotation(wanted)
-
-	if not switched.ok:
-		ctx.reply(switched.error.message)
-		return
-
-	if vote != null:
-		vote.refresh_courses()
-
-	ctx.reply("Rotation: %s" % wanted)
-
-
-func _cmd_maps_reload(ctx: DotCmdContext) -> void:
-	var world := game as WoGame
-
-	if world == null or world.catalogue == null:
-		ctx.reply("No world.")
-		return
-
-	var read := world.load_rotation()
-
-	if vote != null:
-		vote.refresh_courses()
-
-	ctx.reply("maps.yml read." if read.ok else read.error.message)
-
-
-func _cmd_reload(ctx: DotCmdContext) -> void:
-	var world := game as WoGame
-
-	if world == null or world.catalogue == null:
-		ctx.reply("No world.")
-		return
-
-	var loaded := world.catalogue.load_from(world.config.course_directory)
-	loaded += await _add_delivered_courses(world)
-	world.catalogue.apply_rotation(world.config.course_ids)
-
-	if vote != null:
-		vote.refresh_courses()
-
-	ctx.reply("%d documents read; %d refused. The next round draws from them." % [
-		loaded, world.catalogue.refused.size()])
 
 
 func describe() -> Dictionary:
