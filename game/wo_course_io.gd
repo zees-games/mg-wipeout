@@ -3,11 +3,8 @@ extends RefCounted
 const WoWorld := preload("wo_world.gd")
 
 ## A course that runs a map's own entity logic: dot-map's [DotMapWorld] hosted under a stage.
-##
-## The server steps it once a tick (volumes, buttons, doors, teleports, hurt, push) and sends what
-## changes through [signal message]; a client builds the same world without logic, takes those
-## messages and poses every mover for the tick it is simulating. Tick `T` of the game is tick
-## `T - base` of the logic, `base` being the server's tick when the world was built.
+## The server steps it once a tick and sends changes through [signal message]; a client builds the same world
+## without logic and poses every mover for its tick (game tick `T` is logic tick `T - base`).
 
 const CHANNEL := "wo.io"
 

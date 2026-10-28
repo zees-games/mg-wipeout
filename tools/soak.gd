@@ -5,18 +5,9 @@ const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
 const WoPlayer := preload("../game/wo_player.gd")
 
-## Bot soak on the real game: N stand-ins race one course for M simulated minutes through dot-bot's
-## DotBotSoak, fed by dot-spawn's DotSpawnWatch. A "map" here is a course id.
-##
-## [codeblock]
-## ./game.sh soak [course] [minutes]
-## godot --headless --path . res://tools/soak.tscn -- --map wo_first_splash --bots 4 --minutes 2
-## [/codeblock]
-##
-## Takes the harness's own flags too (--soak-max-stuck-sec and the rest of DotBotSoakConfig).
-## Writes .godot/test-logs/soak-<course>.json, prints the SOAK line, exits 1 when the run fails.
-## Rounds run back to back (no warm-up or intermission). A bot is only judged stuck while the
-## course is open and it has not finished. Kills are off: knocks are not kills.
+## Bot soak on the real game: N stand-ins race one course for M simulated minutes through dot-bot's DotBotSoak,
+## fed by dot-spawn's DotSpawnWatch. Run `./game.sh soak [course] [minutes]`; also takes DotBotSoakConfig's flags.
+## Writes .godot/test-logs/soak-<course>.json, prints the SOAK line, exits 1 on failure. No warm-up; kills are off.
 
 const DEFAULT_MAP := &"wo_first_splash"
 const DEFAULT_MINUTES := 1.0

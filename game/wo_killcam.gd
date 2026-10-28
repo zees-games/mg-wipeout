@@ -1,9 +1,8 @@
 extends Node
 
-## The final killcam. Client side: every drawn frame goes into dot-replay's [DotKillcamBuffer],
-## every kill with a killer is noted, and when a round ends on one, [DotKillcam] replays it from
-## the killer's eye before the reveal. A round with no killer on its last kill (a fall, a clock)
-## has nothing to replay and goes straight to [signal over]. The length is `mp_killcam_time`.
+## The final killcam. Client side: every drawn frame goes into dot-replay's [DotKillcamBuffer]; when a round ends on
+## a kill, [DotKillcam] replays it from the killer's eye before the reveal. No killer (a fall, a clock) goes straight
+## to [signal over]. The length is `mp_killcam_time`.
 
 const CHANNEL := "wo.killcam"
 const WoPlayer := preload("wo_player.gd")

@@ -1,12 +1,8 @@
 extends RefCounted
 
-## How a stand-in runs a course that is a map's own world (see [WoCourseIo]): there is no route document, so it
-## walks a path across dot-bot's navigation mesh, baked from the map's static colliders, to the finish.
-##
-## The map's teleports join the mesh as edges and its kill volumes are cut out of it ([DotBotLinks]). What the mesh
-## still cannot know is the rest of the map's logic: a door a button opens, a mover to ride. Movers are left out of
-## the bake (a door baked shut is a doorway never walked to), so where the way on needs one, the path ends at the
-## nearest point the floor reaches and the stand-in stops there. [method reaches_finish] says which.
+## How a stand-in runs a course that is a map's own world (see [WoCourseIo]): it walks dot-bot's navigation mesh,
+## baked from static colliders, to the finish; teleports are edges and kill volumes are cut out ([DotBotLinks]).
+## Movers are left out of the bake, so where the way on needs one the path ends short; [method reaches_finish] says.
 
 const CHANNEL := "wo.io_bot"
 

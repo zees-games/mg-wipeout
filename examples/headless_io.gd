@@ -8,18 +8,12 @@ const WoGame := preload("../game/wo_game.gd")
 const WoPlayer := preload("../game/wo_player.gd")
 
 ## A course that runs its map's own entities (dot-map's DotMapWorld), played on the server's step.
-##
-## A bot cannot finish such a course: its buttons, doors and pushes are the puzzle and no route
-## document describes them. So what is checked is the machinery, on the real map: the world loads
-## with nothing its entities ask for left unhandled, a runner spawns on the map's own spawn
-## points, every kind of thing the map does fires from a body or a press (a hurt volume, a push,
-## a button through the use key, a trigger that starts a mover), the movers move, a mover carries
-## a runner standing on it, and the state reaches a client over the wire format.
+## A bot cannot finish such a course (its buttons and doors are the puzzle), so this checks the machinery on the real
+## map: nothing unhandled, spawns, every kind of entity fires, movers move and carry, state crosses the wire.
 
-## Each course and what it must run: sections and checks (the totals the run must reach), `lava` (a hurt a trigger
-## enables after a delay), `ladders`, `push` (a push that starts on), `button`, `floor` (the metres a runner may
-## sink in a second and a half on its start: measured, 0.5 where the course passes), `rejects` (how many of the
-## map's volumes a team filter turns a body of no team away from, which the run prints).
+## Per course, what it must run: `sections` and `checks` (the totals the run must reach), `lava` (a hurt a trigger
+## enables after a delay), `ladders`, `push`, `button`, `floor` (metres a runner may sink in 1.5 s on its start, 0.5
+## where the course passes), `rejects` (volumes a team filter turns a teamless body away from).
 const COURSES := {
 	&"wo_oaks_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
 	&"wo_office_course": {"sections": 11, "checks": 41, "lava": true, "ladders": true, "rejects": 0},

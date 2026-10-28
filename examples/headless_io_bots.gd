@@ -4,15 +4,9 @@ const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
 
-## Do stand-ins finish the courses that are a map's own world? Each is run with one stand-in, which has no route
-## document there and walks a navigation mesh baked from the map's static colliders (WoIoBot, dot-bot's DotBotNav).
-##
-## Per course, eight checks: the mesh bakes; a path leads from the start; the floor alone leads to the finish
-## (`floor`); the stand-in walked a route of its own; it finished (`finish`) or did not, and the plan says why; and
-## a finish came inside `limit` seconds; and the stand-in pressed `fired` buttons or triggers and took `taken` teleports on its way (the
-## map's own logic that dot-bot's DotBotLinks finds and the stand-in goes to; a count that changes means the way on changed). A course whose way on is the map's own logic (a button, a teleport, a ride)
-## cannot be finished from the floor (`route`: steps of the course's `io_route` a person scripted, all of which the stand-in must walk): `why` records the diagnosis and the suite fails when the picture changes, so
-## somebody looks. headless_routes finds which teleports and doors a walk can fire.
+## Do stand-ins finish the courses that are a map's own world? One stand-in walks a navigation mesh baked from the
+## map's static colliders (WoIoBot, DotBotNav); each course states what it must reach (`floor`, `finish`, `limit`, `fired`, `taken`).
+## A course whose way on is the map's own logic is not finishable from the floor: `route` scripts the steps and `why` records the diagnosis.
 
 const COURSES := {
 	&"wo_oaks_course": {"floor": false, "finish": false, "limit": 90, "why": "13 m on the floor ends at the pit past the start door; dot-map's nav export lists the start door (SpawnDoorT) with no opener, only the round's own logic moves it, so there is no button to press"},

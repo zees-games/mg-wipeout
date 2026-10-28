@@ -2,13 +2,9 @@ extends RefCounted
 
 const WoPaths := preload("wo_paths.gd")
 
-## A course's imported geometry: a `world` piece names a dot-bsp-mesh (`worlds/<mesh>.json` and
-## `.bin` beside the courses) that dot-map's converter wrote, and this builds it: the faces
-## drawn, one convex hull per player-solid brush as a single static body.
-##
-## The mesh is never in the document (a megabyte against the wire's 64 KB). A server and a solo
-## player read it from the pack's `worlds/`; a connected client reads it from the courses pack
-## its server names, which `maps_delivery: client` (game.yml) mounts under `res://dot_cloud/`.
+## A course's imported geometry: a `world` piece names a dot-bsp-mesh (`worlds/<mesh>.json` and `.bin`) that
+## dot-map's converter wrote; this draws the faces and builds one convex hull per player-solid brush.
+## The mesh is never in the document (a megabyte against the wire's 64 KB); `maps_delivery: client` mounts it.
 
 const CHANNEL := "wo.world"
 
@@ -152,10 +148,9 @@ static func build(spec: Dictionary, physics: Object) -> StaticBody3D:
 	return body
 
 
-## The map's own world through dot-map's [DotMapWorld]: every model (movers, doors, buttons, glass
-## included), its entity logic and volumes. [param hooks] is what the game plugs in (damage, move,
-## event, send); the layer of every body is the stage's job, after this returns. Null with a line
-## when the files, or the source document beside them, are not here.
+## The map's own world through dot-map's [DotMapWorld] (models, entity logic, volumes); [param hooks] is what the
+## game plugs in (damage, move, event, send). The stage sets the bodies' layer. Null with a line when the files
+## or the source document are missing.
 static func build_io(spec: Dictionary, hooks: Dictionary, authoritative: bool, draw: bool, rate: int) -> DotMapWorld:
 	var mesh_id := str(spec.get("mesh", ""))
 	var prefix := prefix_of(mesh_id)

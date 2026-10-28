@@ -1,10 +1,6 @@
 extends DotGameCheckSuite
 
-## WoConfig through DotGameConfigBinder: fields, cvars, strict refusal, the diff and the workbench round trip.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_config.tscn
-## [/codeblock]
+## Run: `godot --headless --path . res://examples/headless_config.tscn`.
 
 const WoConfig := preload("../game/wo_config.gd")
 const WoBlurb := preload("../game/wo_blurb.gd")

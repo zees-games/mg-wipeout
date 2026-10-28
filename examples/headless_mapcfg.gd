@@ -3,12 +3,7 @@ extends DotGameCheckSuite
 const WoMapConfig := preload("../game/wo_map_config.gd")
 
 ## A course gets its per-map file's rules and the next course has the previous values back.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_mapcfg.tscn
-## [/codeblock]
-##
-## The cvars start away from the fixture's values, so the default cannot show through as "got them".
+## The cvars start away from the fixture's values, so a default cannot show through as "got them".
 
 const CHECKS := 7
 const DIR := "res://cfg/game/mg-wipeout/dot_map/map/"

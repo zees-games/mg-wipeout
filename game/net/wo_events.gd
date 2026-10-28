@@ -715,8 +715,6 @@ static func read_world_io(r: DotNetReader) -> Dictionary:
 	return {"msg": parsed if parsed is Dictionary else {}, "ok": parsed is Dictionary}
 
 
-# --- A hit ----------------------------------------------------------------------
-
 static func write_hit(point: Vector3, killed: bool, headshot: bool) -> PackedByteArray:
 	var w := _w()
 	w.write_float32(point.x)

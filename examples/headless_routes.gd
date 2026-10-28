@@ -5,15 +5,8 @@ const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
 
 ## Can a runner get from the start to the finish of an io course? A floor-flood walker (1 m cells, step 1 m,
-## jump 5 m, ladders as lifts) is driven to a fixed point with the map's io graph run for real: triggers and
-## buttons the cells reach fire, doors latch open, rides join their poses, teleports are edges.
-##
-## Only the finish and dead_tps are asserted; cell counts and the walk hash are printed. Measured 2026-10-23: the finish is reached on pauls (by "model": a fall past a hole under an overhang); the other
-## courses stall at walls, doors or Source logic (logic_*, timed doors) the model lacks. The plan pins that picture
-## (`dead_tps`: teleport volumes no route reaches); a change fails the suite so somebody looks.
-##
-## Plan keys: `reaches` and `why` (documentation: whether the walk ends in the finish zone, and the diagnosis), `min_cells` (floor found from the start, default 50), `finish` ("walk", "tp" or "none"),
-## `hurt_only`, `dead_tps`. `debug` ("map", "ents") prints the walk for one course.
+## jump 5 m, ladders as lifts) is driven to a fixed point with the map's io graph run for real.
+## Asserted: the finish and `dead_tps` (teleport volumes no route reaches). Plan keys: `reaches`, `why`, `min_cells`, `finish`, `hurt_only`, `debug`.
 
 const COURSES := {
 	&"wo_oaks_course": {"dead_tps": 0, "reaches": false,
@@ -668,11 +661,9 @@ class _Walker:
 			"near_at": near_at}
 
 
-## The machinery of a world, run for real on the map's own io graph: what a runner standing on the cells found so far can
-## set off (a trigger it walks into, a button or door it can use), the doors that then stand open (latched open: the walk
-## goes through them whenever they close again), and the rides (a lift, a train, a mover): wherever a reached cell meets
-## one, the cells on its top, in every pose it takes, join the walk. The io clock is advanced here, the runner is never
-## moved, and the teleports are the walker's own edges (a teleport volume is never fired).
+## The machinery of a world run on the map's own io graph: what a runner on the cells found so far can set off, the
+## doors that then stand open (latched), and the rides, whose top cells join the walk in every pose. The io clock
+## advances, the runner never moves, and teleports are the walker's own edges (never fired).
 class _Model:
 	const SAMPLE_TICKS := 16
 	const BATCH_SECONDS := 10.0

@@ -4052,8 +4052,6 @@ func _on_player_died(player: WoPlayer, damage: DotDamage) -> void:
 	})
 
 
-# --- Reporting --------------------------------------------------------------
-
 func seconds_left() -> float:
 	match phase:
 		Phase.COUNTDOWN:
