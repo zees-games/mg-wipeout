@@ -1,12 +1,5 @@
-extends DotGameCheckSuite
+extends "dedicated_late.gd"
 
-const WoConfig := preload("../game/wo_config.gd")
-const WoGame := preload("../game/wo_game.gd")
-const WoPlayer := preload("../game/wo_player.gd")
-const WoRacer := preload("../game/wo_racer.gd")
-const WoNetBridge := preload("../game/net/wo_net_bridge.gd")
-const WoAmbience := preload("../game/wo_ambience.gd")
-const WoNetLink := preload("../game/net/wo_net_link.gd")
 
 ## The game as a deployed server runs it: a real [DotServer], booted from a config file, with
 ## the module loaded BY PATH the way an operator names it — so the netcode, the services, the
@@ -19,17 +12,6 @@ const WoNetLink := preload("../game/net/wo_net_link.gd")
 
 const SECTIONS := 15
 const CHECKS := 106
-
-const SERVER_DIR := "user://wo_dedicated"
-const PORT := 28931
-const QUERY_PORT := 28932
-const TICK_RATE := 60
-
-var _sections_entered := 0
-var _sections_finished := 0
-
-var server: DotServer = null
-var game: WoGame = null
 
 
 func _ready() -> void:
@@ -427,29 +409,7 @@ func _test_the_course_vote() -> void:
 	_check(ids.has("wo_grand_tour") and ids.has("wo_log_roll") and not ids.has("wo_arena_pit"),
 		"it offers the courses, and no arena", str(ids))
 
-	# The map menu's server half (M): the owner's flag changes the course now, anybody else
-	# gets a nomination and a rock-the-vote. Contexts as dot-server makes them for a chat line.
-	var menu_half: Object = vote.get("commands").get("map_menu")
-	_check(menu_half != null and server.console.find_command("mapmenu") != null
-		and server.console.find_cvar("sv_map_menu_flag").get_string() == "generic"
-		and (menu_half.get("change_fn") as Callable).is_valid(),
-		"the map menu is there, staff-only by default, changing the course now")
-	var staff := DotCmdContext.new()
-	staff.source = DotCmdContext.Source.CHAT
-	staff.permissions = PackedStringArray(["generic"])
-	var player := DotCmdContext.new()
-	player.source = DotCmdContext.Source.CHAT
-	var offered: Dictionary = menu_half.call("offer", player)
-	_check((offered["maps"] as Array).size() > 1 and not bool(offered["allowed"]) and bool(offered["vote"]),
-		"a player is offered every course, as a vote")
-	var target: StringName = &""
-	for row: Dictionary in offered["maps"]:
-		if not bool(row["current"]):
-			target = StringName(str(row["id"]))
-			break
-	var changed: Dictionary = await menu_half.call("choose", staff, target)
-	_check(bool(changed["ok"]) and game.stage.id() == target, "staff choosing one changes the course on the spot",
-		"%s: %s" % [target, changed.get("text", "")])
+	await _course_vote_menu(vote)
 
 	# A course that is not the one being played, so it can be nominated.
 	var playing := String(game.stage.id()) if game.stage != null and not game.stage.is_arena() \
@@ -512,6 +472,33 @@ func _test_the_course_vote() -> void:
 	_finished()
 
 ## Stands in for the module a vote's commands are registered on, recording the names.
+
+func _course_vote_menu(vote: Node) -> void:
+	# The map menu's server half (M): the owner's flag changes the course now, anybody else
+	# gets a nomination and a rock-the-vote. Contexts as dot-server makes them for a chat line.
+	var menu_half: Object = vote.get("commands").get("map_menu")
+	_check(menu_half != null and server.console.find_command("mapmenu") != null
+		and server.console.find_cvar("sv_map_menu_flag").get_string() == "generic"
+		and (menu_half.get("change_fn") as Callable).is_valid(),
+		"the map menu is there, staff-only by default, changing the course now")
+	var staff := DotCmdContext.new()
+	staff.source = DotCmdContext.Source.CHAT
+	staff.permissions = PackedStringArray(["generic"])
+	var player := DotCmdContext.new()
+	player.source = DotCmdContext.Source.CHAT
+	var offered: Dictionary = menu_half.call("offer", player)
+	_check((offered["maps"] as Array).size() > 1 and not bool(offered["allowed"]) and bool(offered["vote"]),
+		"a player is offered every course, as a vote")
+	var target: StringName = &""
+	for row: Dictionary in offered["maps"]:
+		if not bool(row["current"]):
+			target = StringName(str(row["id"]))
+			break
+	var changed: Dictionary = await menu_half.call("choose", staff, target)
+	_check(bool(changed["ok"]) and game.stage.id() == target, "staff choosing one changes the course on the spot",
+		"%s: %s" % [target, changed.get("text", "")])
+
+
 class CommandHost extends Node:
 	var added: Dictionary = {}
 
@@ -669,153 +656,9 @@ func _test_rotation_file() -> void:
 	_finished()
 
 
-## [b]`time_up: finish_round` waits for a round being played, never for warmup.[/b] The game
-## hands dot-vote its match's answer (`round_in_progress_fn`); without it a limit that ran out
-## in warmup held the change for `finish_round_max_sec` over a round that had not started.
-## Run on a director of its own carrying the game's own hook, so the real vote's clock is
-## untouched; the match's state is set by hand and put back.
-func _test_finish_round_waits_for_a_live_round() -> void:
-	_section("finish_round waits for a live round, not warmup")
-	var module := _module()
-	var vote: Node = module.get("vote") if module != null else null
-	var director: DotVoteDirector = vote.get("director") if vote != null else null
-	var hook: Variant = director.get("round_in_progress_fn") if director != null else null
-	_check(hook is Callable and (hook as Callable).is_valid(), "the game tells its vote whether a round is live")
-
-	if not (hook is Callable and (hook as Callable).is_valid()) or game == null or game.match_node == null:
-		_finished()
-		return
-
-	var match_node: DotMatch = game.match_node
-	var was := match_node.state
-	match_node.state = DotMatch.State.WARMUP
-	var warm_applied := []
-	var warm := _finish_round_probe(hook, warm_applied)
-	_check(warm_applied == [&"b"] and not warm.is_finishing_round(),
-		"in warmup a time limit with finish_round changes at once", str(warm_applied))
-
-	match_node.state = DotMatch.State.LIVE
-	var live_applied := []
-	var live := _finish_round_probe(hook, live_applied)
-	_check(live_applied.is_empty() and live.is_finishing_round(),
-		"during a live round it waits for the round", str(live_applied))
-
-	match_node.state = DotMatch.State.INTERMISSION
-	live.advance(0.1)
-	_check(live_applied == [&"b"], "and the round ending is the change", str(live_applied))
-
-	match_node.state = was
-	warm.queue_free()
-	live.queue_free()
-	_finished()
-
-
-## A director under `time_up: finish_round` carrying [param hook], its clock run out with a
-## winner already decided: what dot-vote's own suite builds, with the game's answer in it.
-func _finish_round_probe(hook: Callable, applied: Array) -> DotVoteDirector:
-	var source := DotVoteListSource.new()
-	var _a := source.add(DotVoteChoice.of(&"a", "A"))
-	var _b := source.add(DotVoteChoice.of(&"b", "B"))
-	source.apply_fn = func(id: StringName) -> DotResult:
-		applied.append(id)
-		return DotResult.success(id)
-
-	var rules := DotVoteRules.new()
-	rules.apply_delay_sec = 0.0
-	rules.duration_sec = 100.0
-	rules.vote_lead_sec = 40.0
-	rules.vote_duration_sec = 5.0
-	rules.include_extend = false
-	rules.apply = DotVoteRules.Apply.END_OF_TIME
-	rules.cooldown = 0
-	rules.time_up = DotVoteRules.TimeUp.FINISH_ROUND
-	# For ever: only the hook may release it.
-	rules.finish_round_max_sec = 0.0
-
-	var probe := DotVoteDirector.new()
-	probe.rules = rules
-	probe.source = source
-	probe.register_service = false
-	probe.self_advance = false
-	probe.round_based = true
-	probe.player_count_fn = func() -> int: return 4
-	probe.set(&"round_in_progress_fn", hook)
-	add_child(probe)
-	probe.begin(&"a")
-	source.current = &"a"
-
-	for i in range(61):
-		probe.advance(1.0)
-
-	probe.cast_one(&"p1", &"b")
-
-	# The ballot closes, then the limit (100 s) runs out with the winner decided.
-	for i in range(46):
-		probe.advance(1.0)
-
-	return probe
-
-
-
-## A module reload must leave ONE link under the server, still named for the client's route.
-## Two used to be left, the live one renamed `@Node@n`, and every RPC to a real client was lost
-## without an error. The proof is a real client over the socket: signing on is server events.
-func _test_a_module_reload() -> void:
-	_section("a module reload leaves one live link")
-
-	for _i in range(2):
-		_check(server.modules.unload_module("wipeout").ok, "the module unloads")
-		var back: DotResult = await server.modules.load_module("res://game/wo_module.gd")
-		_check(back.ok, "and loads again", back.error.message if not back.ok else "")
-	for _i in range(5):
-		await get_tree().process_frame
-
-	var links := 0
-	for child in server.get_children():
-		if child.get_script() == WoNetLink:
-			links += 1
-	_check(links == 1 and server.has_node(NodePath(String(WoNetLink.NODE_NAME))),
-		"exactly one link, under the name the client routes to", "%d" % links)
-
-	var side := Node.new()
-	side.name = "ReloadClient"
-	add_child(side)
-	get_tree().set_multiplayer(MultiplayerAPI.create_default_interface(), side.get_path())
-	var link := DotClientLink.new()
-	link.name = "Server"
-	link.player_name = "Reloaded"
-	link.transport_preference = "udp"
-	link.udp_address = "127.0.0.1:%d" % PORT
-	var mirror := Node.new()
-	mirror.name = "Dedicated"
-	side.add_child(mirror)
-	mirror.add_child(link)
-	var attach := func(_a: Variant = null, _b: Variant = null) -> void:
-		if link.get_node_or_null(NodePath(WoNetLink.NODE_NAME)) == null:
-			var sink := WoNetLink.attached_to(link, null, false)
-			sink.name = WoNetLink.NODE_NAME
-			link.add_child(sink)
-	attach.call()
-	link.phase_changed.connect(attach)
-	var spawned := [false]
-	link.spawned.connect(func() -> void: spawned[0] = true)
-	link.connect_to_server("127.0.0.1:%d" % PORT)
-	var joined := await _until(func() -> bool:
-		return spawned[0] or link.phase == DotClientLink.Phase.FAILED, 30.0)
-	_check(joined and spawned[0], "a real client still hears the server's events after two reloads")
-	link.disconnect_from_server("done")
-	for _i in range(10):
-		await get_tree().process_frame
-	side.queue_free()
-	_finished()
-
-
-## [b]A seat whose client has not lifted its loading cover cannot be harmed, eliminated or put
-## across, and can once it does[/b] (dot-game's "still loading"), over a real ENet socket. A client
-## joins and says nothing, as one still loading its level; the world's damage path is then asked
-## to kill it by a blow, a fall and a landing, and must refuse all of them. A fall on a course is
-## not counted against it. An admin's slay still passes. The client then sends `game.cover` on the
-## wire and the same hit lands. Stand-ins never reach this: a bot is never loading.
+## A seat whose client has not lifted its loading cover (dot-game's "still loading") cannot be
+## harmed, eliminated or put across, and can once it does; an admin's slay still passes. Over a
+## real ENet socket: the client joins and says nothing, then sends `game.cover`.
 func _test_a_covered_seat_is_not_harmed() -> void:
 	_section("a client behind its loading cover is not harmed, and is once it lifts")
 
@@ -930,13 +773,15 @@ func _test_a_covered_seat_is_not_harmed() -> void:
 	_finished()
 
 
-func _until(condition: Callable, seconds: float) -> bool:
-	var deadline := Time.get_ticks_msec() + int(seconds * 1000.0)
-	while Time.get_ticks_msec() < deadline:
-		if bool(condition.call()):
-			return true
-		await get_tree().physics_frame
-	return bool(condition.call())
+func _test_it_unloads_cleanly() -> void:
+	_section("unloading")
+	server.modules.unload_all()
+	await get_tree().process_frame
+	_check(_module() == null, "the module unloads")
+	_check(server.console.find_command("wo_status") == null if server.console.has_method("find_command") else true,
+		"and takes its commands with it")
+	_check(is_instance_valid(game), "and leaves the world, which outlives it")
+	_finished()
 
 
 ## [b]`wo_ambient*` on a client.[/b] The server's ambience intent rides the replicated cvars over a real socket, and a
@@ -1007,17 +852,6 @@ func _test_ambient_cvars_reach_the_client() -> void:
 	_finished()
 
 
-func _test_it_unloads_cleanly() -> void:
-	_section("unloading")
-	server.modules.unload_all()
-	await get_tree().process_frame
-	_check(_module() == null, "the module unloads")
-	_check(server.console.find_command("wo_status") == null if server.console.has_method("find_command") else true,
-		"and takes its commands with it")
-	_check(is_instance_valid(game), "and leaves the world, which outlives it")
-	_finished()
-
-
 ## No message script preloads itself: in mg-buses-from-hell that one line leaked the whole
 ## script graph at exit (8ed866c), and the leak is printed after `quit()`, where no assertion
 ## reaches. So the cause is checked, on the source.
@@ -1037,32 +871,3 @@ func _test_no_message_preloads_itself() -> void:
 
 	_check(offenders.is_empty(), "no message preloads itself", ", ".join(offenders))
 	_finished()
-
-
-func _module() -> DotModule:
-	return server.modules.get_module("wipeout") if server != null and server.modules != null else null
-
-
-func _run_command(line: String) -> PackedStringArray:
-	var captured: Array[String] = []
-	var context := DotCmdContext.console("", PackedStringArray())
-	context.reply_sink = func(text: String) -> void: captured.append(text)
-	server.console.execute(line, context)
-	return PackedStringArray(captured)
-
-
-func _said(lines: PackedStringArray, text: String) -> bool:
-	for line in lines:
-		if line.findn(text) >= 0:
-			return true
-
-	return false
-
-
-func _section(name: String) -> void:
-	_sections_entered += 1
-	print(name)
-
-
-func _finished() -> void:
-	_sections_finished += 1
