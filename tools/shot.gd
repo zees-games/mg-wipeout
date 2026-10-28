@@ -195,54 +195,14 @@ func _run() -> void:
 				runner.place = game._finish_count
 			await _seconds_of(game.config.handover_seconds + 1.5)
 		"killcam":
-			# One runner knocks out the rest and the round is called, then frames of the killcam,
-			# the reveal and the intermission, written beside `--out` as `<out>_<seconds>.png`.
-			await _seconds_of(game.config.countdown_seconds + 3.0)
-			var standing: Array = []
-			for id: StringName in game.players:
-				if not game.players[id].watching:
-					standing.append(game.players[id])
-			print("standing: %d" % standing.size())
-			for i in range(1, standing.size()):
-				var hit := DotDamage.make(standing[0].entity_id, standing[i].entity_id, standing[i].health.max_health * 4.0, null)
-				hit.context = {"why": &"shot"}
-				var _dealt := game.combat.apply_damage(hit)
-			game._decide(1, "test")
-			var base := _out.trim_suffix(".png")
-			var last := 0.0
-			for at_sec: float in [1.5, 4.0, 7.0, 9.0, 11.0]:
-				await _seconds_of(at_sec - last)
-				last = at_sec
-				var kc: Object = _client.get("killcam")
-				var reveal: Object = _client.get("winner_reveal")
-				print("t=%.1f killcam=%s reveal=%s" % [at_sec, kc.call(&"is_playing"), reveal.call(&"is_active")])
-				_save("%s_%d.png" % [base, int(at_sec * 10.0)])
+			await _view_killcam(game)
 		"course":
 			await _seconds_of(7.0)
 			# Further out than the straight courses needed: a course that turns is as wide as it
 			# is long, and at 1.0 the overview of a switchback or a spiral was half of it.
 			_overview(game, 1.3)
 		"tour":
-			# An overview and three frames along the course, written beside `--out` as
-			# `<out>_overview.png`, `_1`, `_2`, `_3`. Past the load gate's cover first: the
-			# overview of a course used to show nothing but the cover, because it was taken six
-			# frames in and the cover holds the screen for the first seconds.
-			await _seconds_of(maxf(_seconds, 7.0))
-			var base := _out.trim_suffix(".png")
-			_overview(game, 1.0)
-			await _frames(4)
-			_save("%s_overview.png" % base)
-			var route: Array = game.stage.route()
-			for n in range(1, 4):
-				var index := clampi(int(float(route.size()) * float(n) / 4.0), 0, route.size() - 2)
-				var here: Vector3 = (route[index] as Dictionary)["at"]
-				var ahead: Vector3 = (route[index + 1] as Dictionary)["at"]
-				var way := Vector3(ahead.x - here.x, 0.0, ahead.z - here.z)
-				way = way.normalized() if way.length() > 0.01 else Vector3(0.0, 0.0, -1.0)
-				var camera := _free_camera()
-				camera.look_at_from_position(here - way * 8.0 + Vector3(0.0, 5.0, 0.0), here + way * 9.0)
-				await _frames(4)
-				_save("%s_%d.png" % [base, n])
+			await _view_tour(game)
 		"look":
 			await _seconds_of(maxf(_seconds, 7.0))
 			var camera := _free_camera()
@@ -321,38 +281,7 @@ func _run() -> void:
 					camera.look_at_from_position(at + Vector3(3.5, 2.6, 7.5), at + Vector3(0.0, 1.6, 0.0))
 					break
 		"knockout":
-			# A stand-in at 5 hp struck by the first spinner: out of the round, and the body
-			# goes up as a ragdoll. The frame is a moment into the flight, from the side.
-			await _seconds_of(game.config.countdown_seconds + 0.5)
-			var victim = null
-			for id: StringName in game.players:
-				if game.players[id].is_bot:
-					victim = game.players[id]
-					break
-			var hub := _first_hazard(game)
-			for piece in game.stage.pieces:
-				if str(piece["kind"]) == "spinner":
-					hub = piece["spec"]["at"]
-					break
-			if victim != null:
-				victim.health.health = 5.0
-				victim.place_at(hub + Vector3(2.6, 0.05, 0.0), 0.0)
-				var waited := 0.0
-				while not victim.watching and waited < 6.0:
-					await _frames(1)
-					waited += get_process_delta_time()
-				print("knockout: out=%s death=%s" % [victim.watching, victim.death.describe() if victim.death != null else "none"])
-				await _seconds_of(0.35)
-			var camera := _free_camera()
-			var bodies: Array = (_client.get("ragdolls") as DotPlayerRagdolls).live()
-			var focus := hub + Vector3(3.0, 3.0, 0.0)
-			if not bodies.is_empty():
-				# The ragdoll node itself sits at the origin; its parts are the rigid bodies under it.
-				var parts: Array[Node] = (bodies[0] as Node).find_children("*", "RigidBody3D", true, false)
-				if not parts.is_empty():
-					focus = (parts[0] as Node3D).global_position
-			print("knockout: %d ragdolls, flight at %s (spinner %s)" % [bodies.size(), focus, hub])
-			camera.look_at_from_position(focus + Vector3(7.0, 3.0, 7.0), focus)
+			await _view_knockout(game)
 		"hurt":
 			# The local player at 60 health, just hit: the health bar and the red flash.
 			await _seconds_of(game.config.countdown_seconds + 0.6)
@@ -392,6 +321,90 @@ func _run() -> void:
 	var saved := _save(_out)
 	print("saved %s (%s): %s" % [_out, _view, error_string(saved)])
 	get_tree().quit(0 if saved == OK else 1)
+
+
+## One runner knocks the rest out and the round is called, then frames of the killcam, reveal and intermission.
+func _view_killcam(game: WoGame) -> void:
+	# One runner knocks out the rest and the round is called, then frames of the killcam,
+	# the reveal and the intermission, written beside `--out` as `<out>_<seconds>.png`.
+	await _seconds_of(game.config.countdown_seconds + 3.0)
+	var standing: Array = []
+	for id: StringName in game.players:
+		if not game.players[id].watching:
+			standing.append(game.players[id])
+	print("standing: %d" % standing.size())
+	for i in range(1, standing.size()):
+		var hit := DotDamage.make(standing[0].entity_id, standing[i].entity_id, standing[i].health.max_health * 4.0, null)
+		hit.context = {"why": &"shot"}
+		var _dealt := game.combat.apply_damage(hit)
+	game._decide(1, "test")
+	var base := _out.trim_suffix(".png")
+	var last := 0.0
+	for at_sec: float in [1.5, 4.0, 7.0, 9.0, 11.0]:
+		await _seconds_of(at_sec - last)
+		last = at_sec
+		var kc: Object = _client.get("killcam")
+		var reveal: Object = _client.get("winner_reveal")
+		print("t=%.1f killcam=%s reveal=%s" % [at_sec, kc.call(&"is_playing"), reveal.call(&"is_active")])
+		_save("%s_%d.png" % [base, int(at_sec * 10.0)])
+
+
+## An overview and three frames along the course.
+func _view_tour(game: WoGame) -> void:
+	# Written beside `--out` as `<out>_overview.png`, `_1`, `_2`, `_3`, past the load cover (an early
+	# overview showed only the cover).
+	await _seconds_of(maxf(_seconds, 7.0))
+	var base := _out.trim_suffix(".png")
+	_overview(game, 1.0)
+	await _frames(4)
+	_save("%s_overview.png" % base)
+	var route: Array = game.stage.route()
+	for n in range(1, 4):
+		var index := clampi(int(float(route.size()) * float(n) / 4.0), 0, route.size() - 2)
+		var here: Vector3 = (route[index] as Dictionary)["at"]
+		var ahead: Vector3 = (route[index + 1] as Dictionary)["at"]
+		var way := Vector3(ahead.x - here.x, 0.0, ahead.z - here.z)
+		way = way.normalized() if way.length() > 0.01 else Vector3(0.0, 0.0, -1.0)
+		var camera := _free_camera()
+		camera.look_at_from_position(here - way * 8.0 + Vector3(0.0, 5.0, 0.0), here + way * 9.0)
+		await _frames(4)
+		_save("%s_%d.png" % [base, n])
+
+
+## A stand-in at 5 hp struck by the first spinner, framed a moment into its flight.
+func _view_knockout(game: WoGame) -> void:
+	# A stand-in at 5 hp struck by the first spinner: out of the round, and the body
+	# goes up as a ragdoll. The frame is a moment into the flight, from the side.
+	await _seconds_of(game.config.countdown_seconds + 0.5)
+	var victim = null
+	for id: StringName in game.players:
+		if game.players[id].is_bot:
+			victim = game.players[id]
+			break
+	var hub := _first_hazard(game)
+	for piece in game.stage.pieces:
+		if str(piece["kind"]) == "spinner":
+			hub = piece["spec"]["at"]
+			break
+	if victim != null:
+		victim.health.health = 5.0
+		victim.place_at(hub + Vector3(2.6, 0.05, 0.0), 0.0)
+		var waited := 0.0
+		while not victim.watching and waited < 6.0:
+			await _frames(1)
+			waited += get_process_delta_time()
+		print("knockout: out=%s death=%s" % [victim.watching, victim.death.describe() if victim.death != null else "none"])
+		await _seconds_of(0.35)
+	var camera := _free_camera()
+	var bodies: Array = (_client.get("ragdolls") as DotPlayerRagdolls).live()
+	var focus := hub + Vector3(3.0, 3.0, 0.0)
+	if not bodies.is_empty():
+		# The ragdoll node itself sits at the origin; its parts are the rigid bodies under it.
+		var parts: Array[Node] = (bodies[0] as Node).find_children("*", "RigidBody3D", true, false)
+		if not parts.is_empty():
+			focus = (parts[0] as Node3D).global_position
+	print("knockout: %d ragdolls, flight at %s (spinner %s)" % [bodies.size(), focus, hub])
+	camera.look_at_from_position(focus + Vector3(7.0, 3.0, 7.0), focus)
 
 
 func _save(out: String) -> int:
