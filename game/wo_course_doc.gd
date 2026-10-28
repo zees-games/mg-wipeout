@@ -262,6 +262,20 @@ static func _course(doc: Dictionary) -> DotResult:
 					weather[key].append(floats)
 		doc["weather"] = weather
 
+	var routed := _route(doc)
+
+	if not routed.ok:
+		return routed
+
+
+	if doc.has("dressing"):
+		doc["dressing"] = _dressing(doc["dressing"])
+
+	return DotResult.success(doc)
+
+
+## Normalises `route` (every point a typed dictionary) into `doc`, or fails on a malformed or forked-at-the-ends one.
+static func _route(doc: Dictionary) -> DotResult:
 	var route: Array = []
 
 	for entry: Variant in doc.get("route", []):
@@ -302,10 +316,6 @@ static func _course(doc: Dictionary) -> DotResult:
 		return DotResult.fail(DotError.CODE_INVALID, "A route starts and ends on the way everybody goes (branch 0).")
 
 	doc["route"] = route
-
-	if doc.has("dressing"):
-		doc["dressing"] = _dressing(doc["dressing"])
-
 	return DotResult.success(doc)
 
 
