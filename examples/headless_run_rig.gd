@@ -40,14 +40,9 @@ func _finished() -> void:
 	_sections_finished += 1
 
 
-## A world on the practice course (or on [param course]), stepped by hand.
-##
-## [b]The previous world is freed first, and keeping it was a failure that looked like the
-## game's.[/b] Every world here is a child of this node, so all of them share ONE physics
-## space — and every course is built at the origin. A world left standing from an earlier
-## section kept its start gate closed exactly where the next world's runner had to go, and
-## "the runner is through" failed at the gate's face with the new world's own gate eighty
-## metres down.
+## A world on the practice course (or on [param course]), stepped by hand. The previous
+## world is freed first: all share ONE physics space with every course at the origin, so a
+## leftover start gate blocks the next runner.
 func _world(configure: Callable = Callable(), course: Dictionary = {}) -> WoGame:
 	for old in _worlds.duplicate():
 		await _dispose(old)

@@ -1,7 +1,7 @@
 extends "headless_run_rig.gd"
 
 ## A real offline client, booted: its settings are built and read by its sampler and its
-## camera, and Escape opens the screen. Escape used to let go of the mouse and offer nothing.
+## camera, and Escape opens the screen rather than only freeing the mouse.
 func _test_the_client_settings() -> void:
 	_section("the client's settings are read, and Escape opens them")
 	var client: Node = (load("res://game/wo_client.gd") as GDScript).new()
@@ -9,8 +9,8 @@ func _test_the_client_settings() -> void:
 	client.set(&"config_file", "user://cfg/headless-none.json")
 	add_child(client)
 
-	# The course used to be drawn, and steered, while it was still being built: the cover is up
-	# at the start, blocks input, and lifts once the player is in.
+	# The course must not be drawn or steered while it is built: the cover is up at the start,
+	# blocks input, and lifts once the player is in.
 	var platform: DotGameClient = client.get("platform")
 	var covered := platform != null and platform.gate != null and not platform.is_shown() \
 		and platform.is_input_blocked()
@@ -85,10 +85,9 @@ func _test_a_carrier_is_drawn_carrying() -> void:
 	_finished()
 
 
-## The HUD's health and clock are dot-ui's glance pieces, handed this world's numbers; health
-## only in a final death; the plate above the chat box's full log. A headless viewport is
-## 64 x 64, so the layout is checked as arithmetic on two bottom-anchored things, and looked
-## at with `tools/shot.sh --view=finale`.
+## The HUD's health and clock are dot-ui's glance pieces, health only in a final death. A
+## headless viewport is 64 x 64, so the layout is arithmetic on two bottom-anchored things;
+## look at it with `tools/shot.sh --view=finale`.
 func _test_the_hud() -> void:
 	_section("the HUD draws health and the clock through dot-ui")
 	var game := await _world(func(c: WoConfig) -> void: c.countdown_seconds = 0.2)
@@ -196,11 +195,9 @@ func _test_help_and_menu() -> void:
 	_finished()
 
 
-## The family's rule since the first play test: M opens the course list, and solo a choice
-## changes the course now. The server's half (the owner's flag, the vote) is dot-vote's suite.
-## Offline the world samples the local player's movement itself, so the client's buttons
-## have to go onto that sample. They were stamped on the controller's command and then sampled
-## over, and offline no trigger ever reached the world's gun (game-zombie-zone's play test).
+## M opens the course list and, solo, a choice changes the course now (the vote is dot-vote's
+## suite). Offline the world samples movement itself, so the client's buttons must go onto
+## that sample, not the controller's command, or no trigger reaches the gun.
 func _test_offline_trigger() -> void:
 	_section("offline, the client's trigger reaches the world's gun")
 	var game := await _world()
@@ -273,10 +270,9 @@ func _test_the_weapon_art_is_vendored() -> void:
 	_finished()
 
 
-## The play test's weapons, from a pickup: the drawn rig was given the whole pack, so the slot
-## held whatever was given last and never the gun the server fired; nothing counted the magazine;
-## nothing said a shot had landed. Armed: with `give_everything` back the first check fails,
-## without `correct_drawn` the fourth, without the HIT path the last.
+## Weapons from a pickup: the drawn slot must hold the gun the server fired, count the
+## magazine and show a hit. Armed: `give_everything` back fails the first check, no
+## `correct_drawn` the fourth, no HIT path the last.
 func _test_the_drawn_gun() -> void:
 	_section("an armed racer draws the server's gun, counted on the HUD, with a marker for a hit")
 	var client: Node = (load("res://game/wo_client.gd") as GDScript).new()

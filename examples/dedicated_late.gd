@@ -1,9 +1,7 @@
 extends "dedicated_rig.gd"
 
-## [b]`time_up: finish_round` waits for a round being played, never for warmup.[/b] The game
-## hands dot-vote its match's answer (`round_in_progress_fn`); without it a limit that ran out
-## in warmup held the change for `finish_round_max_sec` over a round that had not started.
-## Run on a director of its own carrying the game's own hook, so the real vote's clock is
+## `time_up: finish_round` waits for a round being played, never for warmup: the game hands
+## dot-vote `round_in_progress_fn`. Run on a director of its own, so the real vote's clock is
 ## untouched; the match's state is set by hand and put back.
 func _test_finish_round_waits_for_a_live_round() -> void:
 	_section("finish_round waits for a live round, not warmup")
@@ -88,8 +86,8 @@ func _finish_round_probe(hook: Callable, applied: Array) -> DotVoteDirector:
 
 
 ## A module reload must leave ONE link under the server, still named for the client's route.
-## Two used to be left, the live one renamed `@Node@n`, and every RPC to a real client was lost
-## without an error. The proof is a real client over the socket: signing on is server events.
+## A second link would rename the live one `@Node@n` and lose every RPC without an error.
+## The proof is a real client over the socket: signing on is server events.
 func _test_a_module_reload() -> void:
 	_section("a module reload leaves one live link")
 
