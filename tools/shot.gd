@@ -362,6 +362,15 @@ func _run() -> void:
 				await _frames(2)
 				me.health.health = 55.0
 				await _frames(2)
+		"crosshair":
+			# Alive saves to --out; then the same frame dead, to <out>_dead.png (the dot must be gone).
+			await _seconds_of(game.config.countdown_seconds + 0.6)
+			await _frames(3)
+			await RenderingServer.frame_post_draw
+			_save(_out)
+			_client.get("player").health.alive = false
+			await _seconds_of(0.5)
+			_out = _out.get_basename() + "_dead.png"
 		"hazard":
 			await _seconds_of(_seconds)
 			var hazard := _first_hazard(game)
