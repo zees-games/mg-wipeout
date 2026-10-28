@@ -1,25 +1,4 @@
-extends Node
-
-const WoAnnouncer := preload("wo_announcer.gd")
-const WoAudio := preload("wo_audio.gd")
-const WoWeaponIcons := preload("wo_weapon_icons.gd")
-const WoBindings := preload("wo_bindings.gd")
-const WoFigure := preload("wo_figure.gd")
-const WoKillcam := preload("wo_killcam.gd")
-const WoSettings := preload("wo_settings.gd")
-const WoServices := preload("wo_services.gd")
-const WoPlayerNet := preload("net/wo_player_net.gd")
-const WoNetBridge := preload("net/wo_net_bridge.gd")
-const WoNetCommand := preload("net/wo_net_command.gd")
-const WoEvents := preload("net/wo_events.gd")
-
-const WoConfig := preload("wo_config.gd")
-const WoGame := preload("wo_game.gd")
-const WoWeatherView := preload("wo_weather_view.gd")
-const WoHud := preload("wo_hud.gd")
-const WoBlurb := preload("wo_blurb.gd")
-const WoPaths := preload("wo_paths.gd")
-const WoPlayer := preload("wo_player.gd")
+extends "wo_client_view.gd"
 
 ## One local player, a camera and a HUD over an [WoGame] — offline, or against a server.
 ##
@@ -40,7 +19,6 @@ const WoPlayer := preload("wo_player.gd")
 ## between its motor and its view, drawn again here — and on a course the third person view
 ## is the one that shows where your feet are against a beam's edge or a ball's top.
 
-const CHANNEL := "wo.client"
 
 ## Where the camera sits behind the player in third person, in metres.
 const CHASE_BACK := 4.6
@@ -59,100 +37,6 @@ const CHASE_UP := 2.1
 ## Which view the camera starts in.
 @export var third_person: bool = false
 
-var game: WoGame = null
-var player: WoPlayer = null
-var camera: Camera3D = null
-
-## Rain and lightning, drawn. See [WoWeatherView].
-var weather: WoWeatherView = null
-var hud: WoHud = null
-
-## The course introduction, top left (under [member hud]).
-var blurb_label: WoBlurb = null
-
-## The Tab board, the menu's. See [method _wire_board].
-var board: DotMenuScoreboard = null
-
-## When this client started, for an offline board's "time".
-var _started_msec: int = Time.get_ticks_msec()
-var chat: DotGameChatClient = null
-
-## What the game sounds like. See [WoAudio].
-var audio: WoAudio = null
-
-## The show's voice: lines, the announcer and the crowd. See [WoAnnouncer].
-var announcer: WoAnnouncer = null
-
-## The player's own settings and the screen Escape opens. See [WoSettings].
-var settings: WoSettings = null
-
-## The player's console. See [method DotConsoleKit.build].
-var console: DotConsoleController = null
-
-## The weapons in this player's own hands, once they have picked one up in a final death.
-##
-## [b]Drawn, never decided.[/b] `authority` is false and every shot that matters is the
-## server's; what this rig is for is a view model that moves — a deploy, a reload, a recoil
-## kick — because a weapon that appears fully formed and never animates reads as a texture
-## stuck to the screen.
-var weapons: ZeeWeaponRig = null
-var view_model: ZeeViewModel = null
-
-var net: DotNetManager = null
-## Asks a server whether this player may edit it (sv_workbench_remote); null offline.
-var workbench_remote: DotGameWorkbenchRemoteClient = null
-## The tuning panel's host: F9 solo, the admin's remote panel on a server that allows it.
-var workbench: DotGameWorkbench = null
-var bridge: WoNetBridge = null
-var link: Node = null
-
-var _offline: bool = true
-## The final killcam ([WoKillcam]) and the winner reveal, which play in the intermission.
-var killcam: WoKillcam = null
-var winner_reveal: DotWinnerReveal = null
-var _reveal_hid: Dictionary = {}
-var _sampler: DotFpsSampler = null
-
-## The spectator's free camera while roaming, and the mouse motion not yet turned into a look.
-var _free_cam: DotSpectatorFreeCam = null
-var _roam_look: Vector2 = Vector2.ZERO
-
-## Which session this client is, once the server has said. -1 until then, so nothing matches
-## before it does.
-var _watch_id: int = -1
-
-## The stage last introduced, and when, so one stage is introduced once. See [method _on_stage].
-var _introduced: StringName = &""
-var _introduced_msec: int = -1000000
-
-## The course time this frame drew the obstacles at, or a negative before the first.
-var _stage_seconds: float = -1.0
-
-
-## The camera rig, in third person. Null in first.
-var _arm: DotCameraBoom = null
-var _fade: DotCameraFade = null
-
-## How far above the player's feet the camera, or in third person the arm, is hung.
-var _rig_height: float = 0.0
-
-## Held buttons, read once a tick rather than sampled from an event queue.
-var _firing: bool = false
-var _alt: bool = false
-var _reloading: bool = false
-var _slot: int = 0
-
-## The grab key, held. Picks up or puts down a prop in a final death; see `WoGame._advance_grabs`.
-var _grab: bool = false
-
-## pickup id -> the model spinning where a weapon lies. Client side.
-var _pickup_nodes: Dictionary = {}
-
-## The knocks this client last saw on its own player, so a new one shakes the screen once.
-var _knocks_seen: int = 0
-
-## The last whole second of the countdown a beep was played for.
-var _beeped: int = -1
 
 
 func _ready() -> void:
@@ -188,22 +72,7 @@ func _ready() -> void:
 	link = platform.link as Node
 	_offline = platform.offline
 
-	game = WoGame.new()
-	game.name = "World"
-	game.config = config
-	game.config_binder = binder
-	game.authoritative = _offline
-	# A connected client's world is not what a module looks up, and registering it would mean
-	# a client and a server sharing a process fighting over the name — which is what every
-	# section of this game's own suite does.
-	game.register_service = _offline
-	game.tick_rate = int(
-		ProjectSettings.get_setting("physics/common/physics_ticks_per_second", 64)
-	)
-	# The sky, the sun and the water: drawn here, never on a server.
-	game.draw_world = true
-	game.covered = _covered
-	add_child(game)
+	_build_game(config, binder)
 	_wire_gate_to_stages()
 	_build_ragdolls()
 
@@ -233,15 +102,28 @@ func _ready() -> void:
 			_start_remote_workbench()
 
 
+## The simulation this client draws: authoritative offline, a replica when connected.
+func _build_game(config: WoConfig, binder: DotGameConfigBinder) -> void:
+	game = WoGame.new()
+	game.name = "World"
+	game.config = config
+	game.config_binder = binder
+	game.authoritative = _offline
+	# A connected client's world is not what a module looks up, and registering it would mean
+	# a client and a server sharing a process fighting over the name — which is what every
+	# section of this game's own suite does.
+	game.register_service = _offline
+	game.tick_rate = int(
+		ProjectSettings.get_setting("physics/common/physics_ticks_per_second", 64)
+	)
+	# The sky, the sun and the water: drawn here, never on a server.
+	game.draw_world = true
+	game.covered = _covered
+	add_child(game)
+
+
+
 # --- The load gate ---------------------------------------------------------
-
-## Keeps the screen covered, and the local body, the keys and the clocks still, until the course
-## is built, the local player exists and its camera is current.
-var gate: DotLoadGate = null
-
-## dot-game's client platform: the cover, settings and menu, console, HUD theme, Tab, M, the
-## pointer and the input block. See [DotGameClient].
-var platform: DotGameClient = null
 
 
 ## [b]Without it the first frames were a half-built world.[/b] Offline the runner stood in a
@@ -266,9 +148,6 @@ func _covered() -> bool:
 
 
 # --- Dead bodies -----------------------------------------------------------
-
-## Where the dead lie: dot-player-char's ragdolls under the game's (the server's) rules.
-var ragdolls: DotPlayerRagdolls = null
 
 
 func _build_ragdolls() -> void:
@@ -416,7 +295,8 @@ func _start_remote_workbench() -> void:
 
 # --- Connected -------------------------------------------------------------
 
-func _build_netcode() -> DotResult:
+## Follows the server's rules cvars through the link, each of which this end draws or predicts.
+func _follow_server_cvars() -> void:
 	# The server's `mp_teammate_passthrough`, and every change to it, through the link: this
 	# end traces its own shots for tracers and impacts, and on its default 1 against a server
 	# on 0 or 2 they ended in (or went through) a team-mate where the server's did the
@@ -436,6 +316,10 @@ func _build_netcode() -> DotResult:
 		# And mp_forcecamera / mp_freeroam*: this end flies the spectator's free camera.
 		var _spectate := game.spectate_rules.follow_cvars(link)
 		_follow_killcam_cvar()
+
+
+func _build_netcode() -> DotResult:
+	_follow_server_cvars()
 
 	net = DotNetManager.new()
 	net.name = "Net"
@@ -1066,157 +950,6 @@ func _on_armed(session_id: int, weapon_id: StringName) -> void:
 			Color(0.86, 0.92, 0.80))
 
 
-# --- Weapons on the floor -------------------------------------------------------
-
-## A weapon lying in the arena: its own model, spinning a little over the floor. Drawn only.
-func _on_pickup(pickup_id: int, weapon_id: StringName, at: Vector3) -> void:
-	if _pickup_nodes.has(pickup_id):
-		return
-
-	var holder := Node3D.new()
-	holder.name = "Pickup_%d" % pickup_id
-	add_child(holder)
-	holder.global_position = at + Vector3(0.0, 0.3, 0.0)
-
-	var art := ZeeWeaponArtTable.get_art(weapon_id)
-	var model: Node3D = ZeeModelCache.instantiate(art.model_path) if art != null and art.model_path != "" else null
-
-	if model == null:
-		# A weapon with no art (fists, or a pack whose art did not load) is still a thing to
-		# pick up, so something has to stand there.
-		var box := MeshInstance3D.new()
-		var mesh := BoxMesh.new()
-		mesh.size = Vector3(0.5, 0.2, 0.2)
-		box.mesh = mesh
-		model = box
-
-	model.scale = Vector3.ONE * 1.6
-	holder.add_child(model)
-
-	# A light under it, so a weapon on a grey floor reads from across the arena.
-	var glow := OmniLight3D.new()
-	glow.light_color = Color(1.0, 0.85, 0.4)
-	glow.light_energy = 0.8
-	glow.omni_range = 2.2
-	holder.add_child(glow)
-	_pickup_nodes[pickup_id] = holder
-
-
-func _on_pickup_gone(pickup_id: int, _by: int) -> void:
-	var holder: Node3D = _pickup_nodes.get(pickup_id)
-	_pickup_nodes.erase(pickup_id)
-
-	if holder != null and is_instance_valid(holder):
-		if audio != null:
-			var _heard := audio.on_pickup(holder.global_position)
-		holder.queue_free()
-
-
-func _clear_pickups() -> void:
-	for pickup_id: int in _pickup_nodes.keys():
-		var holder: Node3D = _pickup_nodes[pickup_id]
-
-		if is_instance_valid(holder):
-			holder.queue_free()
-
-	_pickup_nodes.clear()
-
-
-# --- The weapons, drawn ----------------------------------------------------
-
-## Builds a view model for this player's own hands when they pick a weapon up.
-##
-## [b]Drawn, never decided, and `authority` is false for exactly that reason.[/b] The server
-## owns every shot; what this is for is a gun that moves. A player whose weapon never
-## deploys, never reloads and never kicks is a player who cannot tell a weapon that is ready
-## from one that is not.
-func _arm_locally(weapon_id: StringName = &"") -> void:
-	if player == null:
-		return
-
-	if weapons != null:
-		_give_locally(weapon_id)
-		_select_locally(weapon_id)
-		return
-
-	if camera == null:
-		_build_camera()
-
-	if camera == null:
-		return
-
-	view_model = ZeeViewModel.new()
-	view_model.name = "ViewModel"
-	camera.add_child(view_model)
-
-	weapons = ZeeWeaponRig.new()
-	weapons.name = "Weapons"
-	weapons.role = ZeeWeaponRig.Role.LOCAL
-	weapons.authority = false
-	weapons.tick_rate = game.tick_rate
-	weapons.view_model_ref = DotNodeRef.of_path(view_model.get_path())
-	weapons.player_ref = DotNodeRef.of_path(player.get_path())
-	player.add_child(weapons)
-
-	var ready_now := weapons.setup()
-
-	if not ready_now.ok:
-		DotLog.warn(CHANNEL, "the view model would not set up", {
-			"why": ready_now.error.message,
-		})
-		_disarm_locally()
-		return
-
-	# [b]Only what the server armed, one weapon as each is armed[/b] (`player_armed` / ARMED),
-	# never the whole pack. `give_everything` put all of it in five slots, so a slot held
-	# whichever weapon was given last and the drawn gun was not the one the server fired
-	# (mg-prop-hunt's play test: "weapons appear with no slot logic").
-	_give_locally(weapon_id)
-
-	# Your own shots, from your own rig: a predicted use, heard the tick it happens rather
-	# than when the server's snapshot says it did. At the camera, so it is at full volume.
-	weapons.used.connect(func(outcome: DotWeaponOutcome) -> void:
-		if audio != null and camera != null:
-			var _heard := audio.on_weapon(
-				camera.global_position, ZeeWeaponNet.kind_number(outcome.kind)
-			)
-	)
-
-	_select_locally(weapon_id)
-
-
-## Puts the weapon just picked up in hand, on its own slot, here and in what is sent.
-func _select_locally(weapon_id: StringName) -> void:
-	if weapons == null or weapon_id == &"":
-		return
-
-	var def := weapons.arsenal.catalogue.get_def(weapon_id)
-
-	if def != null:
-		_slot = def.slot
-
-
-func _give_locally(weapon_id: StringName) -> void:
-	if weapons == null or weapon_id == &"":
-		return
-	if weapons.arsenal != null and weapons.arsenal.carries(weapon_id):
-		return
-	var given := weapons.give(weapon_id)
-	if not given.ok:
-		DotLog.warn(CHANNEL, "the drawn rig refused a weapon", {"weapon": String(weapon_id), "why": given.error.message})
-
-
-func _disarm_locally() -> void:
-	if weapons != null:
-		player.remove_child(weapons)
-		weapons.queue_free()
-		weapons = null
-
-	if view_model != null and is_instance_valid(view_model):
-		view_model.queue_free()
-		view_model = null
-
-
 # --- The camera ------------------------------------------------------------
 
 func _build_camera() -> void:
@@ -1345,161 +1078,6 @@ func _on_view_rules_changed() -> void:
 			_place_camera()
 
 
-func _build_hud() -> void:
-	hud = WoHud.new()
-	# The counter reads the gun this player sees (corrected from the server's by correct_drawn).
-	hud.weapons_fn = func() -> ZeeWeaponRig: return weapons
-	hud.name = "Hud"
-	add_child(hud)
-	blurb_label = WoBlurb.new()
-	hud.add_child(blurb_label)
-
-
-
-## The Tab board: dot-menu's, with this game's columns. Built once the menu exists (see
-## [method _build_settings]); the platform feeds it and holds it on Tab.
-##
-## [b]Online it is the server's roster with this game's numbers merged in.[/b] Names, pings
-## and how long each player has been on come from dot-server, which is the only thing that
-## knows them for everybody; points, the round's place, the face and the side are already
-## replicated here, so they are joined in by id rather than sent twice. Offline there is no
-## server and the board is [method board_snapshot], all local.
-func _dress_board() -> void:
-	if board == null:
-		return
-	board.title_text = "Wipeout"
-	board.columns = [
-		{"key": &"avatar", "kind": DotMenuScoreboard.KIND_AVATAR, "width": 0.0},
-		{"key": &"name", "title": "Player", "width": 3.0},
-		{"key": &"points", "title": "Points", "kind": DotMenuScoreboard.KIND_NUMBER},
-		{"key": &"place", "title": "Place", "align": HORIZONTAL_ALIGNMENT_RIGHT},
-		{"key": &"seconds", "title": "Time", "kind": DotMenuScoreboard.KIND_DURATION},
-		{"key": &"ping", "title": "Ping", "kind": DotMenuScoreboard.KIND_PING},
-	]
-	board.sort_with = func(a: Dictionary, b: Dictionary) -> bool:
-		if int(a.get("points", 0)) != int(b.get("points", 0)):
-			return int(a.get("points", 0)) > int(b.get("points", 0))
-		return str(a.get("name", "")) < str(b.get("name", ""))
-	board.decorate = _decorate_row
-	board.prepare = _prepare_board
-
-
-## This game's numbers onto a row of the server's roster, by id.
-func _decorate_row(row: Dictionary) -> void:
-	if game == null:
-		return
-	var who: WoPlayer = game.players.get(WoNetBridge.player_key(int(row.get("id", 0))))
-	if who == null:
-		who = game.players.get(StringName(str(row.get("id", ""))))
-	if who == null:
-		return
-	row["avatar"] = _face(who)
-	row["points"] = who.points
-	row["place"] = str(who.place) if who.finished else ("out" if who.watching else "-")
-	row["team"] = who.team
-	if int(row.get("ping", -1)) < 0 and who.ping_ms >= 0:
-		row["ping"] = who.ping_ms
-	if who == player:
-		row["you"] = true
-
-
-## The course in the header, and the sides when the round has them.
-func _prepare_board(snap: Dictionary) -> void:
-	if game == null:
-		return
-	snap["header"] = {"Course": str(game.course_doc.get("name", ""))}
-	if game.config.teams():
-		var sides: Array = []
-		for side in range(1, game.config.team_count + 1):
-			sides.append({"id": side, "name": game.side_name(side), "color": game.side_colour(side)})
-		snap["teams"] = sides
-
-
-## The board offline: every player in the local world. Public so a suite can read it.
-func board_snapshot() -> Dictionary:
-	var players: Array = []
-	if game != null:
-		for id in game.players:
-			var who: WoPlayer = game.players[id]
-			players.append({"id": String(id), "name": who.display_name, "seconds": _seconds_here(), "ping": -1, "bot": who.is_bot})
-	return {"server": {"name": "Wipeout", "game": "offline"}, "players": players}
-
-
-func _seconds_here() -> int:
-	return int((Time.get_ticks_msec() - _started_msec) / 1000)
-
-
-## The player's face for the board: their figure's head, rendered once per skin.
-##
-## [b]Per skin, not per player, because that is what differs.[/b] Every Blocky Character is
-## the same mesh and the six people `WoFigure` can draw are six atlases, so six portraits
-## cover every player there will ever be; the side is a torso tint and does not reach the
-## head. Each is a 64-pixel SubViewport with its own world, an unshaded figure and a camera
-## at its eyes, rendered once and kept: the board asks every frame it is open, and a render
-## per ask would be a viewport per player per frame for a picture that never changes.
-##
-## Until 2026-10-08 this was a square in a colour hashed from the id, which is what the brief
-## meant by "their avatar picture" only in the sense that it was in the right column.
-var _portraits: Dictionary = {}
-
-func _face(who: WoPlayer) -> Texture2D:
-	return _portrait(str(who.call("_atlas")))
-
-
-func _portrait(atlas: String) -> Texture2D:
-	if _portraits.has(atlas):
-		return _portraits[atlas]
-
-	var view := SubViewport.new()
-	view.name = "Portrait%d" % _portraits.size()
-	view.size = Vector2i(64, 64)
-	view.own_world_3d = true
-	view.transparent_bg = true
-	view.render_target_update_mode = SubViewport.UPDATE_ONCE
-	add_child(view)
-
-	var figure := WoFigure.new()
-	view.add_child(figure)
-	figure.build(1.8, atlas, Color.WHITE)
-	figure.global_position = Vector3.ZERO
-
-	var eye := Camera3D.new()
-	eye.fov = 30.0
-	view.add_child(eye)
-	# In front of the face (a figure looks down -Z) and a touch above it, looking back.
-	eye.look_at_from_position(Vector3(0.0, 1.55, -1.6), Vector3(0.0, 1.45, 0.0), Vector3.UP)
-	eye.current = true
-
-	var texture := view.get_texture()
-	_portraits[atlas] = texture
-	return texture
-
-
-## The chat box, before the netcode and before any player exists.
-##
-## [b]Built in both halves and attached to the bridge afterwards.[/b] A box built after the
-## first line arrived would miss it — the backlog a joining player is sent is the first thing
-## the server says.
-func _build_chat() -> void:
-	chat = new_chat()
-	add_child(chat)
-
-
-## Walking off and on: typing, or the settings screen up. Both samplers, because offline the
-## player samples for themselves and connected the client does.
-func _suspend_input(suspended: bool) -> void:
-	if _sampler != null:
-		_sampler.suspended = suspended
-
-	if player != null and player.sampler != null:
-		player.sampler.suspended = suspended
-
-
-## Whether the pointer is the game's: captured. A menu frees it and the platform takes it back.
-func _pointer_ours() -> bool:
-	return Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-
-
 # --- The frame -------------------------------------------------------------
 
 ## The sampled command, on a connected client, once per tick the clock says has passed.
@@ -1606,9 +1184,6 @@ func _drive_view_model(command: DotFpsCommand) -> void:
 ## Seconds the drawn gun must be quiet before the server's count may overwrite it: longer than a
 ## shot's trip to the server and its snapshot back, so no shot still in flight is undone.
 const DRAWN_SETTLE_SEC := 0.6
-
-## Simulated seconds the drawn gun has gone without a trigger, a reload or a switch.
-var _drawn_quiet: float = 0.0
 
 
 ## Brings the drawn gun's magazine and reserve (what the HUD counts) to the server's once it has
@@ -2244,21 +1819,6 @@ func describe() -> Dictionary:
 	return out
 
 
-## dot-game's chat box and microphone, with this game's channels and voice format. It also
-## draws dot-server's own lines (the vote between games, joins, an admin's `say`), which arrive
-## on the shell's client link rather than on this game's bridge. Static so a suite can build
-## the same box the client does.
-static func new_chat() -> DotGameChatClient:
-	var box := DotGameChatClient.new()
-	box.name = "Chat"
-	box.channels = [
-		{"id": WoServices.CH_ALL, "label": "All", "colour": Color(0.93, 0.94, 0.96)},
-		{"id": WoServices.CH_TEAM, "label": "Team", "colour": Color(0.55, 0.82, 0.95)},
-		{"id": WoServices.CH_NEAR, "label": "Near", "colour": Color(0.82, 0.86, 0.72)},
-	]
-	box.max_length = WoServices.chat_rules().max_length
-	box.voice_config = WoServices.voice_format()
-	return box
 
 
 ## Where a roster row's player stands, for dot-game's look-to-gag key (G, K).
