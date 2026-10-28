@@ -1,6 +1,7 @@
 extends RefCounted
 
 const WoPaths := preload("wo_paths.gd")
+const WoLightBalance := preload("wo_light_balance.gd")
 
 ## A course's imported geometry: a `world` piece names a dot-bsp-mesh (`worlds/<mesh>.json` and
 ## `.bin` beside the courses) that dot-map's converter wrote, and this builds it: the faces
@@ -176,4 +177,6 @@ static func build_io(spec: Dictionary, hooks: Dictionary, authoritative: bool, d
 		DotLog.warn(CHANNEL, "an io world would not build", {"mesh": mesh_id, "why": built.error.message})
 		return null
 
+	if draw and built.value.visual != null:
+		WoLightBalance.apply(built.value.visual)
 	return built.value

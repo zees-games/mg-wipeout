@@ -17,6 +17,7 @@ const WoConfig := preload("wo_config.gd")
 const WoGame := preload("wo_game.gd")
 const WoWeatherView := preload("wo_weather_view.gd")
 const WoHud := preload("wo_hud.gd")
+const WoBlurb := preload("wo_blurb.gd")
 const WoPaths := preload("wo_paths.gd")
 const WoPlayer := preload("wo_player.gd")
 
@@ -65,6 +66,9 @@ var camera: Camera3D = null
 ## Rain and lightning, drawn. See [WoWeatherView].
 var weather: WoWeatherView = null
 var hud: WoHud = null
+
+## The course introduction, top left (under [member hud]).
+var blurb_label: WoBlurb = null
 
 ## The Tab board, the menu's. See [method _wire_board].
 var board: DotMenuScoreboard = null
@@ -666,17 +670,9 @@ func _on_stage(stage_id: StringName, is_arena: bool) -> void:
 
 	if chat != null and name_of != "":
 		var author := str(game.stage.doc.get("author", ""))
-		chat.say_locally("%s%s — %s" % [name_of, " by %s" % author if author != "" else "", _short(blurb, 90)],
-			Color(0.80, 0.90, 1.0))
-
-
-## [param text] cut at a word to at most [param limit] characters, with an ellipsis; the chat box does not wrap.
-static func _short(text: String, limit: int) -> String:
-	if text.length() <= limit:
-		return text
-	var cut := text.substr(0, limit - 1)
-	var space := cut.rfind(" ")
-	return (cut.substr(0, space) if space > limit / 2 else cut) + "…"
+		chat.say_locally("%s%s" % [name_of, " by %s" % author if author != "" else ""], Color(0.80, 0.90, 1.0))
+	if blurb_label != null and not is_arena:
+		blurb_label.show_blurb(blurb)
 
 
 ## Somebody fell in, crossed a checkpoint, or finished. What the feed and the speakers say.
@@ -1355,6 +1351,8 @@ func _build_hud() -> void:
 	hud.weapons_fn = func() -> ZeeWeaponRig: return weapons
 	hud.name = "Hud"
 	add_child(hud)
+	blurb_label = WoBlurb.new()
+	hud.add_child(blurb_label)
 
 
 
