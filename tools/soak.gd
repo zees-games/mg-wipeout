@@ -100,6 +100,11 @@ func _run() -> void:
 		if soak.ticks % 32 == 0:
 			await get_tree().physics_frame
 
+	await _finish(soak, map_id)
+
+
+## Writes the soak report and quits with its verdict.
+func _finish(soak: DotBotSoak, map_id: StringName) -> void:
 	var report := soak.finish()
 	report["map"] = String(map_id)
 	var falls := 0
