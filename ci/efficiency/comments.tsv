@@ -69,7 +69,7 @@ game/wo_progress.gd::long_block	3
 game/wo_racer.gd::banner	1
 game/wo_racer.gd::long_block	1
 game/wo_rules.gd::long_block	2
-game/wo_server.gd::long_block	3
+game/wo_server.gd::long_block	1
 game/wo_services.gd::banner	1
 game/wo_services.gd::history	1
 game/wo_services.gd::long_block	12
