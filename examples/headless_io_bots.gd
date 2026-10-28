@@ -17,10 +17,10 @@ const WoGame := preload("../game/wo_game.gd")
 const COURSES := {
 	&"wo_oaks_course": {"floor": false, "finish": false, "limit": 90, "why": "13 m on the floor ends at the pit past the start door; dot-map's nav export lists the start door (SpawnDoorT) with no opener, only the round's own logic moves it, so there is no button to press"},
 	&"wo_pauls_course": {"floor": false, "finish": false, "limit": 90, "fired": 3, "taken": 1, "why": "presses three buttons, which enables two teleports, and takes one; it lands on an island 16 m above the finish with no drop edge down, so it stalls short"},
-	&"wo_scary_course": {"floor": false, "finish": false, "limit": 90, "fired": 1, "why": "fires the bomb button (667), which breaks the spawn pen's west wall and joins only a 43 m2 stub room behind it; the finish is 10 m up past a pool crossed by the moving platform lol2, and the reachable point nearest it is the pen's own corner, where the stand-in stands (cutting that dead end from the mesh was tried and led nowhere: the stub joins nothing). Then the map's AFK_KILLER trigger_hurt kills the idle stand-in once (1 fall; a respawn is protected from the hurt volumes it stands in, see WoGame._protect_from_hurts); no teleport"},
+	&"wo_scary_course": {"floor": false, "finish": false, "limit": 90, "fired": 1, "why": "fires the bomb button (667), which breaks the spawn pen's west wall and joins only a 43 m2 stub room behind it; the finish is 10 m up past a pool crossed by the moving platform lol2, and the reachable point nearest it is the pen's own corner, where the stand-in stands (cutting that dead end from the mesh was tried and led nowhere: the stub joins nothing). Then the map's AFK_KILLER trigger_hurt kills the idle stand-in once (1 fall; a respawn is protected from the hurt volumes it stands in, see WoGame._protect_from_hurts); no teleport. HAND ROUTE: use 667, walk the stub and hop to the first pad (z 12.15) works; the next pad is blocked by a solid world glass pane (brushes 328/325/326, x -4.2..-2.0, y -0.1..2.6, z 12.5..13.1, 16.2..16.8, 19.8..20.4, clip above), so the importer may misclassify them or a human must say how the original crosses; no io_route written; no teleport"},
 	&"wo_lego_course": {"floor": false, "finish": false, "limit": 90, "fired": 1, "why": "fires one trigger but the mesh still ends 96 m out (movers are not in the bake), then the map's 'afk' trigger_hurt kills the idle stand-in once (1 fall, respawn protected); no teleport"},
 	&"wo_dc_course": {"floor": false, "finish": false, "limit": 90, "why": "the mesh ends 292 m out; two teleports join but the stand-in is killed (3 falls, was 100 before respawn protection) by the 'spawnkill' trigger_hurt around its spawn, not at an edge, before reaching one (a logic_auto enables it 40 s after map spawn as an anti-camp rule, so a stand-in still near the spawn then dies on every respawn; the 'finish' is a row of frag volumes at the far end of a deathmatch map)"},
-	&"wo_waytobar_course": {"floor": false, "finish": false, "limit": 90, "why": "the start platform ends at a wall with the locked use-door door_01 (406, nothing unlocks it) beside the lethal pool; the finish (y -2.3) lies past six teleports whose boxes sit on islands the pads do not join (a chain of rooms with trigger-opened doors). Hop edges across the start pool (stepping pads 1.9 m wide) join 8 islands to the start, ending 26 m out at the glass slab, a lethal trigger_hurt carved out of the mesh; the six teleports are on islands the pads do not reach, and the AFK_KILLER trigger_hurt kills the stand-in (3 falls, was 121 before respawn protection)"},
+	&"wo_waytobar_course": {"floor": false, "finish": false, "limit": 90, "why": "the start platform ends at a wall with the locked use-door door_01 (406, nothing unlocks it) beside the lethal pool; the finish (y -2.3) lies past six teleports whose boxes sit on islands the pads do not join (a chain of rooms with trigger-opened doors). Hop edges across the start pool (stepping pads 1.9 m wide) join 8 islands to the start, ending 26 m out at the glass slab, a lethal trigger_hurt carved out of the mesh; the six teleports are on islands the pads do not reach, and the AFK_KILLER trigger_hurt kills the stand-in (3 falls, was 121 before respawn protection). Re-checked: the start island joins 1 of 323 islands (the start platform, x 2..9 y 1.4); door 406 is a locked use-door and the six teleport boxes are all on other islands, so no io_route can start without a human who knows how the original opens 406"},
 	&"wo_dans_course": {"floor": false, "finish": false, "limit": 90, "fired": 1, "why": "presses the door button (23) but stalls 96 m out; of three teleports one joins and two lie off the mesh with nothing found to enable them"},
 	&"wo_office_course": {"floor": false, "finish": false, "limit": 90, "route": 1, "why": "BLOCKER: the lava-room hurt floor and the timed Spawn_HURT; the stand-in now leaves the spawn room (its Spawn_brush door was solid, see WoCourseIo.reseat_brushes) and walks 70+ m, but never reaches the finish; a death seats it in the lounge, which is inside the finish box (that, not a finish, was the 20 s result)"},
 	&"wo_labo_course": {"floor": false, "finish": false, "limit": 90, "fired": 5, "why": "presses five buttons and doors but the mesh still ends 131 m out; the three teleports lie off the mesh and 14 touch doors stand between"},
@@ -75,6 +75,11 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 	game.start()
 	await _until(game, WoGame.Phase.COURSE)
 	await _steps(game, 2)
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--route=") and game._io_bot != null:
+			var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(a.substr(8)))
+			game._io_bot._route = parsed if parsed is Array else []
+			game._io_bot._route_at = 0
 	var started := Time.get_ticks_msec()
 	var waited := 0.0
 	while game._io_bot != null and not game._io_bot.is_ready() and waited < BAKE_WAIT:
@@ -152,6 +157,10 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--seconds="):
 			limit = float(a.substr(10))
+	var follow := 0
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--follow="):
+			follow = int(a.substr(9))
 	var travelled := 0.0
 	var last := start
 	var finished_at := -1.0
@@ -168,6 +177,8 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 			print("      mode %s vel %s surf %s mods %s" % [bot.controller.state.mode, bot.controller.state.velocity, bot.controller.state.surface, bot.controller.state.modifiers])
 			if OS.get_cmdline_user_args().has("--points"):
 				print("      path %s" % [Array(tail).slice(0, 6)])
+		if follow > 0 and i % follow == 0:
+			print("    f t=%.2f at (%.2f, %.2f, %.2f) falls=%d route %d/%d" % [i * TICK, at.x, at.y, at.z, bot.falls, game._io_bot.route_done, game._io_bot._route.size()])
 		if tracing and at.distance_to(last) > 3.0:
 			print("    jump t=%.2f %s -> %s finished=%s watching=%s phase=%s" % [i * TICK, last, at, bot.finished, bot.watching, game.phase])
 		last = at
@@ -212,13 +223,16 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 					if c is CollisionShape3D and c.shape != null:
 						var wb: AABB = (c as CollisionShape3D).global_transform * c.shape.get_debug_mesh().get_aabb()
 						if wb.grow(3.0).has_point(here) or n.collision_layer == 0:
-							print("    BODY %s %s layer %d aabb %s" % [n.get_class(), n.name, n.collision_layer, wb])
+							print("    BODY %s %s layer %d aabb %s path %s meta %s" % [n.get_class(), n.name, n.collision_layer, wb, str(n.get_path()).trim_prefix(str(game.stage.io.world.get_path())), n.get_meta_list()])
 	if OS.get_cmdline_user_args().has("--graph-end"):
 		var en: DotBotNav = game._io_bot.nav
 		var here := bot.controller.state.position
 		print("  GRAPH-END islands %d, here island %d" % [en.islands().size(), en.island_at(here)])
-		for isl in en.islands().slice(0, 14):
+		for isl in en.islands().slice(0, 14 if not OS.get_cmdline_user_args().has("--all-islands") else 400):
 			print("   island %d area %.0f bounds %s joined-from-here %s" % [isl["index"], isl["area"], isl["bounds"], en.joined(here, isl["centre"])])
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--raster="):
+			_raster(game, a.substr(9))
 	if OS.get_cmdline_user_args().has("--ring"):
 		var here := bot.controller.state.position
 		var space := game.stage.io.world.get_world_3d().direct_space_state
@@ -268,6 +282,20 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 		"done %d, given up %d" % [route_done, game._io_bot.route_skipped])
 	_check(not bot.finished or finished_at < limit, "inside %d seconds" % int(limit), "%.1f s" % finished_at)
 	_finished_count += 1
+
+
+## `--raster=x0,z0,x1,z1,ytop`: a top-down picture of what stands under `ytop`, one metre a cell, a letter per half metre of height.
+func _raster(game: WoGame, spec: String) -> void:
+	var v := spec.split(",")
+	var space := game.stage.io.world.get_world_3d().direct_space_state
+	var ytop := float(v[4])
+	print("  RASTER x %s..%s, z %s..%s, a = y %.1f, one letter per 0.5 m" % [v[0], v[2], v[1], v[3], ytop - 13.0])
+	for z in range(int(v[1]), int(v[3]) + 1):
+		var line := ""
+		for x in range(int(v[0]), int(v[2]) + 1):
+			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(x, ytop, z), Vector3(x, ytop - 13.0, z)))
+			line += " " if hit.is_empty() else char(97 + clampi(int((hit["position"].y - (ytop - 13.0)) * 2.0), 0, 25))
+		print("   %4d %s" % [z, line])
 
 
 func _until(game: WoGame, phase: int) -> void:

@@ -58,7 +58,7 @@ var _age := 0
 ## Windows of a second in a row without half a metre of progress.
 var _stuck := 0
 ## A course's scripted steps (`io_route` in its document) walked before the mesh takes over: `{"to": [x, y, z]}` a
-## point walked straight to (`"jump": true` hops on the way), `{"use": entity}` a button used, `{"wait": seconds}`.
+## point walked straight to (`"jump": true` hops on the way, `"speed": 0.5` walks slower so a hop lands short), `{"use": entity}` a button used, `{"wait": seconds}`.
 ## What the mesh cannot know (a door, a button chain, an arrival the map teleports to) is named here by a person.
 var _route: Array = []
 var _route_at := 0
@@ -235,7 +235,7 @@ func _route_step(feet: Vector3, grounded: bool, command: DotFpsCommand) -> bool:
 		_finish_step(false)
 		return false
 	command.yaw = rad_to_deg(atan2(-toward.x, -toward.z))
-	command.move = Vector2(0.0, 1.0)
+	command.move = Vector2(0.0, clampf(float(step.get("speed", 1.0)), 0.1, 1.0))
 	if grounded and (bool(step.get("jump", false)) or to.y - feet.y > JUMP_RISE):
 		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
 	_path_tick = -REPATH_TICKS
