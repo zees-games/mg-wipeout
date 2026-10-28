@@ -3,6 +3,7 @@ extends DotGameCheckSuite
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
+const WoPlayer := preload("../game/wo_player.gd")
 
 ## Do stand-ins finish the courses that are a map's own world? One stand-in walks a navigation mesh baked from the
 ## map's static colliders (WoIoBot, DotBotNav); each course states what it must reach (`floor`, `finish`, `limit`, `fired`, `taken`).
@@ -95,6 +96,73 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 	_check(floor_reaches == bool(plan["floor"]), "the floor alone %s the finish" % ("reaches" if plan["floor"] else "does not reach"),
 		"path ends %.1f m from it" % [(path[path.size() - 1] if not path.is_empty() else start).distance_to(finish.get_center())])
 
+	_dump_start(game, start, finish)
+	var tracing := OS.get_cmdline_user_args().has("--trace")
+	var limit: float = float(plan["limit"])
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--seconds="):
+			limit = float(a.substr(10))
+	var follow := 0
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--follow="):
+			follow = int(a.substr(9))
+	var travelled := 0.0
+	var last := start
+	var finished_at := -1.0
+	for i in range(int(limit * TICK_RATE)):
+		game.simulate(TICK)
+		if i % 64 == 63:
+			await get_tree().process_frame
+		var at := bot.controller.state.position
+		if at.distance_to(last) < 10.0:
+			travelled += at.distance_to(last)
+		if tracing and i % 128 == 0:
+			var tail: PackedVector3Array = game._io_bot.path_to(at)
+			print("    t=%.0f at %s falls=%d path_end=%s %s" % [i * TICK, at, bot.falls, str(tail[tail.size() - 1]) if not tail.is_empty() else "-", game._io_bot.describe()])
+			print("      mode %s vel %s surf %s mods %s" % [bot.controller.state.mode, bot.controller.state.velocity, bot.controller.state.surface, bot.controller.state.modifiers])
+			if OS.get_cmdline_user_args().has("--points"):
+				print("      path %s" % [Array(tail).slice(0, 6)])
+		if follow > 0 and i % follow == 0:
+			print("    f t=%.2f at (%.2f, %.2f, %.2f) falls=%d route %d/%d" % [i * TICK, at.x, at.y, at.z, bot.falls, game._io_bot.route_done, game._io_bot._route.size()])
+		if tracing and at.distance_to(last) > 3.0:
+			print("    jump t=%.2f %s -> %s finished=%s watching=%s phase=%s" % [i * TICK, last, at, bot.finished, bot.watching, game.phase])
+		last = at
+		# an eliminated stand-in is seated in the lounge, which lies inside the finish box: not a finish
+		if bot.finished and not bot.watching:
+			finished_at = game.course_elapsed
+			break
+		if game.phase != WoGame.Phase.COURSE:
+			break
+	_dump_end(game, bot)
+	_verdict(game, bot, plan, finish, travelled, finished_at, limit)
+	_finished_count += 1
+
+
+## The per-course checks, after the walk.
+func _verdict(game: WoGame, bot: WoPlayer, plan: Dictionary, finish: AABB, travelled: float, finished_at: float, limit: float) -> void:
+	var nearest := bot.controller.state.position.distance_to(finish.get_center())
+	print("  walked %.0f m, %.0f m from the finish, %d falls, finished %s" % [travelled, nearest, bot.falls, str(bot.finished and not bot.watching)])
+	_check(travelled > 3.0, "the stand-in walks a route of its own", "%.1f m" % travelled)
+	_check((bot.finished and not bot.watching) == bool(plan["finish"]), "it %s" % ("finishes" if plan["finish"] else "does not finish: " + str(plan["why"])),
+		"%d falls, %.0f m from the finish" % [bot.falls, nearest])
+	var fired := 0
+	var taken := 0
+	for key in game._io_bot.describe()["done"]:
+		if int(key) >= DotBotLinks.TELEPORT_ID:
+			taken += 1
+		else:
+			fired += 1
+	print("  fired %d, taken %d  %s" % [fired, taken, game._io_bot.describe()])
+	_check(fired == int(plan.get("fired", 0)) and taken == int(plan.get("taken", 0)), "it fired %d buttons or triggers and took %d teleports" % [plan.get("fired", 0), plan.get("taken", 0)],
+		"fired %d, taken %d" % [fired, taken])
+	var route_done: int = game._io_bot.route_done
+	_check(route_done == int(plan.get("route", 0)) and game._io_bot.route_skipped == 0, "it walked %d scripted route steps, none given up" % int(plan.get("route", 0)),
+		"done %d, given up %d" % [route_done, game._io_bot.route_skipped])
+	_check(not bot.finished or finished_at < limit, "inside %d seconds" % int(limit), "%.1f s" % finished_at)
+
+
+## The `--export`, `--dump` and `--graph` diagnostics, printed before the stand-in walks.
+func _dump_start(game: WoGame, start: Vector3, finish: AABB) -> void:
 	print("  links %s" % [game._io_bot.links.describe()])
 	if OS.get_cmdline_user_args().has("--export"):
 		var ex := DotMapNavLinks.read(game.stage.io.world)
@@ -146,42 +214,10 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 		print("   islands reachable from start: %d" % reach)
 		for isl in gnav.islands().slice(0, 12):
 			print("   island %d area %.0f bounds %s joined-from-start %s" % [isl["index"], isl["area"], isl["bounds"], gnav.joined(start, isl["centre"])])
-	var tracing := OS.get_cmdline_user_args().has("--trace")
-	var limit: float = float(plan["limit"])
-	for a in OS.get_cmdline_user_args():
-		if a.begins_with("--seconds="):
-			limit = float(a.substr(10))
-	var follow := 0
-	for a in OS.get_cmdline_user_args():
-		if a.begins_with("--follow="):
-			follow = int(a.substr(9))
-	var travelled := 0.0
-	var last := start
-	var finished_at := -1.0
-	for i in range(int(limit * TICK_RATE)):
-		game.simulate(TICK)
-		if i % 64 == 63:
-			await get_tree().process_frame
-		var at := bot.controller.state.position
-		if at.distance_to(last) < 10.0:
-			travelled += at.distance_to(last)
-		if tracing and i % 128 == 0:
-			var tail: PackedVector3Array = game._io_bot.path_to(at)
-			print("    t=%.0f at %s falls=%d path_end=%s %s" % [i * TICK, at, bot.falls, str(tail[tail.size() - 1]) if not tail.is_empty() else "-", game._io_bot.describe()])
-			print("      mode %s vel %s surf %s mods %s" % [bot.controller.state.mode, bot.controller.state.velocity, bot.controller.state.surface, bot.controller.state.modifiers])
-			if OS.get_cmdline_user_args().has("--points"):
-				print("      path %s" % [Array(tail).slice(0, 6)])
-		if follow > 0 and i % follow == 0:
-			print("    f t=%.2f at (%.2f, %.2f, %.2f) falls=%d route %d/%d" % [i * TICK, at.x, at.y, at.z, bot.falls, game._io_bot.route_done, game._io_bot._route.size()])
-		if tracing and at.distance_to(last) > 3.0:
-			print("    jump t=%.2f %s -> %s finished=%s watching=%s phase=%s" % [i * TICK, last, at, bot.finished, bot.watching, game.phase])
-		last = at
-		# an eliminated stand-in is seated in the lounge, which lies inside the finish box: not a finish
-		if bot.finished and not bot.watching:
-			finished_at = game.course_elapsed
-			break
-		if game.phase != WoGame.Phase.COURSE:
-			break
+
+
+## The diagnostics printed where the stand-in stopped.
+func _dump_end(game: WoGame, bot: WoPlayer) -> void:
 	if OS.get_cmdline_user_args().has("--dump"):
 		var lk2: DotBotLinks = game._io_bot.links
 		print("  END links %s" % [lk2.describe()])
@@ -256,26 +292,6 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 			var mv = ent.get("mover")
 			if mv != null and mv.kind == "path":
 				print("    path %s %s name=%s node %s hit %s half %s corners %s loop=%s" % [ent.index, ent.classname, ent.targetname, ent.node.global_position if ent.node != null else null, ent.hit_frame.origin, ent.hit_half, ent._corners, ent._ring])
-	var nearest := bot.controller.state.position.distance_to(finish.get_center())
-	print("  walked %.0f m, %.0f m from the finish, %d falls, finished %s" % [travelled, nearest, bot.falls, str(bot.finished and not bot.watching)])
-	_check(travelled > 3.0, "the stand-in walks a route of its own", "%.1f m" % travelled)
-	_check((bot.finished and not bot.watching) == bool(plan["finish"]), "it %s" % ("finishes" if plan["finish"] else "does not finish: " + str(plan["why"])),
-		"%d falls, %.0f m from the finish" % [bot.falls, nearest])
-	var fired := 0
-	var taken := 0
-	for key in game._io_bot.describe()["done"]:
-		if int(key) >= DotBotLinks.TELEPORT_ID:
-			taken += 1
-		else:
-			fired += 1
-	print("  fired %d, taken %d  %s" % [fired, taken, game._io_bot.describe()])
-	_check(fired == int(plan.get("fired", 0)) and taken == int(plan.get("taken", 0)), "it fired %d buttons or triggers and took %d teleports" % [plan.get("fired", 0), plan.get("taken", 0)],
-		"fired %d, taken %d" % [fired, taken])
-	var route_done: int = game._io_bot.route_done
-	_check(route_done == int(plan.get("route", 0)) and game._io_bot.route_skipped == 0, "it walked %d scripted route steps, none given up" % int(plan.get("route", 0)),
-		"done %d, given up %d" % [route_done, game._io_bot.route_skipped])
-	_check(not bot.finished or finished_at < limit, "inside %d seconds" % int(limit), "%.1f s" % finished_at)
-	_finished_count += 1
 
 
 ## `--raster=x0,z0,x1,z1,ytop`: a top-down picture of what stands under `ytop`, one metre a cell, a letter per half metre of height.
