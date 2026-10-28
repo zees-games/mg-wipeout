@@ -109,6 +109,57 @@ class _Walker:
 		var q := PhysicsRayQueryParameters3D.create(Vector3(a.x, h, a.z), Vector3(b.x, h, b.z))
 		return not space.intersect_ray(q).is_empty()
 
+	## The cells one step from `p`: walks, jumps, falls, ladders and open teleports (setting `tp_hit`).
+	func _neighbours(p: Vector3, body: AABB, tps: Array, tp_hit: Array) -> Array[Vector3]:
+		var found: Array[Vector3] = []
+		for dir: Vector2 in DIRS:
+			for d: int in range(1, max_gap + 1):
+				var x: float = p.x + dir.x * d * CELL
+				var z: float = p.z + dir.y * d * CELL
+				var up := max_up
+				var f: Variant = _floor(x, z, p.y + up + 0.1, up + max_drop)
+				if f == null:
+					continue
+				var n: Vector3 = f
+				if n.y - p.y > up + 0.05 or _blocked(p, n):
+					continue
+				found.append(n)
+				if d == 1:
+					break
+
+		# A hole beside the cell: step off and fall, steering in the air under whatever overhangs the shaft.
+		for dir: Vector2 in DIRS.slice(0, 4):
+			var fx: float = p.x + dir.x * CELL
+			var fz: float = p.z + dir.y * CELL
+			if _floor(fx, fz, p.y + max_up + 0.1, max_up + max_drop) != null:
+				continue
+			var hole := Vector3i(roundi(fx / 2.0), roundi(p.y / 2.0), roundi(fz / 2.0))
+			if not falls.has(hole):
+				falls[hole] = _fall(Vector3(fx, p.y, fz), p.y)
+			found.append_array(falls[hole])
+
+		for ladder in ladders:
+			if ladder.grow(0.9).intersects(body):
+				for off in [Vector2(1.2, 0), Vector2(-1.2, 0), Vector2(0, 1.2), Vector2(0, -1.2)]:
+					var c := ladder.get_center()
+					var f: Variant = _floor(c.x + off.x, c.z + off.y, ladder.end.y + 1.2, 3.0)
+					if f != null and (f as Vector3).y > p.y:
+						found.append(f)
+
+		for i in tps.size():
+			var t: Dictionary = tps[i]
+			if not (t["open_fn"] as Callable).call():
+				continue
+			for box: AABB in t["boxes"]:
+				# a 0.25 m trigger plane falls between 1 m cells, so pad each axis to a cell
+				var pad := Vector3(maxf(box.size.x, CELL), maxf(box.size.y, CELL), maxf(box.size.z, CELL))
+				if AABB(box.get_center() - pad * 0.5, pad).grow(0.2).intersects(body):
+					tp_hit[i] = true
+					found.append(t["to"])
+					break
+		return found
+
+
 	func flood(start: Vector3, finish: AABB, tps: Array, hurts: Array, seeds: Array = []) -> Dictionary:
 		var seen := {}
 		var queue: Array[Vector3] = [start]
@@ -141,52 +192,7 @@ class _Walker:
 				nearest = dist
 				near_at = p
 
-			var found: Array[Vector3] = []
-			for dir: Vector2 in DIRS:
-				for d: int in range(1, max_gap + 1):
-					var x: float = p.x + dir.x * d * CELL
-					var z: float = p.z + dir.y * d * CELL
-					var up := max_up
-					var f: Variant = _floor(x, z, p.y + up + 0.1, up + max_drop)
-					if f == null:
-						continue
-					var n: Vector3 = f
-					if n.y - p.y > up + 0.05 or _blocked(p, n):
-						continue
-					found.append(n)
-					if d == 1:
-						break
-
-			# A hole beside the cell: step off and fall, steering in the air under whatever overhangs the shaft.
-			for dir: Vector2 in DIRS.slice(0, 4):
-				var fx: float = p.x + dir.x * CELL
-				var fz: float = p.z + dir.y * CELL
-				if _floor(fx, fz, p.y + max_up + 0.1, max_up + max_drop) != null:
-					continue
-				var hole := Vector3i(roundi(fx / 2.0), roundi(p.y / 2.0), roundi(fz / 2.0))
-				if not falls.has(hole):
-					falls[hole] = _fall(Vector3(fx, p.y, fz), p.y)
-				found.append_array(falls[hole])
-
-			for ladder in ladders:
-				if ladder.grow(0.9).intersects(body):
-					for off in [Vector2(1.2, 0), Vector2(-1.2, 0), Vector2(0, 1.2), Vector2(0, -1.2)]:
-						var c := ladder.get_center()
-						var f: Variant = _floor(c.x + off.x, c.z + off.y, ladder.end.y + 1.2, 3.0)
-						if f != null and (f as Vector3).y > p.y:
-							found.append(f)
-
-			for i in tps.size():
-				var t: Dictionary = tps[i]
-				if not (t["open_fn"] as Callable).call():
-					continue
-				for box: AABB in t["boxes"]:
-					# a 0.25 m trigger plane falls between 1 m cells, so pad each axis to a cell
-					var pad := Vector3(maxf(box.size.x, CELL), maxf(box.size.y, CELL), maxf(box.size.z, CELL))
-					if AABB(box.get_center() - pad * 0.5, pad).grow(0.2).intersects(body):
-						tp_hit[i] = true
-						found.append(t["to"])
-						break
+			var found := _neighbours(p, body, tps, tp_hit)
 
 			for n in found:
 				var k := _key(n)
