@@ -168,6 +168,7 @@ static func build_io(spec: Dictionary, hooks: Dictionary, authoritative: bool, d
 		_surfaces = DotMapSurfaces.new()
 		_surfaces.path_fn = WoPaths.rebase
 
+	# Process-wide on purpose, never reset: actor ambient reads it live; wipeout is one game per process.
 	DotMapBspMesh.set_lightmap_max_chroma_ratio(MAX_CHROMA_RATIO)
 	var wired := hooks.duplicate()
 	var built := DotMapWorld.build(prefix, wired, {
