@@ -277,7 +277,8 @@ static func read_team(r: DotNetReader) -> Dictionary:
 
 
 ## [param death] is how the body falls (dot-player-char's [DotPlayerDeath], the server's pick),
-## last and optional, so every client draws the same fall and an older one reads the rest.
+## last and optional, so every client draws the same fall. There is no event version: a client
+## built before weapon_id reads the fall's first bytes as the weapon, so mixed builds misread.
 static func write_death(player_id: int, by: int, why: StringName, death: DotPlayerDeath = null,
 		weapon_id: StringName = &"") -> PackedByteArray:
 	var w := _w()

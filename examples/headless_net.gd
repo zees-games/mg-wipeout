@@ -15,7 +15,7 @@ extends "headless_net_workbench.gd"
 ## Sections and checks are both counted; mg-smash-copter's notes say why the second matters.
 
 const SECTIONS := 17
-const CHECKS := 97
+const CHECKS := 102
 
 
 func _ready() -> void:
@@ -695,6 +695,9 @@ func _test_the_killcam_names_the_weapon() -> void:
 	_section("the killcam banner shows the weapon DEATH carried")
 	var dead := WoEvents.read_death(DotNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT, null, &"pistol")))
 	_check(bool(dead["ok"]) and dead["weapon_id"] == &"pistol", "DEATH carries the weapon id", str(dead))
+	var fell := WoEvents.read_death(DotNetReader.new(WoEvents.write_death(2, 0, WoGame.DIED_FELL)))
+	_check(bool(fell["ok"]) and fell["weapon_id"] == &"" and not fell.has("death"),
+		"a fall carries an empty weapon id", str(fell))
 	var kc: Node = preload("res://game/wo_killcam.gd").new()
 	add_child(kc)
 	var banner := DotKillcamBanner.new()
@@ -703,8 +706,26 @@ func _test_the_killcam_names_the_weapon() -> void:
 	banner.present({"killer": "Rival", "weapon": "Shot", "weapon_id": "pistol"})
 	_check(banner.icon_rect.visible and banner.icon_rect.texture != null,
 		"the banner shows the icon WoKillcam's icon_provider gives")
-	kc.queue_free()
 	banner.queue_free()
+	var killer := preload("res://game/wo_player.gd").new()
+	var clock := [10.0]
+	kc.now_fn = func() -> float: return clock[0]
+	kc.seconds_fn = func() -> float: return 1.0
+	kc.players_fn = func() -> Dictionary: return {&"k": killer}
+	for weapon: String in ["pistol", ""]:
+		kc.new_round()
+		clock[0] = 10.0
+		kc.buffer.push_frame(clock[0], {})
+		clock[0] = 11.0
+		kc.note_kill("k", "v", "shot", weapon)
+		_check(kc.round_ended(), "a round ending on a kill with weapon '%s' plays the killcam" % weapon)
+		var shown: DotKillcamBanner = kc.killcam.banner
+		var has_icon := shown != null and shown.icon_rect.visible and shown.icon_rect.texture != null
+		_check(has_icon == (weapon != ""), "the killcam banner icon is %s for weapon '%s'" % [
+			"shown" if weapon != "" else "absent", weapon])
+		kc.killcam.skip()
+	kc.queue_free()
+	killer.free()
 	_finished()
 
 
