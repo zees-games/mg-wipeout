@@ -1,8 +1,6 @@
 extends "headless_routes_rig.gd"
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
-const WoConfig := preload("../game/wo_config.gd")
-const WoGame := preload("../game/wo_game.gd")
 
 ## Can a runner get from the start to the finish of an io course? A floor-flood walker (1 m cells, step 1 m,
 ## jump 5 m, ladders as lifts) is driven to a fixed point with the map's io graph run for real.
@@ -22,8 +20,6 @@ const COURSES := {
 	&"wo_sweet_course": {"dead_tps": 4, "reaches": false, "why": "stalls 223 m out; four teleports unreached"},
 }
 const CHECKS_PER_COURSE := 6
-const TICK_RATE := 64
-const TICK := 1.0 / float(TICK_RATE)
 const RELAXED_GAP := 10
 ## The pinned profile's jump is WoConfig.jump_height (1.25 m); a 56-unit block is 1.07 m and was out of reach at 1.0.
 const STEP_UP := 1.2
@@ -32,7 +28,6 @@ const RELAXED_DROP := 30.0
 
 var _entered := 0
 var _finished_count := 0
-var _world: WoGame = null
 var _expected_sections := 0
 var _debug := ""
 
@@ -473,58 +468,3 @@ func _finish_box(doc: Dictionary) -> AABB:
 	var turned := int(roundf(float(finish["yaw"]) / 90.0)) % 2 != 0
 	var half := Vector3(size.z, size.y, size.x) * 0.5 if turned else size * 0.5
 	return AABB(Vector3(at.x - half.x, at.y - 0.5, at.z - half.z), Vector3(half.x * 2.0, size.y + 0.5, half.z * 2.0))
-
-
-## A floor-flood walker over the physics space.
-func _until(game: WoGame, phase: int) -> void:
-	for i in range(int(8.0 * TICK_RATE)):
-		game.simulate(TICK)
-		if i % 64 == 0:
-			await get_tree().process_frame
-		if game.phase == phase:
-			break
-
-
-func _steps(game: WoGame, count: int) -> void:
-	for i in range(count):
-		game.simulate(TICK)
-		if i % 64 == 63:
-			await get_tree().process_frame
-	await get_tree().physics_frame
-
-
-func _fresh_world(doc: Dictionary) -> WoGame:
-	if _world != null:
-		remove_child(_world)
-		_world.free()
-		await get_tree().process_frame
-
-	var config := WoConfig.new()
-	config.knock_damage_per_speed = 0.0
-	config.fall_damage_per_metre = 0.0
-	config.courses_per_round = 1
-	config.wind_chance = 0.0
-	config.storm_chance = 0.0
-	config.warmup_seconds = 0.0
-	config.intermission_seconds = 0.0
-	config.countdown_seconds = 0.5
-	config.minimum_players = 0
-	config.keep_progress = false
-	config.course_ids = PackedStringArray([str(doc["id"])])
-
-	var game := WoGame.new()
-	game.name = "World"
-	game.config = config
-	game.tick_rate = TICK_RATE
-	game.register_service = false
-	game.draw_world = true
-	add_child(game)
-	game.set_physics_process(false)
-	_world = game
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	return game
-
-
-func _failure_prefix() -> String:
-	return "%s: " % (_world.config.course_ids[0] if _world != null else "?")

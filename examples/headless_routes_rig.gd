@@ -1,4 +1,4 @@
-extends DotGameCheckSuite
+extends "headless_world_base.gd"
 
 ## The floor-flood walker and the io model of headless_routes.
 
