@@ -336,6 +336,7 @@ func _view_killcam(game: WoGame) -> void:
 	for i in range(1, standing.size()):
 		var hit := DotDamage.make(standing[0].entity_id, standing[i].entity_id, standing[i].health.max_health * 4.0, null)
 		hit.context = {"why": &"shot"}
+		hit.weapon_id = &"pistol"
 		var _dealt := game.combat.apply_damage(hit)
 	game._decide(1, "test")
 	var base := _out.trim_suffix(".png")

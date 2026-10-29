@@ -14,8 +14,8 @@ extends "headless_net_workbench.gd"
 ##
 ## Sections and checks are both counted; mg-smash-copter's notes say why the second matters.
 
-const SECTIONS := 16
-const CHECKS := 95
+const SECTIONS := 17
+const CHECKS := 97
 
 
 func _ready() -> void:
@@ -31,6 +31,7 @@ func _run() -> void:
 	print("")
 
 	_test_the_codec()
+	_test_the_killcam_names_the_weapon()
 
 	if await _build():
 		await _test_a_client_joins()
@@ -690,6 +691,23 @@ func _test_a_hit_is_the_shooters() -> void:
 
 
 ## How many events of [param kind] the server sent to [param peer_id] (0: broadcast).
+func _test_the_killcam_names_the_weapon() -> void:
+	_section("the killcam banner shows the weapon DEATH carried")
+	var dead := WoEvents.read_death(DotNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT, null, &"pistol")))
+	_check(bool(dead["ok"]) and dead["weapon_id"] == &"pistol", "DEATH carries the weapon id", str(dead))
+	var kc: Node = preload("res://game/wo_killcam.gd").new()
+	add_child(kc)
+	var banner := DotKillcamBanner.new()
+	banner.icon_provider = kc.killcam.icon_provider
+	add_child(banner)
+	banner.present({"killer": "Rival", "weapon": "Shot", "weapon_id": "pistol"})
+	_check(banner.icon_rect.visible and banner.icon_rect.texture != null,
+		"the banner shows the icon WoKillcam's icon_provider gives")
+	kc.queue_free()
+	banner.queue_free()
+	_finished()
+
+
 func _test_leaving() -> void:
 	_section("leaving")
 	_server_bridge.remove_peer(CLIENT_PEER)

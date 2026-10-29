@@ -201,7 +201,7 @@ func _race(doc: Dictionary, difficulty: String, bots: int, round_index: int, dam
 	# Knocked out of the round (health gone on the course) while the course was open, which
 	# is not the same as still running when it closed: then everybody not home watches.
 	var eliminated := {}
-	game.player_died.connect(func(id: StringName, _by: StringName, why: StringName) -> void:
+	game.player_died.connect(func(id: StringName, _by: StringName, why: StringName, _weapon: StringName) -> void:
 		if game.phase == WoGame.Phase.COURSE:
 			eliminated[id] = true
 		if verbose:

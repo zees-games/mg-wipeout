@@ -103,7 +103,7 @@ signal round_over(number: int, winner: int, winner_name: String)
 
 signal phase_changed(phase: int)
 
-signal player_died(player_id: StringName, by: StringName, why: StringName)
+signal player_died(player_id: StringName, by: StringName, why: StringName, weapon_id: StringName)
 
 ## Somebody fell in and was put back. Not a death: the course goes on.
 signal player_fell(player_id: StringName, checkpoint: int)
@@ -3143,7 +3143,7 @@ func _on_player_died(player: WoPlayer, damage: DotDamage) -> void:
 	if authoritative:
 		player.death = decide_death(player, damage)
 
-	player_died.emit(player.player_id, by, why)
+	player_died.emit(player.player_id, by, why, damage.weapon_id)
 
 	# On the course a death is either the round over for them (the brief's "fatal", the
 	# default) or a restart at the last checkpoint. Either way they are alive again at once:

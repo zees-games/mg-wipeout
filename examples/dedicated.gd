@@ -730,7 +730,7 @@ func _test_a_covered_seat_is_not_harmed() -> void:
 	# A death on a course revives at once (a restart or the lounge), so health alone proves
 	# nothing: the signal is the proof.
 	var deaths := []
-	var on_died := func(id: StringName, _by: StringName, _why: StringName) -> void: deaths.append(id)
+	var on_died := func(id: StringName, _by: StringName, _why: StringName, _weapon: StringName) -> void: deaths.append(id)
 	game.player_died.connect(on_died)
 	var hit := DotDamage.make(0, victim.entity_id, victim.health.max_health * 10.0, null)
 	hit.tick = game._tick

@@ -6,6 +6,7 @@ extends Node
 
 const CHANNEL := "wo.killcam"
 const WoPlayer := preload("wo_player.gd")
+const WoWeaponIcons := preload("wo_weapon_icons.gd")
 
 ## Skip keys: the ones a runner's hands are on.
 const SKIP_ACTIONS: PackedStringArray = ["dot_fps_jump", "ui_cancel", "ui_accept"]
@@ -37,6 +38,8 @@ func _ready() -> void:
 	killcam = DotKillcam.new()
 	killcam.name = "Killcam"
 	killcam.skip_actions = SKIP_ACTIONS
+	killcam.icon_provider = func(id: String) -> Texture2D:
+		return WoWeaponIcons.shared.menu_texture(StringName(id))
 	add_child(killcam)
 	killcam.started.connect(_on_started)
 	killcam.frame_drawn.connect(_apply)
@@ -67,10 +70,10 @@ func frame() -> void:
 
 
 ## A kill this client was told about. Without a killer there is nobody to watch through.
-func note_kill(killer: String, victim: String, cause: String) -> void:
+func note_kill(killer: String, victim: String, cause: String, weapon_id: String = "") -> void:
 	if killer == "":
 		return
-	buffer.note_event(now_fn.call(), &"kill", {"killer": killer, "victim": victim, "cause": cause})
+	buffer.note_event(now_fn.call(), &"kill", {"killer": killer, "victim": victim, "cause": cause, "weapon_id": weapon_id})
 
 
 ## Forgets the last round's kills, so a round that ends on a fall replays nothing.
@@ -94,6 +97,7 @@ func round_ended() -> bool:
 		"killer": killer.display_name,
 		"victim": victim.display_name if victim != null else "",
 		"weapon": String(kill["data"].get("cause", "")).capitalize(),
+		"weapon_id": String(kill["data"].get("weapon_id", "")),
 		"hint": "Jump to skip",
 	})
 	if not played.ok:

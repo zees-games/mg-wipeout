@@ -610,10 +610,10 @@ func _on_round(number: int, began: bool, winner: int, why: String = "") -> void:
 	_begin_round_end()
 
 
-func _on_death(session_id: int, by: int, why: StringName) -> void:
+func _on_death(session_id: int, by: int, why: StringName, weapon_id: StringName) -> void:
 	var id := WoNetBridge.player_key(session_id)
 	if killcam != null and by != 0:
-		killcam.note_kill(String(WoNetBridge.player_key(by)), String(id), String(why))
+		killcam.note_kill(String(WoNetBridge.player_key(by)), String(id), String(why), String(weapon_id))
 	var who: WoPlayer = game.players.get(id)
 
 	_hear_death(who, why)
@@ -806,9 +806,9 @@ func _hear_the_world() -> void:
 		_on_round(n, true, 0))
 	game.round_over.connect(func(n: int, winner: int, why: String) -> void:
 		_on_round(n, false, winner, why))
-	game.player_died.connect(func(id: StringName, by: StringName, why: StringName) -> void:
+	game.player_died.connect(func(id: StringName, by: StringName, why: StringName, weapon_id: StringName) -> void:
 		if killcam != null and _offline:
-			killcam.note_kill(String(by), String(id), String(why))
+			killcam.note_kill(String(by), String(id), String(why), String(weapon_id))
 		_hear_death(game.players.get(id), why))
 	game.player_fell.connect(func(id: StringName, _checkpoint: int) -> void:
 		_on_progress(WoNetBridge.session_of(id) if id != &"local" else _watch_id,
