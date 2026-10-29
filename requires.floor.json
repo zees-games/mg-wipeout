@@ -1,6 +1,7 @@
 {
   "format": 1,
   "addons": {
+    "dot_player_char": 11,
     "dot_ui": 13
   }
 }

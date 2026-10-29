@@ -9,7 +9,7 @@ extends "headless_run_client.gd"
 
 const SECTIONS := 42
 
-const CHECKS := 222
+const CHECKS := 223
 
 
 func _ready() -> void:

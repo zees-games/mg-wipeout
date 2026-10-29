@@ -76,8 +76,6 @@ var carrying: bool = false:
 ## The person, under this node.
 var person: DotHumanoidFigure = null
 
-var _posed_at_usec: int = -1
-
 
 func _init() -> void:
 	# The caller places it; see the class note.
@@ -90,7 +88,6 @@ func build(height: float, atlas_path: String, colour: Color) -> void:
 	atlas = atlas_path
 	team_colour = colour
 	clip = &""
-	_posed_at_usec = -1
 	# The gun hung off the old person's hand and goes with it; [method hold] builds it again on
 	# the next frame, from [member holding], which outlives a rebuild.
 	held = null
@@ -130,11 +127,8 @@ func pose(at: Vector3, yaw_radians: float, speed: float) -> void:
 	rotation = Vector3(0.0, yaw_radians, 0.0)
 	if person == null:
 		return
-	var now := Time.get_ticks_usec()
-	# A figure that was hidden for a minute is not a minute behind: clamped.
-	var delta := 0.0 if _posed_at_usec < 0 else clampf((now - _posed_at_usec) / 1e6, 0.0, 0.1)
-	_posed_at_usec = now
-	person.animate(speed, delta)
+	# Game time, as the body moves: a wall-clock step skated the feet (slow motion, fixed-rate frames).
+	person.animate(speed, person.frame_delta())
 	clip = person.clip
 
 

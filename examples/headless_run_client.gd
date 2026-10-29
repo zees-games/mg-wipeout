@@ -82,6 +82,10 @@ func _test_a_carrier_is_drawn_carrying() -> void:
 	_check(carrier.figure != null and not carrier.figure.carrying and person != null
 			and person.hold == DotHumanoidFigure.Hold.NONE,
 		"and down again when it is let go")
+	# The figure steps its clip by game time (frame_delta), which stamps the frame it ran in.
+	carrier.figure.pose(carrier.global_position, 0.0, 3.0)
+	_check(int(carrier.figure.person.get("_posed_frame")) == Engine.get_process_frames(),
+		"a posed figure animates by game time, not the wall clock")
 	_finished()
 
 
