@@ -1,7 +1,6 @@
 extends Label
 ## A course's one-paragraph introduction, top left: wrapped to a fixed share of the screen, outlined, gone after a few seconds.
 
-const CHANNEL := "wo_blurb"
 const MARGIN := Vector2(16.0, 72.0)
 const MAX_WIDTH := 420.0
 ## The widest share of the view it may take, so a narrow or 4:3 window keeps the middle (the runner) clear.
