@@ -60,6 +60,83 @@ static func missing(doc: Dictionary) -> PackedStringArray:
 	return out
 
 
+## The start and finish a map's `roles` name (`wo_start` on spawns or entities, `wo_finish` on entities), as `{start, finish}`;
+## a key is left out when no role names it. A zone is centred on the mean of its entities' places and faces the first one.
+static func zones_from_roles(manifest: Dictionary) -> Dictionary:
+	var places: Dictionary = {}
+
+	for e: Dictionary in manifest.get("entities", []):
+		if e.get("origin") is Array and (e["origin"] as Array).size() == 3:
+			places[int(e.get("entity", -1))] = {"at": e["origin"], "yaw": 0.0}
+
+	var spawns: Array = manifest.get("spawns", [])
+	var found: Dictionary = {"wo_start": [], "wo_finish": []}
+
+	for r: Dictionary in manifest.get("roles", []):
+		var role := str(r.get("role", ""))
+
+		if not found.has(role):
+			continue
+
+		var at: Dictionary = places.get(int(r.get("entity", -1)), {})
+
+		if at.is_empty():
+			for s: Dictionary in spawns:
+				if str(s.get("classname", "")) == str(r.get("classname", "")) and str(s.get("targetname", "")) == str(r.get("targetname", "")):
+					at = {"at": s["at"], "yaw": float(s.get("yaw", 0.0))}
+					break
+
+		if not at.is_empty():
+			(found[role] as Array).append(at)
+
+	var out: Dictionary = {}
+
+	for role: String in found:
+		var list: Array = found[role]
+
+		if list.is_empty():
+			continue
+
+		var sum := Vector3.ZERO
+
+		for z: Dictionary in list:
+			sum += Vector3(z["at"][0], z["at"][1], z["at"][2])
+
+		sum /= float(list.size())
+		var at := [snappedf(sum.x, 0.01), snappedf(sum.y, 0.01), snappedf(sum.z, 0.01)]
+		var zone := {"at": at, "yaw": float(list[0]["yaw"])}
+
+		if role == "wo_start":
+			zone["size"] = [10.0, 8.0]
+			out["start"] = zone
+		else:
+			zone["size"] = [6.0, 4.0, 4.0]
+			zone["lounge"] = at
+			out["finish"] = zone
+
+	return out
+
+
+## Puts the zones [method zones_from_roles] finds in the manifest of [param doc]'s first world piece into
+## [param doc]'s start and finish, over the hand-written ones. A document with no roles is left alone.
+static func apply_roles(doc: Dictionary) -> void:
+	for piece: Dictionary in doc.get("pieces", []):
+		if str(piece.get("kind", "")) != "world":
+			continue
+
+		var prefix := prefix_of(str(piece.get("mesh", "")))
+
+		if prefix.is_empty():
+			return
+
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(prefix + ".json"))
+
+		if parsed is Dictionary:
+			doc.merge(zones_from_roles(parsed), true)
+
+		return
+
+
 ## Fetches [param mesh]'s files: a maps pack whose manifest puts them in a group named after the
 ## mesh id is widened to include it, so a join downloads the courses played, not every mesh.
 ## OK with nothing done when no mounted pack groups it (an ungrouped pack arrived whole).

@@ -116,12 +116,13 @@ func _read_directory(root: String) -> int:
 			})
 			continue
 
+		WoWorld.add_dir(root.path_join("..").path_join("worlds").simplify_path())
+		WoWorld.apply_roles(parsed.value)
+
 		if _add(parsed.value, file):
 			loaded += 1
 			var cfg_path := root.path_join("..").path_join("cfg").path_join("%s.cfg" % parsed.value["id"])
 			cfg_path = cfg_path.simplify_path()
-
-			WoWorld.add_dir(root.path_join("..").path_join("worlds").simplify_path())
 
 			if FileAccess.file_exists(cfg_path):
 				course_cfg[StringName(str(parsed.value["id"]))] = cfg_path

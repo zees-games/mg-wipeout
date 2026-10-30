@@ -2,6 +2,7 @@ extends "headless_io_rig.gd"
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoCourseIo := preload("../game/wo_course_io.gd")
+const WoWorld := preload("../game/wo_world.gd")
 const WoEvents := preload("../game/net/wo_events.gd")
 
 ## A course that runs its map's own entities (dot-map's DotMapWorld), played on the server's step.
@@ -24,8 +25,8 @@ const COURSES := {
 	&"wo_sweet_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
 }
 
-var _expect_sections := 0
-var _expect_checks := 0
+var _expect_sections := 1
+var _expect_checks := 7
 
 
 func _ready() -> void:
@@ -36,6 +37,8 @@ func _ready() -> void:
 func _run() -> void:
 	print("wipeout: courses run by their map's own entities")
 	print("")
+
+	_roles_section()
 
 	var catalogue := WoCatalogue.new()
 	var _loaded := catalogue.load_from("courses")
@@ -54,6 +57,32 @@ func _run() -> void:
 		print("  (%d checks)" % (_passed + _failed - before))
 
 	_report_sections(_sections_entered, _sections_finished, _expect_sections, _expect_checks if _expect_checks > 0 else -1)
+
+
+func _roles_section() -> void:
+	_section("start and finish from a map's roles")
+	var manifest := {
+		"entities": [{"entity": 4, "origin": [10.0, 2.0, 0.0]}, {"entity": 7, "origin": [30.0, 2.0, 40.0]}, {"entity": 9, "origin": [50.0, 6.0, 40.0]}],
+		"spawns": [{"at": [1.0, 0.5, 2.0], "classname": "info_player_start", "targetname": "", "yaw": 90.0},
+			{"at": [3.0, 0.5, 2.0], "classname": "info_player_start", "targetname": "", "yaw": 90.0}],
+		"roles": [
+			{"entity": 99, "classname": "info_player_start", "targetname": "", "role": "wo_start"},
+			{"entity": 7, "classname": "trigger_multiple", "targetname": "end_a", "role": "wo_finish"},
+			{"entity": 9, "classname": "trigger_multiple", "targetname": "end_b", "role": "wo_finish"},
+			{"entity": 4, "classname": "info_target", "targetname": "x", "role": "prop_spawner"},
+		],
+	}
+	var zones := WoWorld.zones_from_roles(manifest)
+	_check(zones.has("start") and zones.has("finish"), "both zones are found", str(zones))
+	_check((zones["start"]["at"] as Array) == [1.0, 0.5, 2.0], "a start role on a spawn takes the spawn's place", str(zones["start"]))
+	_check(is_equal_approx(float(zones["start"]["yaw"]), 90.0), "and faces its way")
+	_check((zones["finish"]["at"] as Array) == [40.0, 4.0, 40.0], "two finish entities meet in the middle", str(zones["finish"]))
+	_check(zones["finish"]["lounge"] == zones["finish"]["at"], "the lounge is the finish")
+	_check(WoWorld.zones_from_roles({"entities": manifest["entities"]}).is_empty(), "a manifest with no roles names no zone")
+	var doc := {"start": 1, "finish": 2, "pieces": []}
+	WoWorld.apply_roles(doc)
+	_check(doc["start"] == 1 and doc["finish"] == 2, "a document with no world piece is left alone")
+	_finished()
 
 
 func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
