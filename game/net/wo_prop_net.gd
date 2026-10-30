@@ -1,19 +1,8 @@
 extends DotNetBehaviour
 
-## What a prop replicates: where it is and how it is turned.
-##
-## [b]Server-authoritative and never predicted, and that is a decision rather than an
-## omission.[/b] Godot's rigid-body solver is not reproducible across machines — island
-## ordering, sleep thresholds and contact caching all differ — so a client predicting a
-## sky full of falling crates would disagree with the server within a second and be
-## corrected continuously. In this game it matters more than in most: a prop is a thing
-## that is about to land on a platform, and a prop a few centimetres out on a client is a
-## player who dodged the wrong way.
-##
-## The consequence a player feels is that a crate they watched leave the tube is drawn
-## about a snapshot behind where the server has it, and that is the correct trade: a
-## wrong-but-immediate crate that snaps back is worse than a right one that arrives a
-## moment late.
+## What a prop replicates: where it is and how it is turned. Server-authoritative and never predicted: Godot's rigid-
+## body solver is not reproducible across machines, so a predicted sky of crates would disagree within a second. A
+## crate drawn about a snapshot behind is the right trade against a wrong one that snaps back.
 
 var prop: Node3D = null
 
@@ -38,27 +27,16 @@ func pull() -> void:
 	net_rotation = prop.global_basis.get_rotation_quaternion()
 
 
-## Whether this behaviour's body can still be asked where it is.
-##
-## [b]`is_inside_tree` as well as `is_instance_valid`, and the second is not enough.[/b] A
-## round re-lays the field from inside the netcode's own loop over replicated entities, so
-## a body taken out of the tree and queued for freeing is an entirely expected state for
-## the rest of that frame — and `global_position` on one is
-## `Condition "!is_inside_tree()" is true`, with a full backtrace, once per body per tick.
-## To an operator reading a log that is indistinguishable from a crash. dot-entity guards
-## its own `position()` for exactly this reason and writes down why.
+## Whether this body can still be asked where it is. `is_inside_tree` as well as `is_instance_valid`: a round re-lays
+## the field inside the netcode's loop, and `global_position` on a queued-for-free body logs an error with a backtrace
+## per body per tick.
 func _drawable() -> bool:
 	return prop != null and is_instance_valid(prop) and prop.is_inside_tree()
 
 
-## Where this body is, for anything that does not care what kind of body it is.
-##
-## [b]A method and not a property read, because a chopper does not use [member
-## net_position].[/b] [WoCopterNet] replicates through [DotVehicleNetSync], whose layout is
-## three separate floats — so code that read `net_position` off a mirrored chopper got the
-## zero it was constructed with, and a joining player was told every machine in the map was
-## at the origin. It was the announcement to a late joiner that had it in
-## game-buses-from-hell, which is the one path a suite that joins first never takes.
+## Where this body is, for anything that does not care what kind of body it is. A method, not a read of [member
+## net_position], because [WoCopterNet] replicates through [DotVehicleNetSync] (three separate floats): reading it off
+## a mirrored chopper gave zero, and a late joiner was told every machine was at the origin.
 func replicated_position() -> Vector3:
 	return net_position
 
@@ -91,10 +69,8 @@ func _draw() -> void:
 	prop.global_position = net_position
 	prop.global_basis = Basis(net_rotation)
 
-	# A mirrored body must not be simulated locally as well. Freezing it is not cosmetic:
-	# an unfrozen [RigidBody3D] fights every position written into it, and what that looks
-	# like is a crate juddering against gravity while the packets say it is falling
-	# smoothly.
+	# A mirrored body must not be simulated locally too. Freezing is not cosmetic: an unfrozen [RigidBody3D] fights
+	# every position written into it and judders against gravity.
 	var body := prop as RigidBody3D
 
 	if body != null and not body.freeze:

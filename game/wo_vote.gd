@@ -1,24 +1,8 @@
 extends Node
 
-## The players choose the next course.
-##
-## [DotVoteDirector] over a [DotVoteListSource] of this server's courses, and the only thing
-## this file decides is WHEN: a ballot opens [member open_after_sec] into every course and is
-## applied when the round ends, because in this game a round IS a course — the next round
-## starts on whatever was chosen. Everything about the ballot itself (how many options, the
-## counting method, the tie-break, rock the vote, nominations, cooldowns) is dot-vote's
-## settings and none of it is restated here; [method _rules] only says which of them a
-## one-course-per-round game wants by default.
-##
-## [b]`trigger` is MANUAL, not ROUND_END, and that is the point of this file.[/b] dot-vote's
-## ROUND_END opens a ballot at a round's end and applies it at the NEXT round's end, which is
-## right for a game that plays several rounds on a map and one course late here. Opening it
-## during the round and applying it at the end (`apply: END_OF_ROUND`) puts the choice on
-## the very next round.
-##
-## [b]Server side only.[/b] A client draws the ballot from the notice [member ballot_fn] sends
-## (the client shell's [DotBallotPanel]), and never holds a director: a client that applied a
-## result would be deciding what it plays.
+## The players choose the next course: [DotVoteDirector] over a [DotVoteListSource]. This file decides only WHEN: open
+## [member open_after_sec] into every course, apply at its end. `trigger` is MANUAL, not ROUND_END, which applies one
+## course late here. Server only: a client draws the ballot from [member ballot_fn]'s notice and never applies one.
 
 const WoCatalogue := preload("wo_catalogue.gd")
 
@@ -39,10 +23,9 @@ const COMMAND_NAMES := {"vote": "vote"}
 ## sees it close.
 @export var open_after_sec: float = 20.0
 
-## The file a server owner configures the vote in, keyed exactly as [DotVoteRules]. Layered:
-## [code]_rules() < game.yml metadata course_vote: < this file < DOT_VOTE_* < --vote-*[/code].
-## Empty skips the file. [code]{"enabled": false}[/code] turns the vote off and the rotation
-## ([code]shuffle_courses[/code] in the game's config) decides alone.
+## The file a server owner configures the vote in, keyed as [DotVoteRules]; layered `_rules() < game.yml metadata
+## course_vote: < this file < DOT_VOTE_* < --vote-*`. Empty skips it. `{"enabled": false}` turns the vote off and the
+## rotation decides alone.
 @export var config_path: String = "user://cfg/wipeout_vote.json"
 
 ## [code]func() -> Array[/code] of [code][id, name][/code] pairs: every course a ballot may
@@ -124,11 +107,9 @@ func setup() -> DotResult:
 	# The server's tick drives it, not the frame clock.
 	director.self_advance = false
 	director.round_based = true
-	# [b]Set by name, and only where it exists.[/b] A delivered pack runs on the shell's
-	# dot-vote, and one older than API 3 has no `round_in_progress_fn`: naming it would fail
-	# the pack's parse. There, a finish_round limit in warmup waits out finish_round_max_sec,
-	# which is what it did before. Read through this node's own field, so the order the host
-	# sets it in does not matter.
+	# Set by name, only where it exists: a delivered pack runs on the shell's dot-vote, and one older than API 3 has
+	# no `round_in_progress_fn`, so naming it would fail the pack's parse. Read through this node's own field, so the
+	# host's setting order does not matter.
 	if "round_in_progress_fn" in director:
 		director.set(&"round_in_progress_fn", func() -> bool:
 			return not round_in_progress_fn.is_valid() or bool(round_in_progress_fn.call()))
@@ -144,12 +125,9 @@ func setup() -> DotResult:
 
 	add_child(director)
 
-	# [b]Rock the vote opens its own ballot from dot-vote API level 2 on[/b]: the director's
-	# _on_vote_due opens a rocked vote under MANUAL as under any trigger, and a second
-	# start_vote here would only be refused. Below level 2 (an older shell dot-vote under a
-	# delivered pack) MANUAL dropped it: the clock expired with reason rtv, the director did
-	# nothing, and `!rtv` answered "Rocked. 1 of 1." and nothing happened. Only there does
-	# this game open it, connected after the director's own handler.
+	# Rock the vote opens its own ballot from dot-vote API level 2: under MANUAL a second start_vote here would only
+	# be refused. Below level 2 (an older shell under a delivered pack) `!rtv` answered "Rocked." and nothing
+	# happened, so only there does this game open it, connected after the director's own handler.
 	if DotAddonApi.build_level("dot_vote") < RTV_OPENS_IN_DIRECTOR_LEVEL:
 		director.clock.expired.connect(func(reason: StringName) -> void:
 			if reason != DotVoteClock.REASON_RTV or director.is_voting():
@@ -219,10 +197,9 @@ func _rules() -> DotVoteRules:
 	return rules
 
 
-## Reads the course list again: on boot, after the delivered courses arrive, and after
-## [code]wo_reload[/code]. The module calls it after [code]_add_delivered_courses[/code]: built
-## before them, the list held only the built-in practice course, and a list of one never
-## opens a ballot.
+## Reads the course list again: on boot, after the delivered courses arrive, and after `wo_reload`. The module calls
+## it after `_add_delivered_courses`: built before them, the list held only the practice course, and a list of one
+## never opens a ballot.
 func refresh_courses() -> void:
 	if source == null:
 		return
@@ -262,10 +239,9 @@ func note_course(id: StringName) -> void:
 	_opened_this_course = false
 
 
-## The server woke from hibernation: the course ballot is owed again, from the top.
-##
-## The director restarts itself ([member DotVoteRules.wake_restart]); this is the half that is
-## this game's — the seconds into the course at which the ballot opens.
+## The server woke from hibernation: the course ballot is owed again from the top. The director restarts itself
+## ([member DotVoteRules.wake_restart]); this is the half that is this game's, the seconds into the course at which it
+## opens.
 func note_woke() -> void:
 	_on_course_sec = 0.0
 	_opened_this_course = false
@@ -287,10 +263,8 @@ func advance(delta: float) -> void:
 	if feed != null:
 		feed.poll()
 
-	# The ballot's own timer waits with the director's clock while the server hibernates
-	# (DotGameModule hands the director the server's hibernation). Counted on, it ran past
-	# open_after_sec over an empty room, the ballot was refused for want of voters, and the
-	# first player in never got one on this course.
+	# The ballot's own timer waits with the director's clock while the server hibernates (DotGameModule hands it the
+	# hibernation). Counted on, it ran past open_after_sec over an empty room and was refused for want of voters.
 	if director.hibernating:
 		return
 

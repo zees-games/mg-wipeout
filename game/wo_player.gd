@@ -6,22 +6,14 @@ const WoCourse := preload("wo_course.gd")
 const WoFigure := preload("wo_figure.gd")
 const WoAvatars := preload("wo_avatars.gd")
 
-## One person: how they move, what the course does to them, how far along it they are, and
-## what they are holding.
-##
-## [b]Everything the course does to a player happens inside their own tick[/b] — see
-## [WoController] — and is a function of their state and the tick, so a connected client
-## predicting itself gets the same carry, the same bounce and the same knock the server does.
-## What happens to a player that is NOT a function of the tick (falling in, a checkpoint, the
-## finish, a weapon picked up) is the server's alone and arrives in a snapshot or an event.
+## One person: how they move, what the course does to them, how far along it they are, and what they hold. What the
+## course does happens inside their own tick (see [WoController]), so a predicting client gets the same carry, bounce
+## and knock; falls, checkpoints, the finish and pickups are the server's alone.
 
 const CHANNEL := "wo.player"
 
-## Metres above a player's feet that their eyes are.
-##
-## Here rather than on the client, because it is where a shot leaves from as well as where
-## the camera is, and the two being one number is what stops a player hitting what they are
-## not looking at.
+## Metres above a player's feet that their eyes are. Here, not on the client, because it is where a shot leaves from
+## as well as the camera: one number stops a player hitting what they are not looking at.
 const EYE_HEIGHT := 1.6
 
 ## Somebody shot them, threw something at them, or they fell out of the arena.
@@ -36,11 +28,8 @@ var avatar: DotAvatar = null
 ## Whether a command is sampled from the input devices each tick. The person at the keyboard.
 @export var samples_input: bool = false
 
-## Whether this player is driven by the game rather than by a person.
-##
-## [b]Separate from [member samples_input], and conflating the two is a bug waiting for
-## netcode.[/b] Every remote player also samples nothing; what makes a bot a bot is that
-## something here decides for them.
+## Whether this player is driven by the game rather than by a person. Separate from [member samples_input]: every
+## remote player samples nothing too, and what makes a bot a bot is that something here decides for them.
 @export var is_bot: bool = false:
 	set(value):
 		if is_bot == value:
@@ -148,14 +137,9 @@ var figure: WoFigure = null
 ## carried on DEATH and set here before anybody hears of it. Null before a first death.
 var death: DotPlayerDeath = null
 
-# --- What a watcher draws in their hand. Client side --------------------------
-#
-# A player this process SIMULATES (an offline stand-in, or yourself in third person) is read
-# off their own rig. One it only MIRRORS has no rig here at all — the server owns it — so it
-# is drawn from two things the wire already carries: the weapons the server ANNOUNCED it
-# dealt them (`WoEvents.Kind.ARMED`, one per weapon) and the slot the snapshot says is in
-# hand. A slot alone names no weapon, because the pack puts several weapons in each slot;
-# the dealt list alone does not say which of two is out.
+# A player this process SIMULATES is read off their own rig. One it only MIRRORS has no rig, so it is drawn from the
+# weapons the server ANNOUNCED (`WoEvents.Kind.ARMED`) and the slot the snapshot says is in hand: a slot alone names
+# no weapon, because the pack puts several in each slot.
 
 ## Whether [member mirror_slot] and the rest are written from a snapshot (`WoPlayerNet`).
 var mirrored: bool = false
@@ -220,21 +204,17 @@ func _ready() -> void:
 		register_actions(sampler)
 
 
-## How a player moves.
-##
-## [b]Static, and it takes the config,[/b] for mg-smash-copter's reason: a connected client
-## builds a sampler before it has a player, and a sampler built from different tunables than
-## the controller it feeds is input clamped differently from the simulation that consumes it.
+## How a player moves. Static, and it takes the config: a connected client builds a sampler before it has a player,
+## and one built from different tunables than its controller would clamp input differently from the simulation
+## consuming it.
 static func tunables_for(config: WoConfig) -> DotFpsTunables:
 	var t := DotFpsTunables.with_profile("legacy")    # the courses are tuned against it
 	t.max_speed = config.run_speed if config != null else 7.0
 	t.gravity = config.gravity if config != null else 20.0
 	t.jump_height = config.jump_height if config != null else 1.25
 
-	# [b]No bunny hopping, and the course is why.[/b] Every jump on a course is measured
-	# against a running jump at the run speed (`tools/check_reach` in mg-wipeout-maps, and
-	# the suite); a player who could chain hops would clear gaps a mapper meant to be the
-	# hard part, and the course would be about a movement trick instead of the obstacles.
+	# No bunny hopping: every jump on a course is measured against a running jump at the run speed
+	# (`tools/check_reach` in mg-wipeout-maps), and chained hops would clear gaps a mapper meant to be hard.
 	t.auto_hop = false
 
 	# Shift is the walk here, as in mg-smash-copter, and for a reason of this game's own:
@@ -287,20 +267,15 @@ static func register_actions(p_sampler: DotFpsSampler = null) -> void:
 	InputMap.action_add_event(walk, shift)
 
 
-## The clear air a running player crosses in one jump, landing [param rise] metres higher.
-##
-## dot-player-controller's own arithmetic over this game's tunables, so a cvar that shortens
-## the jump shortens every check that reads this.
+## The clear air a running player crosses in one jump, landing [param rise] metres higher: dot-player-controller's
+## arithmetic over this game's tunables, so a cvar that shortens the jump shortens every check that reads this.
 static func jump_reach(config: WoConfig, rise: float = 0.0) -> float:
 	return tunables_for(config).jump_reach(rise)
 
 
-## Called once per simulated tick by the world, on the server and offline.
-## Offline only: puts the client's buttons (fire, reload...) on the command [member sampler] has
-## just made. Stamped here, after sampling: the client used to stamp
-## `controller.current_command` from its own physics frame, and this function then applied a
-## fresh sample over it, so offline no trigger ever reached the world's rig and no shot of the
-## player's landed (game-zombie-zone's play test found it; its docs/history.md has the story).
+## Called once per simulated tick by the world, on the server and offline. Offline only: puts the client's buttons
+## (fire, reload...) on the command [member sampler] just made, stamped AFTER sampling: a fresh sample applied over
+## `controller.current_command` meant no trigger ever reached the world's rig.
 var command_stamp: Callable = Callable()
 
 
@@ -335,14 +310,9 @@ func _before_tick(tick: int) -> void:
 		stage.pose_at(tick)
 
 
-## After the motor: what the course does to whoever is standing on it, or in its way.
-##
-## [b]In this order, and the order is the design.[/b] The carry first, because it is where the
-## ground took them while they stood on it; the bounce, because a bouncer is ground; the
-## knock last, because it is measured where they have ended up. Each writes the STATE and the
-## node together: the controller starts its next tick from `state.position`, so a displacement
-## applied only to the node is undone by the very next move — mg-smash-copter found that as a
-## player riding a platform for one frame each tick.
+## After the motor: what the course does to whoever is on it or in its way, in this order: carry, bounce (a bouncer is
+## ground), knock last (measured where they ended up). Each writes the STATE and the node together: the next tick
+## starts from `state.position`, so a node-only displacement is undone.
 func _after_tick(tick: int, state: DotFpsState) -> void:
 	global_position = state.position
 
@@ -444,12 +414,9 @@ func aim_direction() -> Vector3:
 	return -view.z
 
 
-## Puts a player somewhere, facing somewhere, with nothing carried over.
-##
-## [b]The state, the node and the pending command together[/b], and every one of the three
-## was a separate bug in mg-smash-copter: the velocity (a player arriving still carrying a
-## fall), `teleport` (the drawn view sweeping across the map for a frame) and the command
-## (the motor taking the yaw back on the next tick from a command that still said north).
+## Puts a player somewhere, facing somewhere, with nothing carried over: the state, the node and the pending command
+## together. Each was a separate bug: velocity (arriving still carrying a fall), `teleport` (the drawn view sweeping
+## the map) and the command (the motor taking the yaw back from one that still said north).
 func place_at(at: Vector3, yaw_degrees: float) -> void:
 	warps += 1
 	DotLog.debug(CHANNEL, "placed", {"player": String(player_id), "at": at, "warps": warps})
@@ -623,10 +590,9 @@ static func held_by_slot(ids: Array[StringName], slot: int) -> StringName:
 	return &""
 
 
-## The rig this process simulates them with: the server's, an offline stand-in's, or the
-## one a networked client builds for its own player's hands (`WoClient._arm_locally`, which
-## hangs it on the player without setting [member weapons], because a client must not hand
-## its rig to the simulation's lookups).
+## The rig this process simulates them with: the server's, an offline stand-in's, or the one a networked client builds
+## for its own player's hands (`WoClient._arm_locally`, which does not set [member weapons], so the simulation's
+## lookups never see it).
 func _rig() -> ZeeWeaponRig:
 	if weapons != null:
 		return weapons

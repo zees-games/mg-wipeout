@@ -2,33 +2,15 @@ extends RigidBody3D
 
 const WoPaths := preload("../game/wo_paths.gd")
 
-## One thing the cannon throws: a rigid body that builds its own mesh and its own collider
-## from four exported numbers.
-##
-## [b]Eight props, one script, and the model is loaded by PATH rather than instanced as an
-## `ext_resource`.[/b] That is a delivery decision. A `.tscn` records an external resource
-## as an absolute `res://` path plus a UID, and inside a mounted dot-cloud pack neither
-## resolves: game-buses-from-hell shipped a round where every crate's mesh loaded and every
-## crate's texture did not, which is a game that plays perfectly and appears to have
-## shipped without art. Loading through [method WoPaths.rebase] is one form that is right
-## both built in and delivered, and it lets the atlas be put on by hand — see
-## [method _paint].
-##
-## [b]The collider is a primitive and is not taken off the model.[/b] The art is a box, a
-## barrel and three rocks; the physics is a box, a cylinder and a sphere. A convex hull
-## would be more faithful and much worse: dot-props already documents what loose triangles
-## do to a sliding body, and everything here spends its life sliding across a tilting
-## platform.
+## One thing the cannon throws: a rigid body that builds its own mesh and collider from four exported numbers. The
+## model is loaded by PATH, not an `ext_resource` (an absolute `res://` path plus UID resolves in neither mounted pack),
+## via [method WoPaths.rebase]. The collider is a primitive: a convex hull is much worse for a body that slides.
 
 const CHANNEL := "wo.prop"
 
-## The two atlases, rebased where they are defined. They are rebased again at load, which
-## is a no-op on these and is what makes an [code]atlas_path[/code] set in a scene safe
-## too — the publisher has already rewritten that one onto the mount.
-##
-## [b]Two files with the same name, and they are different files.[/b] Flattening the kits
-## into one folder paints the survival props in the car kit's palette, which is a
-## plausible-looking wrong answer that no assertion would ever catch.
+## The two atlases, rebased where they are defined (and again at load, a no-op here that makes an `atlas_path` set in
+## a scene safe). Two files with the same name are different files: flattening the kits paints the survival props in
+## the car kit's palette, a plausible wrong answer no assertion catches.
 static var SURVIVAL_ATLAS := WoPaths.rebase("res://assets/kenney/survival/Textures/colormap.png")
 static var CAR_ATLAS := WoPaths.rebase("res://assets/kenney/car/Textures/colormap.png")
 
@@ -44,12 +26,8 @@ enum Shape {
 ## The model, as this game was authored. Rebased at load.
 @export var model_path: String = ""
 
-## What the model is multiplied by to reach the size below.
-##
-## [b]Measured per model rather than guessed, and every one of them needed a different
-## number.[/b] Kenney's survival box is 0.25 m across and the car kit's tyre is 0.6 m, so
-## one scale for the kit would make half the catalogue the wrong size. Each prop's scale
-## is set in that prop's own scene (props/wo_*.tscn), next to the art it scales.
+## What the model is multiplied by to reach the size below. Measured per model (a survival box is 0.25 m, a car-kit
+## tyre 0.6 m) and set in that prop's own scene (props/wo_*.tscn), next to the art it scales.
 @export var model_scale: float = 1.0
 
 ## Metres the model is moved down by, so a model whose origin is at its foot is centred on
@@ -67,18 +45,15 @@ enum Shape {
 ## sphere.
 @export var shape_size: Vector3 = Vector3.ONE
 
-## Degrees the collider alone is turned by, for a model whose axis is not Godot's.
-##
-## A tyre lies on its side: the mesh's axle runs along X and a [CylinderShape3D]'s runs
-## along Y, so the shape is turned and the mesh is not.
+## Degrees the collider alone is turned by, for a model whose axis is not Godot's: a tyre's axle runs along X and a
+## [CylinderShape3D]'s along Y, so the shape is turned and the mesh is not.
 @export var shape_rotation: Vector3 = Vector3.ZERO
 
 
 func _ready() -> void:
-	# Mass is NOT set here. [method DotPropSpawner.spawn] writes the catalogue's figure
-	# onto the body before it enters the tree, which is the addon being right: a scene
-	# saved at one mass and a definition claiming another is two numbers that are only
-	# ever compared by a player wondering why something bounced.
+	# Mass is NOT set here: [method DotPropSpawner.spawn] writes the catalogue's figure before the body enters the
+	# tree, and a scene saved at another mass would be two numbers only a player wondering why something bounced
+	# compares.
 	_build_collider()
 	_build_model()
 
@@ -141,19 +116,9 @@ func _build_model() -> void:
 	_paint(art)
 
 
-## Gives every untextured material under [param root] this prop's atlas.
-##
-## [b]An imported GLB names its texture by UID and by the absolute path it had when it was
-## imported, and a delivered pack has neither.[/b] The loader falls back to the path, the
-## path is `res://assets/…` which in the host project is another game's directory or
-## nothing, and the mesh loads white. game-buses-from-hell found this by looking at a
-## screenshot of a real client; dot-cloud now registers a mounted pack's own UIDs and this
-## is the belt to that braces.
-##
-## [b]Surgical, not an override.[/b] It touches only a material that has no albedo texture,
-## so in a build — where the import worked — it does exactly nothing and the picture a
-## developer sees is the picture a player gets. An unconditional `material_override` would
-## be a second definition of how these models look, free to drift from the one in the file.
+## Gives every untextured material under [param root] this prop's atlas: an imported GLB names its texture by UID and
+## import-time path, which a delivered pack lacks, so the mesh loaded white. Surgical, not an override: a material that
+## already has an albedo texture is untouched, so in a build this does nothing.
 func _paint(root: Node) -> void:
 	var meshes := _meshes(root)
 
@@ -181,10 +146,9 @@ func _paint(root: Node) -> void:
 					})
 					return
 
-			# On a DUPLICATE, and this is the line that stops one repair painting the whole
-			# game: an imported scene's materials are shared between every instance of it,
-			# so writing into one writes into all of them — and the two kits' atlases are
-			# different files, so a later car-kit prop would repaint every survival one.
+			# On a DUPLICATE, which stops one repair painting the whole game: an imported scene's materials are
+			# shared between instances, and the two kits' atlases differ, so a later car-kit prop would repaint every
+			# survival one.
 			var fixed: BaseMaterial3D = material.duplicate()
 			fixed.albedo_texture = atlas
 			mesh.set_surface_override_material(surface, fixed)

@@ -1,11 +1,8 @@
 extends "headless_run_client.gd"
 
-## The simulation, headless: documents, the course, what it does to a player, and the round.
-##
-## [b]Counts sections AND checks, and the second is the one that matters.[/b] A script error
-## inside a section aborts that function and the section counter is already satisfied,
-## because the section announced itself on the way in. mg-smash-copter and dot-settings both
-## have the story; every total here was armed by raising it by one and watching the run fail.
+## The simulation, headless: documents, the course, what it does to a player, and the round. Counts sections AND
+## checks, the second being what matters: a script error aborts a section that has already announced itself, so every
+## total was armed by raising it by one and watching the run fail.
 
 const SECTIONS := 42
 
@@ -71,8 +68,6 @@ func _run() -> void:
 
 	_report_sections(_sections_entered, _sections_finished, SECTIONS, CHECKS)
 
-
-# --- Without a world ------------------------------------------------------------
 
 func _test_config() -> void:
 	_section("the configuration")
@@ -268,8 +263,6 @@ func _test_formulas() -> void:
 	_check(warned_wrongly == 0, "and never while it is already gone")
 	_finished()
 
-
-# --- A world --------------------------------------------------------------------
 
 func _test_world_builds() -> void:
 	_section("a world builds its course and puts everybody on the start pad")
@@ -1094,8 +1087,6 @@ func _test_nobody_finishes() -> void:
 		str(ended[0]) if not ended.is_empty() else "")
 	_finished()
 
-
-# --- Helpers ------------------------------------------------------------------------
 
 func _test_knocks_hurt() -> void:
 	_section("on the course a knock hurts, a bad one is fatal, a checkpoint heals")

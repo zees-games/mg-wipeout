@@ -4,17 +4,9 @@ const WoCourseDoc := preload("wo_course_doc.gd")
 const WoPaths := preload("wo_paths.gd")
 const WoWorld := preload("wo_world.gd")
 
-## Every course and arena this server can play, and which one is next.
-##
-## [b]Two sources, and the built-in one is a floor rather than a feature.[/b] The courses are
-## the mg-wipeout-maps repository's, read from [member WoConfig.course_directory] — a link in
-## a checkout, a directory in a delivered pack. A server whose directory is missing or empty
-## still has [method practice] and [method practice_arena], so it plays rather than refusing
-## to start; that is the state a fresh clone without the maps repository is in, and nothing
-## in it is broken.
-##
-## [b]A server reads documents; a client never does.[/b] The course travels in the round's
-## first event (see [WoCourseDoc]), so nothing here runs on a connected client.
+## Every course and arena this server can play, and which is next. The built-in one is a floor: a server with no maps
+## still has [method practice] and [method practice_arena]. A server reads documents; a client never does (see
+## [WoCourseDoc]).
 
 const CHANNEL := "wo.catalogue"
 
@@ -73,12 +65,9 @@ func load_from(directory: String) -> int:
 	return loaded
 
 
-## Adds every document under [param root] — an absolute `res://` path — to what is already
-## loaded. What a server uses for a course pack mounted beside the game.
-##
-## [b]Absolute, and not rebased.[/b] A delivered course pack mounts at its OWN prefix
-## (`res://dot_cloud/<owner>/mg-wipeout-maps/<version>/`), not under this game's, so the
-## rebasing every one of this game's own paths needs would put it in the wrong place.
+## Adds every document under [param root] (an absolute `res://` path) to what is loaded: a course pack mounted beside
+## the game. Absolute, not rebased: a delivered pack mounts at its OWN prefix (`res://dot_cloud/<owner>/mg-wipeout-
+## maps/<version>/`).
 func add_directory(root: String) -> int:
 	var loaded := _read_directory(root)
 	_rebuild_order()
@@ -169,16 +158,9 @@ func _rebuild_order() -> void:
 	_next = 0
 
 
-## Takes the courses subscribed packs provide, for the index's current session only. Opt-in.
-## A pack's map is a [b]course document[/b] (the JSON `courses/` holds, see its README) named
-## by the entry's `scene` path, with `map_kind` one of [param accepted_kinds] ("*" is every kind,
-## empty none). The document is the whole map (pieces, checkpoints, finish, route), so a pack
-## ships no code and the game needs no second format. Arenas are not offered: the final death
-## stays the game's own.
-##
-## [b]Synced on every read rather than copied once[/b]: the index filters by its current
-## session, so a game that goes online loses them with no signal to miss.
-## [method playable_courses] is the read everything goes through.
+## Takes the courses subscribed packs provide, for the index's current session only. Opt-in. A pack's map is a course
+## document named by the entry's `scene` path, with `map_kind` in [param accepted_kinds] ("*" all, empty none); arenas
+## are not offered. Synced on every read, as the index filters by session; see [method playable_courses].
 func follow_content(index: DotContentIndex, accepted_kinds: PackedStringArray = PackedStringArray()) -> void:
 	content_index = index
 	content_kinds = accepted_kinds
@@ -407,12 +389,9 @@ func playable_arenas(allowed: PackedStringArray) -> Array[StringName]:
 	return out
 
 
-## The next course: drawn from [param stream] when shuffling, in order otherwise. A maps.yml with
-## rotations replaces both: its rotation's mode (`random` with a cooldown, or `cycle`) and
-## written order decide.
-##
-## [b]Never the same course twice running when there is a choice[/b], because a shuffle that
-## repeats is the thing every player notices first and reports as the rotation being broken.
+## The next course: drawn from [param stream] when shuffling, in order otherwise; a maps.yml with rotations replaces
+## both. Never the same course twice running when there is a choice: a shuffle that repeats is what every player
+## notices first.
 func next_course(allowed: PackedStringArray, shuffle: bool, stream: DotRandomStream,
 		previous: StringName) -> Dictionary:
 	if has_rotation_file():
@@ -484,13 +463,8 @@ func describe_lines() -> PackedStringArray:
 	return lines
 
 
-# --- The two built in ---------------------------------------------------------
-
-## A short course of one of each family of obstacle: still ground, a carrier, a hazard.
-##
-## [b]Written here rather than shipped as a file,[/b] so a server with no course directory
-## at all — a fresh clone, a suite — has something to play and the suites have a course whose
-## every number is in front of them.
+## A short course of one of each family of obstacle: still ground, a carrier, a hazard. Written here rather than
+## shipped as a file, so a server with no course directory (a fresh clone, a suite) has something to play.
 static func practice() -> Dictionary:
 	var doc := {
 		"format": 1,

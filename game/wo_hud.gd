@@ -4,21 +4,11 @@ const WoGame := preload("wo_game.gd")
 const WoWeaponIcons := preload("wo_weapon_icons.gd")
 const WoPlayer := preload("wo_player.gd")
 
-## The clock, where you are on the course, and in a final death how much you have left.
-##
-## [b]How far along you are is the bar along the bottom, and it is the number a player
-## cannot read off the world.[/b] A course is long and mostly behind you; the checkpoints
-## crossed out of the course's total says whether a fall now costs ten seconds or a minute,
-## and the finished count says whether the course is about to close.
-##
-## [b]Health only in a final death.[/b] Nothing on a course can hurt you — a fall is a
-## restart, a knock is a flight — so a health number there would be a number that never
-## moves, and the one thing a player learns from a number that never moves is to ignore it.
+## The clock, where you are on the course, and in a final death how much you have left. The bar says whether a fall
+## costs ten seconds or a minute. Health only in a final death: a number that never moves teaches a player to ignore it.
 
-# No `const CHANNEL`. This draws numbers from state somebody else owns and has nothing an
-# operator would act on; the round, the finishes and the deaths are logged by [WoGame],
-# which is where the decisions are. A channel declared and never used is a file that meant
-# to say something and does not.
+# No `const CHANNEL`: this draws numbers from state somebody else owns and has nothing an operator would act on;
+# [WoGame] logs the decisions.
 
 var game: WoGame = null
 var player: WoPlayer = null
@@ -66,18 +56,9 @@ var _hurt_wash: ColorRect = null
 var _course_seen: int = 1
 const HURT_FLASH_SEC := 0.45
 
-## An administrator's `blind`, over the world and under the HUD's numbers.
-##
-## [b]Under the numbers, on purpose.[/b] A blind takes the game away, not the player's
-## bearings: the clock, the phase and their own health still say the round is going on and
-## that they are in it, which is what makes it read as "an admin did this" rather than as a
-## client that stopped drawing.
-##
-## [b]But not under the progress bar, which a blind hides.[/b] The bar says how much of the
-## course is behind them, which is a thing their eyes would have told them.
-##
-## Black rather than white. A white screen at full brightness is a thing a player can be
-## hurt by in a dark room, and taking the picture away is the whole of the point.
+## An administrator's `blind`, over the world and under the HUD's numbers: a blind takes the game away, not the
+## player's bearings, so the clock and phase still say they are in the round. But not under the progress bar, which a
+## blind hides. Black rather than white, which can hurt in a dark room.
 var blind_overlay: ColorRect = null
 
 ## Seconds a blind takes to come down and to lift. Short, so it is unmistakably on, and not
@@ -93,10 +74,9 @@ const LOW_CLOCK_SEC := 10.0
 const AMBER := Color(0.98, 0.78, 0.33)
 
 
-## This game's accent over whichever theme the player picked in the menu: the course name's
-## amber as the glance pieces' highlight and their plates' edge. The plates, the words and
-## their outline are the theme's (dark by default), so a light or high-contrast theme can
-## change them. Static so a render tool can use it.
+## This game's accent over whichever theme the player picked: the course name's amber as the glance pieces' highlight
+## and plate edge. The rest is the theme's, so a light or high-contrast theme can change it. Static so a render tool
+## can use it.
 static func piece_theme() -> Theme:
 	var t := Theme.new()
 	var type := DotHudPiece.THEME_TYPE
@@ -105,10 +85,9 @@ static func piece_theme() -> Theme:
 	return t
 
 
-## The Escape menu, whose theme this HUD follows (dot-menu's `follow_hud`): the menu sets the
-## theme on the HUD's root now and at every theme change, and applies the player's HUD size.
-## Christian's first play test (2026-10-11) asked for a darker HUD a player can restyle in
-## the menu. Duck-typed and called by name, for a client shell older than dot-menu 7.
+## The Escape menu, whose theme this HUD follows (dot-menu's `follow_hud`): it sets the theme on the HUD's root now
+## and at every change, and applies the player's HUD size. Duck-typed and called by name, for a client shell older
+## than dot-menu 7.
 var _menu: Object = null
 
 
@@ -131,22 +110,18 @@ func bind(p_game: WoGame, p_player: WoPlayer) -> void:
 
 
 func _build() -> void:
-	# [b]A full-rect Control between the CanvasLayer and the labels, and the first render of
-	# game-buses-from-hell is why.[/b] A CanvasLayer is not a Control and does not lay its
-	# children out, so anchors on a Label parented straight to one resolve against nothing:
-	# every label lands in the top-left corner on top of the others, and the only one
-	# visible is whichever drew last, clipped in half by the edge of the screen. It reads as
-	# the HUD being half-written.
+	# A full-rect Control between the CanvasLayer and the labels: a CanvasLayer is not a Control and does not lay out
+	# its children, so anchors on a Label parented straight to one resolve against nothing and every label lands top-
+	# left on top of the others.
 	_root = Control.new()
 	_root.name = "Screen"
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
 
-	# First, so every widget added below draws over it. Full rect on `_root`, which is full
-	# rect on a CanvasLayer — so the whole viewport, with no safe-area inset between them to
-	# leave a frame of the world showing round the edge, which is what game-arena's first
-	# render of its own blind found. See [member blind_overlay].
+	# First, so every widget added below draws over it. Full rect on `_root`, which is full rect on a CanvasLayer:
+	# the whole viewport, with no safe-area inset leaving a frame of the world round the edge. See [member
+	# blind_overlay].
 	blind_overlay = ColorRect.new()
 	blind_overlay.name = "Blind"
 	blind_overlay.color = BLIND_COLOUR
@@ -199,14 +174,9 @@ func _build() -> void:
 	_shout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_shout.add_theme_color_override("font_color", Color(0.99, 0.86, 0.40))
 
-	# [b]Above the chat box, because the chat box also draws itself bottom-left.[/b] The
-	# first render had the health number and the first line of chat in the same forty pixels,
-	# one on top of the other — which is exactly the shape of the bug game-buses-from-hell
-	# shipped with four HUD labels, and is invisible to a headless suite because a headless
-	# viewport is 64 x 64 and nothing there can overlap anything.
-	# The plate is 56 tall and ends 206 pixels off the bottom, above the chat box's FULL
-	# eight-row log, which reaches 202 (checked in headless_run). The old number ended at 150,
-	# over the log's top rows; only a full log showed it.
+	# Above the chat box, which also draws bottom-left: the health number and the first chat line overlapped, which a
+	# headless suite cannot see (its viewport is 64 x 64). The plate ends 206 pixels off the bottom, above the FULL
+	# eight-row log, which reaches 202 (checked in headless_run).
 	vitals = DotVitals.new()
 	vitals.name = "Vitals"
 	vitals.bar_end = 220.0
@@ -358,11 +328,9 @@ func _build_tilt() -> void:
 func _label(size: int) -> Label:
 	var label := Label.new()
 	label.add_theme_font_size_override("font_size", size)
-	# An outline rather than a panel behind it. This HUD is drawn over a bright sky, dark
-	# water and a grey deck in the same frame; white is unreadable over one and black
-	# over another, and an outline is readable over all three and costs nothing. Its colour
-	# and the words' are the menu's theme's (a Label under the root takes them), so a
-	# player's theme reaches these lines too.
+	# An outline rather than a panel: this HUD is over a bright sky, dark water and a grey deck, and white or black
+	# alone is unreadable over one of them. Its colour and the words' are the menu theme's (a Label under the root
+	# takes them).
 	label.add_theme_constant_override("outline_size", 6)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(label)

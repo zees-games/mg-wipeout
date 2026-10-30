@@ -1,15 +1,8 @@
 extends DotFpsController
 
-## The first-person controller, with the two hooks a course needs inside the tick.
-##
-## [b]Inside the tick, and outside it is wrong in a way only a connected client shows.[/b]
-## dot-net's predictor re-simulates past ticks when a snapshot corrects the client, and it
-## does that by calling `simulate_tick` directly — so anything a game does "around" the tick
-## in its own loop is skipped on every replayed one. A replay that did not pose the obstacles
-## at the tick being replayed would sweep the player against arms where they are NOW, several
-## ticks later, and every correction would correct into a different answer. dot-player-
-## controller documents [method _on_pre_simulate] and [method _on_post_simulate] as running
-## during replays for exactly this, and this subclass is the whole of using them.
+## The first-person controller with the hooks a course needs INSIDE the tick: dot-net's predictor replays ticks by
+## calling `simulate_tick` directly, so anything done around the tick is skipped on a replay and obstacles would be
+## swept where they are now. [method _on_pre_simulate] and [method _on_post_simulate] run in replays.
 
 ## `func(tick: int) -> void`: put the world where it is on [param tick], before the motor runs.
 var before_fn: Callable = Callable()

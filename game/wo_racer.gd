@@ -1,26 +1,8 @@
 extends RefCounted
 
-## How a stand-in races: how often it gets a jump wrong, how late it reacts to a window, how
-## well it steers a landing, how long it shakes off a fall. One column per dot-bot preset.
-##
-## [b]A race is lost to mistakes, not to speed.[/b] Everybody runs at the same speed here; what
-## separates a good run from a bad one is a jump taken a tenth of a second late off an edge, a
-## window gone through as it closed, an arm not jumped. So the stand-ins' difficulty is a set of
-## mistake rates, never a slower run: a bot jogging at three quarters of the run reads as broken,
-## one that falls off a ball reads as a person.
-##
-## [b]The preset is dot-bot's `bot_difficulty`[/b] ([DotBotSettings] on the world), so one
-## word sets how a stand-in races and how it fights in a final death. The reaction to a window
-## is dot-bot's own `bot_reaction`, because it is the same thing: the time between seeing and
-## doing. Each row here is a cvar, `wo_bot_<field>`, overridable on its own; an override
-## outlives a preset change, as in dot-bot ([DotBotSettings]).
-##
-## [b]Every stand-in is a little different.[/b] [method factor] scales one bot's mistakes by
-## up to `variety` either way, drawn from the bot and the round, so eight medium bots finish
-## spread out rather than in a clump, and the order changes from round to round.
-##
-## [b]`WoConfig.bot_mistakes` scales all of it[/b], and 0 is a stand-in that is never wrong:
-## the course suite's, which proves a course can be finished, not that a bot can.
+## How a stand-in races, one column per dot-bot preset. A race is lost to mistakes, never speed (a slower bot reads as
+## broken), so difficulty is a set of mistake rates. Rows are cvars `wo_bot_<field>`, an override outliving a preset
+## change; [method factor] varies each bot; `WoConfig.bot_mistakes` scales all, 0 being never wrong.
 
 const CHANNEL := "wo.racer"
 
@@ -136,8 +118,6 @@ func shown(field: String) -> String:
 	var raw := float(overrides[field]) if overrides.has(field) else preset_value(preset, field)
 	return "%s" % snappedf(raw, 0.001)
 
-
-# --- Cvars and the solo console ---------------------------------------------------
 
 ## The cvar objects [method bind_cvars] made, field -> object.
 var _cvars: Dictionary = {}

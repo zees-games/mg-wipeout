@@ -5,24 +5,9 @@ const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
 const WoPlayer := preload("../game/wo_player.gd")
 
-## Races a field of stand-ins round every course at every difficulty and prints how long they
-## took: the numbers a course's length and a preset's mistake rates are tuned against.
-##
-## [codeblock]
-## godot --headless --path . res://tools/race_times.tscn -- [--course=wo_first_splash]
-##     [--difficulty=medium] [--bots=8] [--rounds=1] [--damage=1] [--csv=user://race_times.csv]
-## [/codeblock]
-##
-## [b]Deterministic[/b]: the same arguments print the same numbers, because every mistake is a
-## seeded draw (see [WoGame] `_bot_roll`) and the ticks are driven here, not paced by frames
-## (legitimate for the reason `headless_courses` gives). Each round is a different round number,
-## so `--rounds=3` is three different draws of who gets what wrong. Knock damage is on, as a
-## server plays it (a stand-in can be knocked out of a round); weather is off, so a course's
-## number is the course's.
-##
-## Per course and preset: how many of the field finished, and the finish times' fastest,
-## median, slowest, the falls per runner, and how many were knocked out of the round (`out`,
-## health gone on the course). A runner neither home nor out was still running at the close.
+## Races a field of stand-ins round every course at every difficulty and prints finished, fastest, median and slowest
+## times, falls and `out`: what a course's length and mistake rates are tuned against. Deterministic (seeded draws,
+## driven ticks), knock damage on, weather off. Flags: --course --difficulty --bots --rounds --damage --csv.
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -216,10 +201,9 @@ func _race(doc: Dictionary, difficulty: String, bots: int, round_index: int, dam
 
 	var limit := game.course_limit() + config.countdown_seconds + 1.0
 	var started := false
-	# What each runner had done at the last tick the course was open. Read after the loop, the
-	# runner has already been reset: a course that everybody finishes closes at once (the
-	# intermission is 0 here) and the next one's countdown puts them back on the start pad with
-	# `finished` cleared, so every field read 0/N on any course it got home on.
+	# What each runner had done at the last tick the course was open: read after the loop the runner has already been
+	# reset (a course everybody finishes closes at once and the next countdown clears `finished`), so every field
+	# read 0/N.
 	var last := {}
 
 	for i in range(int(limit * TICK_RATE)):

@@ -1,18 +1,8 @@
 extends DotMatchRules
 
-## A round ends when the game says so, and the game says who won.
-##
-## [b]Neither of dot-match's two shipped shapes fits, and that is not a gap in dot-match.[/b]
-## A round here is a course that ends when everybody is across or the clock runs out, then —
-## only if two sides finished — a final death that ends on the last side standing. Nobody
-## dies on a course, so an elimination rule would never fire; nobody scores, so a score rule
-## would never fire either. What decides is [WoGame], which knows who finished, in what order,
-## and who is still up in the arena — and [DotMatchRules] is documented as the place a mode
-## dot-match does not ship goes, with the state machine left alone.
-##
-## [b]The answer is read, never computed here.[/b] dot-match's rules are meant to be pure
-## functions of what they are handed; this one is a pure function of what the game decided,
-## and a game that has not decided returns NONE every tick.
+## A round ends when the game says so: neither of dot-match's shipped shapes fits, as nobody dies or scores on a
+## course. What decides is [WoGame], which knows who finished; this only reads that answer, and returns NONE every
+## tick it has not decided.
 
 ## `func() -> Dictionary`: `{decided: bool, winner: int}`. Set by [WoGame].
 var decision_fn: Callable = Callable()
@@ -25,10 +15,9 @@ static func make() -> DotMatchRules:
 	rules.id = &"wipeout"
 	rules.display_name = "Wipeout"
 	rules.score_limit = 0
-	# The course and the final death keep their own clocks; this one is the BACKSTOP, set by
-	# [WoGame] to their sum and a minute more. A round the game somehow never decided — a
-	# rule with a hole in it — ends on it as a draw rather than running for ever, and dot-match
-	# stops warning at every boot that nothing but a custom outcome can end a round.
+	# The course and the final death keep their own clocks; this is the BACKSTOP, set by [WoGame] to their sum and a
+	# minute more, so a round with a hole in its rule ends as a draw rather than running for ever, and dot-match
+	# stops warning that only a custom outcome can end a round.
 	rules.time_limit_sec = 600.0
 	rules.rounds_to_win = 999
 	rules.respawn_disabled = true

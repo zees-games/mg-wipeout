@@ -3,33 +3,9 @@ extends "wo_course_asks.gd"
 const WoCourseDoc := preload("wo_course_doc.gd")
 const WoWorld := preload("wo_world.gd")
 
-## A course, or an arena, built from its document: the pieces, where each one is at a given
-## tick, and the four questions a player's movement asks of them.
-##
-## [b]An obstacle is a pure function of the tick, and that is the decision this file
-## exists for.[/b] mg-smash-copter's platforms are a spring the server integrates and tells
-## every client about, because what they do depends on who is standing on them. Nothing here
-## does: an arm turns at a speed, a mover slides with a period, a tile drops on a schedule —
-## so where any of it is on tick N is a formula both ends evaluate and nobody has to send.
-## No obstacle is a replicated entity, no snapshot carries one, and a client predicting its
-## own player on tick N poses every obstacle at tick N first, so a jump over a sweeping arm
-## lands or fails identically on the client and the server.
-##
-## [b]Three kinds of piece, by what they do to a player:[/b]
-##
-## - [b]still[/b] (box, ramp, ball, cylinder): a static collider and nothing else;
-## - [b]carriers[/b] (mover, turntable, roller, seesaw, conveyor) and the two specials (tiles,
-##   bouncer): solid, and whoever stands on one is moved with it by [method carry] — after
-##   the motor has run, because the motor writes an absolute position and anything applied
-##   before it is overwritten. That ordering is mg-smash-copter's platform carry, unchanged;
-## - [b]hazards[/b] (spinner, pendulum, pusher): NOT solid to a player. They are measured
-##   instead ([method knock]), against the player's capsule, every tick. A swept capsule
-##   meeting a body that moved into it between two ticks is resolved by depenetration, which
-##   is order-dependent and different on two machines; an analytic overlap of two shapes is
-##   the same arithmetic everywhere, and it is what lets the knock be predicted.
-##
-## [b]Built the same on a server and a client.[/b] The meshes cost a server nothing it
-## renders; [member draw_world] adds the sky, the sun and the water, which only a client sees.
+## A course or arena built from its document: the pieces, where each is at a tick, and the questions movement asks.
+## An obstacle is a pure function of the tick, never replicated: a client poses every one at tick N before predicting N.
+## Hazards are NOT solid; [method knock] measures them analytically (depenetration is order-dependent across machines).
 
 const CHANNEL := "wo.course"
 
@@ -82,12 +58,9 @@ var strikes: Array[Dictionary] = []
 var _gate: StaticBody3D = null
 var _gate_rest: Transform3D = Transform3D.IDENTITY
 
-## The stage's toys (dot-props' [DotPropToyBox]): loose ones only, beach balls in the start pen
-## and balls in a finale's arena, simulated where [member authoritative] and posed from snapshots
-## elsewhere, under the game's `sv_toys*` [member toy_rules]. A runner walks through one and
-## pushes it (`WoGame._advance_toys`), so it never holds anybody up or covers anybody; a fixed toy
-## (a pad, a trampoline) would be a way past an obstacle, and is left out. Set by the game
-## before it builds.
+## The stage's toys (dot-props' [DotPropToyBox]): loose ones only (beach balls, a finale's balls), simulated where
+## [member authoritative] and posed from snapshots elsewhere, under the game's `sv_toys*` [member toy_rules]. A runner
+## pushes one through (`WoGame._advance_toys`); a fixed toy would be a way past an obstacle. Set before building.
 var toys: DotPropToyBox = null
 var authoritative: bool = true
 var toy_rules: DotPropToyRules = null
@@ -97,14 +70,9 @@ var gravity: float = 20.0
 const TOY_KINDS: Array[StringName] = [&"ball", &"pin", &"barrel", &"tyre"]
 
 
-# --- Building ---------------------------------------------------------------
-
-## Builds everything [param p_doc] describes, replacing whatever was here.
-##
-## [b]The old pieces are taken out of the tree now and freed at the end of the frame.[/b]
-## A round can change course inside the netcode's own tick, and freeing a body there frees
-## something [DotNetManager.server_tick] may still be walking — mg-smash-copter's
-## `ScPlatforms.clear` is the same two lines for the same reason.
+## Builds everything [param p_doc] describes, replacing whatever was here. The old pieces leave the tree now and are
+## freed at frame end: a round can change course inside the netcode's tick, and freeing a body there frees something
+## [DotNetManager.server_tick] may be walking.
 func build(p_doc: Dictionary) -> DotResult:
 	clear()
 
@@ -452,27 +420,15 @@ func _add_box(parent: Node3D, size: Vector3, role: WoTextures.Role, moving: bool
 	return mesh
 
 
-## Marks a drawing as meant to be walked through, for dot-core's [DotCollisionAudit]. Used for
-## the hazards (a spinner's arms, a pendulum, a pusher's ram, a curtain of water: measured by
-## [method _knock_pusher] and its kin, never collided, so a runner is knocked rather than
-## stopped), the water plane (a fall is a height comparison) and the markers (an arch is a
-## volume [method checkpoint_at] measures). A SOLID piece is never marked: it has a shape.
+## Marks a drawing as meant to be walked through, for dot-core's [DotCollisionAudit]: hazards (measured by [method
+## _knock_pusher] and kin, never collided), the water plane and the markers. A SOLID piece is never marked.
 static func _not_collided(node: Node) -> void:
 	node.set_meta(&"dot_no_collision", true)
 
 
-## A body the course moves by setting its transform each tick.
-##
-## [b]A STATIC body, teleported, and a kinematic one is wrong here in a way only a test with
-## no physics frames between ticks shows.[/b] Godot's physics server applies a new transform
-## to a KINEMATIC body (which is what an `AnimatableBody3D` is) only at its next step — the
-## first one lands at once, every later one waits. So a client replaying six predicted ticks
-## inside one frame swept all six against the obstacle where it was a frame ago, and the
-## course suite, which drives ticks without frames, found the turntables and the rollers
-## still standing at the origin where they were built, eighty metres from where their
-## documents put them. A static body's transform is applied the moment it is set. Nothing is
-## lost: nothing here is pushed by the solver (props excepted, and a prop knocked by a moving
-## floor is cosmetic), and riding is [method carry]'s arithmetic, not a body velocity.
+## A body the course moves by setting its transform each tick. STATIC, teleported: a kinematic body applies a new
+## transform only at its next physics step, so replaying six predicted ticks in one frame swept all six against the
+## obstacle where it was. Nothing is pushed by the solver; riding is [method carry]'s arithmetic.
 static func _animatable() -> StaticBody3D:
 	return StaticBody3D.new()
 
@@ -724,10 +680,9 @@ func _pusher(spec: Dictionary, role: WoTextures.Role) -> Node3D:
 	return root
 
 
-## A curtain of water or slime across the way: a sluice on two posts, the sheet that falls
-## from it, the drips that warn it is coming, and the splash where it lands. Meshes only: what
-## counts is [method fall_on] and the volume [method _knock_fall] measures. The posts stand
-## outside the curtain's width, so they are never in a runner's way.
+## A curtain of water or slime across the way: a sluice on two posts, the sheet, the drips that warn and the splash.
+## Meshes only: what counts is [method fall_on] and the volume [method _knock_fall] measures. The posts stand outside
+## the curtain's width.
 func _fall(spec: Dictionary) -> Node3D:
 	var root := Node3D.new()
 	_not_collided(root)
@@ -998,20 +953,9 @@ func _build_gallery() -> void:
 		_put_on_world_layer(body)
 
 
-## The sky, the sun and the water. Client side.
-##
-## [b]The light is a dot-lighting document made from the course's theme[/b]
-## ([method light_document]), so the family's look (game-arena's built-in maps: a warm sun
-## with soft shadows, a pale cool fill, filmic tone map, glow) and each course's own sky,
-## horizon, sun colour and water are one thing rather than two that can disagree.
-## dot-lighting's contact shade (API 4) where the course's still boxes meet: a wall on a deck, a
-## block on a platform, a bouncer on the floor. The Compatibility renderer the client draws has
-## no ambient occlusion, and every wall stood on its deck with no shade at its foot. Only the
-## still `box` and `bouncer` pieces and the start pen's pad and walls: everything else either moves (movers, seesaws, rollers,
-## conveyors, tiles, spinners, pendulums, pushers, a falling floor) and the shade is one mesh
-## built here, so it would stay where they were; or is tilted (a ramp), whose creases the helper
-## does not follow; or is round; the pen's gate drops. By path, behind the level, so a shell older than the helper
-## draws the course without it.
+## The sky, the sun and the water. Client side. The light is a dot-lighting document made from the course's theme
+## ([method light_document]). Contact shade (API 4, the Compatibility renderer has no AO) only on still boxes, bouncers
+## and the start pen: moving pieces would leave it behind. By path, so an older shell draws without it.
 func _add_contact_shade() -> void:
 	if DotAddonApi.build_level("dot_lighting") < 4 or not ResourceLoader.exists(CONTACT_SHADE_SCRIPT):
 		return
@@ -1066,10 +1010,8 @@ func _build_world() -> void:
 	# the overview camera above its far end saw the edge of a 1.6 km sheet as a grey band.
 	plane.size = Vector2(4000.0, 4000.0)
 	water.mesh = plane
-	# Darker than the theme's colour and barely glossy. The first render had it at 0.18
-	# roughness, and a glossy plane under a blue sky IS the sky: the horizon vanished and a
-	# course read as floating in a blue void, which is the one thing the water is there to
-	# say otherwise.
+	# Darker than the theme's colour and barely glossy: a glossy plane under a blue sky IS the sky, the horizon
+	# vanished and the course read as floating in a blue void.
 	var water_material := StandardMaterial3D.new()
 	water_material.albedo_color = (theme.get("water", Color(0.16, 0.42, 0.62)) as Color).darkened(0.35)
 	water_material.roughness = 0.55
@@ -1080,15 +1022,8 @@ func _build_world() -> void:
 	add_child(water)
 
 
-# --- The show ----------------------------------------------------------------
-#
-# [b]A course is a televised event, and the first play test had nothing round it but sea.[/b]
-# A document's `dressing` (see [WoCourseDoc]) puts stands full of people beside it, banners,
-# light towers, big screens and flags; every finish arch gets confetti. Client side and
-# meshes only: nothing collides, nothing is simulated, a server never builds it. The crowd is
-# three MultiMeshes (bodies, heads, arms) and one shader that makes them bob, and jump with
-# their arms up when [method cheer] raises [member excitement]; thousands of people are three
-# draw calls.
+# A document's `dressing` (see [WoCourseDoc]) puts stands, banners, light towers, screens and flags beside the course.
+# Client side, meshes only. The crowd is three MultiMeshes and one shader that bobs them, jumping on [method cheer].
 
 ## How excited the crowd is, 0 (sitting) to 1 (on their feet). Decays to [constant CALM].
 var excitement: float = 0.0
@@ -1480,16 +1415,9 @@ func _finish_confetti() -> void:
 		_confetti.append(burst)
 
 
-## The dot-lighting document a course's theme describes.
-##
-## The angles are dot-lighting's source convention (a negative pitch is a sun in the sky),
-## high so a deck is not in its neighbour's shadow, and behind the start, so the faces a
-## runner runs toward are the lit ones: from the other side the start gate's orange and
-## every obstacle's front came out a shaded brown. The brightness is divided by the
-## profile's reference and square-rooted. The ambient is the light in the shade, a pale
-## cool grey whatever the theme: a saturated blue fill turns every shaded face navy. The
-## fog is the theme's horizon from 120 m out (source units, metres / 0.01905), so nothing a
-## player has to react to is hidden in it.
+## The dot-lighting document a course's theme describes. The sun is high (a deck is not in its neighbour's shadow) and
+## behind the start (the faces a runner runs toward are lit). The ambient is a pale cool grey whatever the theme, as a
+## saturated fill turns shaded faces navy. Fog starts at 120 m so nothing a player must react to is hidden.
 static func light_document(theme: Dictionary) -> Dictionary:
 	var sun: Color = theme.get("sun", Color(1.0, 0.96, 0.88))
 	var horizon: Color = theme.get("horizon", Color(0.82, 0.88, 0.94))
@@ -1512,23 +1440,14 @@ static func light_document(theme: Dictionary) -> Dictionary:
 	}
 
 
-## What this machine draws of a course's light: dot-lighting's `painted()`.
-##
-## [b]Shadows stay on in the browser[/b], unlike dot-lighting's `web()`: a course is a few
-## hundred boxes, and a mover's shadow on the deck is how a player sees where it is.
-## `painted()` is the family's profile for flat-painted worlds (dot-lighting API 3), matched
-## to the renderer: the Compatibility renderer, which this game and the client shell use,
-## has no headroom above white, and at Forward+'s numbers every deck clipped to white and the
-## grid, which is how far a jump is, was gone (mg-smash-copter found it first). Over the
-## hand-set numbers it replaced (the sun divided by 700, a fill of 0.62) it lowers the
-## exposure, grades, and adds a shadowless fill so an obstacle's shaded faces keep edges.
+## What this machine draws of a course's light: dot-lighting's `painted()` profile (API 3), matched to the
+## Compatibility renderer, which has no headroom above white. Shadows stay on in the browser, unlike `web()`: a mover's
+## shadow on the deck is how a player sees where it is.
 static func light_profile() -> DotLightProfile:
 	var p := DotLightProfile.painted()
 	p.sun_shadows = true
 	return p
 
-
-# --- Weather -------------------------------------------------------------------
 
 ## Reads the weather a server drew into the document. Called by [method build].
 func _read_weather() -> void:
@@ -1599,8 +1518,6 @@ func strike_at(tick: int) -> Dictionary:
 	return {}
 
 
-# --- The course's own facts -----------------------------------------------------
-
 ## Whether [param feet] are in a `kill` piece: a drowning as the water's, for a pit with a floor.
 func in_kill(feet: Vector3) -> bool:
 	for piece in pieces:
@@ -1660,10 +1577,8 @@ func finish_box() -> AABB:
 	return AABB(Vector3(at.x - half.x, at.y - 0.5, at.z - half.z), Vector3(half.x * 2.0, size.y + 0.5, half.z * 2.0))
 
 
-## Whether [param point] is inside a box whose BOTTOM-centre is [param at].
-##
-## Bottom-centre for a gate, because a mapper places a checkpoint on the floor a player
-## crosses it on, and the volume rises from there.
+## Whether [param point] is inside a box whose BOTTOM-centre is [param at]. Bottom-centre for a gate, because a mapper
+## places a checkpoint on the floor a player crosses it on.
 static func _inside(point: Vector3, at: Vector3, size: Vector3, yaw: float) -> bool:
 	var local := _yaw_basis(yaw).inverse() * (point - at)
 	return absf(local.x) <= size.x * 0.5 and local.y >= -0.5 and local.y <= size.y \
@@ -1686,10 +1601,8 @@ func respawn_point(checkpoint: int, seat: int = 0) -> Array:
 	return start_spot(seat, 1000)
 
 
-## Where seat [param seat] of [param of] stands on the start pad.
-##
-## Rows across the pad from the front, a metre and a half apart, so a full server of
-## twenty-four is four rows of six on a ten metre pad and nobody is placed inside anybody.
+## Where seat [param seat] of [param of] stands on the start pad: rows from the front a metre and a half apart, so
+## twenty-four is four rows of six on a ten metre pad and nobody is inside anybody.
 func start_spot(seat: int, of: int) -> Array:
 	var spawns := io_spawns()
 
@@ -1763,12 +1676,8 @@ func route() -> Array:
 	return doc.get("route", [])
 
 
-## The route point after [param index] for somebody on [param branch] of a fork.
-##
-## [b]A fork is laid out in the route as one branch's points and then the other's[/b], between
-## the point everybody leaves from and the one everybody meets at. Walking on means skipping
-## the points of every branch but your own: on a branch point, its own branch; on the way
-## everybody goes, [param branch] (what a stand-in chose), else the first branch it meets.
+## The route point after [param index] for somebody on [param branch] of a fork. A fork's branches are laid out one
+## after the other, so walking on skips every branch but your own: its own on a branch point, else [param branch].
 func route_next(index: int, branch: int = 0) -> int:
 	var points := route()
 	if index >= 0 and index < points.size() and int((points[index] as Dictionary).get("branch", 0)) != 0:
@@ -1824,10 +1733,8 @@ var _progress: PackedFloat32Array = PackedFloat32Array()
 var _progress_of: Array = []
 
 
-## How far along the course each route point is, metres, a fork counted as long as its
-## shortest branch (each branch's points spread over that length). What the race order reads,
-## so a runner on the long way round is not counted ahead of one who took the short cut just
-## because the long way's points come later in the list.
+## How far along the course each route point is, in metres, a fork counted as long as its shortest branch. What the
+## race order reads, so a runner on the long way round is not counted ahead of one who took the short cut.
 func route_progress() -> PackedFloat32Array:
 	var points := route()
 	if is_same(_progress_of, points) and _progress.size() == points.size():

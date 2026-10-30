@@ -1,10 +1,8 @@
 extends Node
 
-## Runs one course with one stand-in and prints every fall and every knock: where, and which
-## route point it was heading for. The tool for "a stand-in cannot finish this course" — the
-## suite says that it happened, this says where.
-##
-##   godot --headless --path . res://tools/trace_course.tscn -- --course=wo_big_balls [--seconds=120] [--every=0.5] [--heights=x0,x1,z0,z1]
+## Runs one course with one stand-in and prints every fall and knock: where, and which route point it was heading for.
+## The suite says a stand-in cannot finish, this says where. `godot --headless --path . res://tools/trace_course.tscn
+## -- --course=wo_big_balls [--seconds=120] [--every=0.5] [--heights=x0,x1,z0,z1]`
 
 const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")

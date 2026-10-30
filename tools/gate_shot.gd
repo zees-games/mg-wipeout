@@ -1,11 +1,8 @@
 extends SceneTree
 
-## Renders the real offline client's first frames, to see what the load gate covers.
-##
-##     xvfb-run -a godot --path . --resolution 1280x720 --script tools/gate_shot.gd
-##
-## Saves screenshots/gate_<n>.png on a few chosen frames and prints, per frame, whether the gate
-## is open and the local body's height. Not --headless: that renders nothing.
+## Renders the real offline client's first frames, to see what the load gate covers: saves screenshots/gate_<n>.png
+## and prints per frame whether the gate is open and the local body's height. Run with `xvfb-run -a godot --path .
+## --resolution 1280x720 --script tools/gate_shot.gd`, not --headless, which renders nothing.
 
 var _client: Node = null
 var _frame := 0

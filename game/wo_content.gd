@@ -3,14 +3,9 @@ extends RefCounted
 const WoConfig := preload("wo_config.gd")
 const WoPaths := preload("wo_paths.gd")
 
-## The props a final death drops: what a player picks up and throws.
-##
-## [b]Five, all of them light enough to carry and heavy enough to matter.[/b] mg-smash-
-## copter's catalogue had four tiers up to a 900 kg monolith, because its props were thrown by
-## a cannon; these are thrown by a person, through dot-props' gravity gun, and a prop is only
-## worth having here if it can be picked up. The damage a throw does is its momentum
-## ([member WoConfig.throw_damage_per_impulse]), so the boulder is the heavy hitter and the
-## cone a nuisance, and the barrel is the one that goes off.
+## The props a final death drops: what a player picks up and throws. Five, all light enough to carry and heavy enough
+## to matter: a throw's damage is its momentum ([member WoConfig.throw_damage_per_impulse]), so the boulder is the
+## heavy hitter, the cone a nuisance, and the barrel the one that goes off.
 
 ## Where the bodies live, rebased where they are defined (see mg-smash-copter, where a
 ## `const` rebased at each call site was one new call site away from a prop that does not

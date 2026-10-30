@@ -1,23 +1,8 @@
 extends "wo_client_view.gd"
 
-## One local player, a camera and a HUD over an [WoGame] — offline, or against a server.
-##
-## [b]One client for both, and the offline half is not a demo mode.[/b] It is the same world
-## class with `authoritative` true and nothing else different: the same courses, the same
-## obstacles, the same rules. What changes is where the answers come from, and the whole of
-## that difference is [WoNetBridge]. A separate single-player build would be a second game to
-## keep in step, and this family has watched two copies of one thing drift more than once.
-##
-## [b]Which half runs is decided by whether there is a link in the registry.[/b] A dot-server
-## client publishes a [DotClientLink] under `dot_client_link` before the game scene loads; no
-## link means nobody connected us to anything, and the honest answer to that is a playable
-## course rather than an error. `--offline` forces it.
-##
-## [b]First person and third, and the motor does not know which.[/b] The camera is
-## presentation: the simulation is first-person, command-driven and predictable in both, and
-## what changes is where the camera sits. That is the line dot-player-controller draws
-## between its motor and its view, drawn again here — and on a course the third person view
-## is the one that shows where your feet are against a beam's edge or a ball's top.
+## One local player, a camera and a HUD over an [WoGame], offline or against a server.
+## One client for both: offline is the same world with `authoritative` true; the difference is [WoNetBridge]. A
+## `dot_client_link` in the registry means connected; none means a playable course, not an error. `--offline` forces it.
 
 
 ## Where the camera sits behind the player in third person, in metres.
@@ -92,10 +77,8 @@ func _ready() -> void:
 	if _offline:
 		_start_offline()
 	else:
-		# [b]Here, in `_ready`, which runs INSIDE `DotClientLink._load_scene`.[/b] The link
-		# adds this scene and tells the server it has loaded on the next line, so the netcode
-		# is up before the server has been told there is anybody to send to — which is the
-		# order that leaves nothing to be missed.
+		# Here, in `_ready`, which runs INSIDE `DotClientLink._load_scene`: the link adds this scene and tells the
+		# server it has loaded on the next line, so the netcode is up before the server has anybody to send to.
 		var netted := _build_netcode()
 		DotLog.result(CHANNEL, "the netcode", netted)
 		if netted.ok:
@@ -123,16 +106,10 @@ func _build_game(config: WoConfig, binder: DotGameConfigBinder) -> void:
 
 
 
-# --- The load gate ---------------------------------------------------------
 
-
-## [b]Without it the first frames were a half-built world.[/b] Offline the runner stood in a
-## course whose pieces were still being posed and the countdown ran behind nothing; connected,
-## the client drew from its first frame with no stage, no player and a HUD with nobody to read,
-## and a new course (each round) was torn down in front of a body that kept moving. The gate
-## (DotGameClient's) does not stop the simulation by itself: [member WoGame.covered] holds every
-## clock and every obstacle still but the local body, [method WoPlayer.simulate] skips a frozen
-## body, and the keys and the netcode sampling check [method _covered].
+## Without the gate the first frames were a half-built world. It does not stop the simulation by itself: [member
+## WoGame.covered] holds every clock and obstacle still but the local body, [method WoPlayer.simulate] skips a frozen
+## body, and the keys and netcode sampling check [method _covered].
 
 
 ## Holds again for each stage rebuild (a new course or the arena) and releases once it stands.
@@ -146,8 +123,6 @@ func _wire_gate_to_stages() -> void:
 func _covered() -> bool:
 	return gate != null and not gate.is_open()
 
-
-# --- Dead bodies -----------------------------------------------------------
 
 
 func _build_ragdolls() -> void:
@@ -169,10 +144,8 @@ func _ragdoll_sound(id: StringName, at: Vector3, volume: float) -> void:
 		var _played := audio.on_body(id, at, volume)
 
 
-## [param who]'s body falls the way the server picked ([member WoPlayer.death]), copied from the
-## figure this client draws; the figure itself stays hidden while they are dead
-## ([method WoPlayer.present_body]). Nobody's figure, nothing: a first-person player who never
-## had one drawn here.
+## [param who]'s body falls the way the server picked ([member WoPlayer.death]), copied from the figure this client
+## draws; the figure stays hidden while they are dead ([method WoPlayer.present_body]). No figure, nothing.
 func _fall(who: WoPlayer) -> void:
 	if who == null or ragdolls == null or who.figure == null or not who.figure.is_inside_tree():
 		return
@@ -182,8 +155,6 @@ func _fall(who: WoPlayer) -> void:
 	var velocity := who.controller.state.velocity if who.controller != null else Vector3.ZERO
 	var _body := ragdolls.spawn(who.figure, who.death if who.death != null else DotPlayerDeath.new(), velocity)
 
-
-# --- Offline ---------------------------------------------------------------
 
 func _exit_tree() -> void:
 	# A static outlives the game: the next one the shell loads must not look for its art here.
@@ -293,14 +264,11 @@ func _start_remote_workbench() -> void:
 	platform.add_workbench(wb)
 
 
-# --- Connected -------------------------------------------------------------
-
 ## Follows the server's rules cvars through the link, each of which this end draws or predicts.
 func _follow_server_cvars() -> void:
-	# The server's `mp_teammate_passthrough`, and every change to it, through the link: this
-	# end traces its own shots for tracers and impacts, and on its default 1 against a server
-	# on 0 or 2 they ended in (or went through) a team-mate where the server's did the
-	# opposite. An older shell's link cannot say, and the manager keeps its default.
+	# The server's `mp_teammate_passthrough`, and every change to it, through the link: this end traces its own
+	# shots, and a default 1 against a server on 0 or 2 ended tracers in (or through) a team-mate. An older shell's
+	# link cannot say; the manager keeps its default.
 	if game.combat != null and link != null:
 		var _following := game.combat.follow_cvars(link)
 	# The server's sv_ragdoll* set: this end draws the bodies.
@@ -420,11 +388,8 @@ func _on_hello(session_id: int) -> void:
 
 
 ## A player arrived or changed. The one we are waiting for might be us.
-##
-## [b]Connected before anything can create a player rather than only checked on HELLO.[/b]
-## HELLO and JOIN are both reliable and ordered, so HELLO does arrive first — but "the
-## ordering happens to save us" is exactly the reasoning that put this bug in another game
-## here, and a check that costs nothing is cheaper than depending on it.
+## Connected before anything can create a player, not only checked on HELLO: they are ordered so HELLO arrives first,
+## but depending on that ordering is what put this bug in another game.
 func _on_roster_changed(session_id: int) -> void:
 	if session_id == _watch_id and player == null:
 		_adopt(game.players.get(WoNetBridge.player_key(session_id)))
@@ -469,8 +434,6 @@ func _adopt(candidate: WoPlayer) -> void:
 	if announcer != null:
 		announcer.me = player.player_id
 
-
-# --- What the server says --------------------------------------------------
 
 func _on_phase(phase: int) -> void:
 	_hear_phase(phase)
@@ -535,11 +498,9 @@ func _on_stage(stage_id: StringName, is_arena: bool) -> void:
 	var name_of := str(game.stage.doc.get("name", ""))
 	var blurb := str(game.stage.doc.get("blurb", ""))
 
-	# [b]Once, though the world is rebuilt twice for it.[/b] The warmup lays round one's
-	# course out and `WoGame.start` builds the same one again (Decision 2), so offline the
-	# name was shouted and the blurb written into the chat twice, a frame apart, at every
-	# boot. By time rather than by round: the rebuild happens inside one round, and a server
-	# with one course plays it again next round, which should be introduced again.
+	# Once, though the world is rebuilt twice for it: the warmup lays round one out and `WoGame.start` builds the
+	# same again, so the name was shouted twice at boot. By time rather than round: a one-course server should
+	# introduce it again next round.
 	var now := Time.get_ticks_msec()
 	if stage_id == _introduced and now - _introduced_msec < INTRODUCE_AGAIN_MSEC:
 		return
@@ -642,12 +603,8 @@ func _on_death(session_id: int, by: int, why: StringName, weapon_id: StringName)
 	chat.say_locally(line, Color(0.80, 0.82, 0.86))
 
 
-# --- What it sounds like -----------------------------------------------------
-
-## The player's settings, applied to everything that reads them. See [WoSettings].
-##
-## After the audio and the sampler, because both are bound here and a binding applies at
-## once. The camera arrives with the player and is bound in [method _adopt].
+## The player's settings, applied to everything that reads them ([WoSettings]). After the audio and the sampler,
+## because a binding applies at once; the camera is bound in [method _adopt].
 func _build_settings() -> void:
 	settings = WoSettings.new()
 	settings.name = "Settings"
@@ -788,12 +745,9 @@ func _build_audio() -> void:
 		return
 
 
-## Offline: the world IS the authority, so its own signals are what happened.
-##
-## [b]Two sources and one set of sounds.[/b] A connected client hears the same things from
-## the bridge's signals instead (see [method _hear_the_wire]); both call the same [WoAudio]
-## method with the same arguments, so offline and online can only differ in where a fact
-## came from and never in what it sounds like.
+## Offline: the world IS the authority, so its own signals are what happened. A connected client hears the same from
+## the bridge's signals ([method _hear_the_wire]); both call the same [WoAudio] method, so they differ only in where a
+## fact came from.
 func _hear_the_world() -> void:
 	if game == null:
 		return
@@ -900,11 +854,8 @@ func _hear_death(who: WoPlayer, why: StringName) -> void:
 	var _heard := audio.on_death(who.global_position, who == player)
 
 
-## The body comes apart, and how depends on what did it: lightning and a hard knock blow it
-## to pieces, anything else takes a limb or two, seeded from who died and how often they
-## have, so every client breaks it the same way. Mended a moment later, because on the
-## course a knocked-out player is alive again at once, watching from the lounge.
-## Breaks [param who]'s body apart. True when it went to pieces entirely (nothing left to fall).
+## The body comes apart, depending on what did it: lightning and a hard knock blow it to pieces, anything else takes a
+## limb or two, seeded so every client breaks it the same way. Mended a moment later. True when it went to pieces.
 func _break(who: WoPlayer, why: StringName) -> bool:
 	if who.figure == null or who == player:
 		return false
@@ -950,8 +901,6 @@ func _on_armed(session_id: int, weapon_id: StringName) -> void:
 			Color(0.86, 0.92, 0.80))
 
 
-# --- The camera ------------------------------------------------------------
-
 func _build_camera() -> void:
 	if camera != null or player == null:
 		return
@@ -961,10 +910,8 @@ func _build_camera() -> void:
 	camera.fov = 92.0
 	camera.current = true
 
-	# Other players and stand-ins: hidden when one is at the lens, faded in third person when
-	# one stands between the camera and you. It rides the camera wherever the camera goes.
-	# Handed the figures rather than found by a query: a player's hull is off while
-	# mp_solidplayers is 0, and a body walking through you is exactly when it is needed.
+	# Other players and stand-ins: hidden at the lens, faded in third person when between camera and you. Handed the
+	# figures rather than queried: a hull is off while mp_solidplayers is 0, which is when the fade is needed.
 	_fade = DotCameraFade.new()
 	_fade.name = "Fade"
 	_fade.bodies_fn = _other_players
@@ -986,11 +933,9 @@ func _build_camera() -> void:
 		add_child(weather)
 
 
-## Puts the camera where this view mode wants it, rebuilding the rig if the mode changed.
-##
-## [b]A boom in third person and nothing in first.[/b] dot-core's [DotCameraBoom] sweeps a
-## sphere from the eye and eases in ahead of a wall or a gantry; the spring arm it replaced
-## cast a ray from a pivot above the head and snapped to whatever it hit.
+## Puts the camera where this view mode wants it, rebuilding the rig if the mode changed. A [DotCameraBoom] in third
+## person and nothing in first: it sweeps a sphere and eases in ahead of a wall, where the spring arm snapped to
+## whatever a ray hit.
 func _place_camera() -> void:
 	if camera == null or player == null:
 		return
@@ -1078,15 +1023,9 @@ func _on_view_rules_changed() -> void:
 			_place_camera()
 
 
-# --- The frame -------------------------------------------------------------
-
-## The sampled command, on a connected client, once per tick the clock says has passed.
-##
-## [b]Offline this does nothing and the world ticks itself.[/b] The player samples inside
-## [method WoPlayer.simulate] there, which is the shape a single process wants; a connected
-## client cannot use it, because its local player has to be simulated by the PREDICTOR from
-## the same command that was sent, and a second sample would predict something different from
-## what the server was told.
+## The sampled command, on a connected client, once per tick the clock says has passed. Offline this does nothing and
+## the world ticks itself: a connected client's local player is simulated by the PREDICTOR from the command that was
+## sent, and a second sample would predict something else.
 func _physics_process(delta: float) -> void:
 	if _offline:
 		_drive_offline(delta)
@@ -1109,13 +1048,9 @@ func _physics_process(delta: float) -> void:
 	# at the server's rate is almost always exactly one.
 	var ticks := net.clock.advance(delta)
 
-	# [b]Each pass is its own tick.[/b] `advance` has already moved the clock by all of
-	# them, so `input_tick()` is the LAST one on every pass: a frame worth two ticks sent
-	# the second twice and the first never, the server repeated a stale command for the
-	# one it never got, and the predictor's replay stopped at the hole and drew the player
-	# short of where they were -- after every hitch, and on every frame the display and
-	# the tick rate do not line up. Arithmetic here rather than a new dot-net call,
-	# because a pack has to run on whatever client shell the player already has.
+	# Each pass is its own tick. `advance` has already moved the clock by all of them, so `input_tick()` is the LAST
+	# on every pass: a two-tick frame sent the second twice and the first never, and the predictor's replay stopped
+	# at the hole. Arithmetic here, not a new dot-net call, so a pack runs on any client shell.
 	for i in range(ticks):
 		if not net.clock.is_synced():
 			continue
@@ -1186,13 +1121,9 @@ func _drive_view_model(command: DotFpsCommand) -> void:
 const DRAWN_SETTLE_SEC := 0.6
 
 
-## Brings the drawn gun's magazine and reserve (what the HUD counts) to the server's once it has
-## been quiet [constant DRAWN_SETTLE_SEC]: online from this player's owner-only snapshot fields,
-## offline from the world's own rig. True when it changed anything.
-##
-## [b]The drawn gun predicts, so it can be wrong, and nothing else puts it right.[/b] A shot the
-## server refused or a fresh round's refill leaves the counter on the client's own sum otherwise
-## (mg-prop-hunt's `correct_drawn`, game-zombie-zone's 15 / 105).
+## Brings the drawn gun's magazine and reserve (what the HUD counts) to the server's once quiet for [constant
+## DRAWN_SETTLE_SEC]: online from the owner-only snapshot fields, offline from the world's rig. True when it changed
+## anything. The drawn gun predicts, so a refused shot or a refill leaves it wrong and nothing else corrects it.
 func correct_drawn() -> bool:
 	if weapons == null or weapons.arsenal == null or _drawn_quiet < DRAWN_SETTLE_SEC:
 		return false
@@ -1286,11 +1217,8 @@ func _process(delta: float) -> void:
 		_present_effects(delta)
 		return
 
-	# Drawn every FRAME from the controller's own interpolated view, not once per tick.
-	# Another game in this family measured what the other way costs: a client stepping physics
-	# at one rate and drawing at another advances the camera in bursts, which is a 47% change
-	# in apparent speed several times a second and reads as "the game is jittery" with every
-	# simulated number correct.
+	# Drawn every FRAME from the controller's interpolated view, not once per tick: stepping physics at one rate and
+	# drawing at another advances the camera in bursts, which reads as jitter with every simulated number correct.
 	var state := player.controller.state
 	var pitch := deg_to_rad(state.pitch)
 	var yaw := deg_to_rad(state.yaw)
@@ -1310,15 +1238,9 @@ func _process(delta: float) -> void:
 
 	rig.rotation = Vector3(pitch, yaw, 0.0)
 
-	# [b]And the position from between the last two ticks, which the angles above never
-	# needed.[/b] The rig hangs off the player's node and the node only moves on a tick, so
-	# a camera left there advances in steps: measured offline at 64 ticks and 144 frames,
-	# 160 frames in 288 did not move at all while the player ran, and the per-frame step
-	# varied by 112%. `render_state` blends the last two ticks by the engine's own physics
-	# fraction, which this client makes a fraction through a tick by running the engine at
-	# the world's rate. Written globally rather than by moving the node, because the tick
+	# And the position from between the last two ticks: the node only moves on a tick, so the camera advanced in
+	# steps. `render_state` blends the last two by the engine's physics fraction. Written globally, because the tick
 	# writes the node and prediction reads it back.
-	#
 	var drawn := player.controller.render_state()
 	rig.global_position = drawn.position + Vector3(0.0, _rig_height, 0.0)
 
@@ -1334,13 +1256,9 @@ func _process(delta: float) -> void:
 	_present_effects(delta)
 
 
-## Poses the course for this FRAME, between two ticks.
-##
-## [b]A frame, not a tick: the obstacles are drawn at the time the frame shows.[/b] The arms
-## and the movers are a function of time, so the client can draw them at the exact fraction
-## through a tick this frame is — which no snapshot could give it. The local player's own
-## prediction poses the course back at its tick before every simulated tick (see
-## [WoController]), so drawing it between them never moves what a tick is swept against.
+## Poses the course for this FRAME, between two ticks. The arms and movers are a function of time, so the client draws
+## them at the exact fraction through a tick, which no snapshot could give. The local prediction poses the course back
+## at its tick before every simulated tick (see [WoController]), so this never moves what a tick is swept against.
 func _pose_stage() -> void:
 	if game == null or game.stage == null or game.stage.doc.is_empty():
 		return
@@ -1350,10 +1268,9 @@ func _pose_stage() -> void:
 
 	if net != null and net.is_running():
 		tick = float(net.clock.tick)
-		# At the alpha your own player is drawn at (see `present_frame`), so a clock slip
-		# moves the course and the player on it together; at the engine's fraction a rider
-		# on a mover slid a tick against it for a moment after each. By name, for an older
-		# shell's dot-net.
+		# At the alpha your own player is drawn at (see `present_frame`), so a clock slip moves course and player
+		# together; at the engine's fraction a rider on a mover slid against it. By name, for an older shell's dot-
+		# net.
 		if net.clock.has_method(&"render_alpha"):
 			alpha = float(net.clock.call(&"render_alpha"))
 
@@ -1430,8 +1347,6 @@ func _present_effects(delta: float) -> void:
 		game.effects.advance(delta)
 
 
-# --- Watching, once out -----------------------------------------------------
-
 ## Whether this client's own player is out and watching somebody.
 func is_spectating() -> bool:
 	return player != null and game != null and game.spectate != null \
@@ -1451,16 +1366,9 @@ func _watched_through_eyes() -> WoPlayer:
 	return game.players.get(game.spectate.watching(player.player_id))
 
 
-## Puts the camera where [WoSpectate] says, and takes it back when a round starts.
-##
-## [b]The camera leaves the player's node while they watch.[/b] Setting a global transform
-## on a camera hung under the chase arm is undone by the arm on its next frame, and one hung
-## under the body is under a body that is not where anything worth seeing is. So it is moved
-## to this node for as long as the player is out and handed back by `_place_camera` — the
-## same call a view swap uses — the moment they are not.
-##
-## Once a FRAME, like the rig: the target's pose is the drawn one, so a camera moved on the
-## tick would step at the tick rate however smoothly the target is drawn.
+## Puts the camera where [WoSpectate] says, and takes it back when a round starts. It leaves the player's node while
+## they watch (the chase arm undoes a global transform under it); `_place_camera` hands it back. Once a FRAME, like the
+## rig, or it would step at the tick rate.
 func _drive_spectator_camera() -> bool:
 	if not is_spectating():
 		if camera.get_parent() == self:
@@ -1606,23 +1514,9 @@ func spectate_step(direction: int) -> void:
 			var _denied := audio.deny()
 
 
-## Everything a frame draws that a tick does not, in this order: the netcode's
-## interpolation, then every player's body, then every beacon. Returns how many bodies are
-## shown. Static so the net suite drives exactly this and not a copy of it.
-##
-## [b]The interpolation was never called in this game, and a comment here said it was.[/b]
-## `present_beacons`, which this replaces, read a remote player's node on the grounds that
-## "everybody else's node is written by the interpolator once a frame already" — and nothing
-## anywhere called `DotNetManager.interpolate_frame`, so nothing wrote it. The
-## `_net_interpolated` hooks on `WoPlayerNet` and `WoPropNet` were written, documented and
-## reached by nothing, and every remote player and prop moved only when a snapshot landed —
-## mg-smash-copter's finding, the render-jitter class. The other half was that a remote player had no body to move
-## ([WoFigure]).
-##
-## [param first_person] is whether [param own]'s camera is behind their eyes, which is what
-## hides their own body. [param alpha] is the fraction through the current tick; -1 derives it
-## from the engine, which is what a real frame wants. A suite passes it, because a suite's
-## frames are not an engine's.
+## Everything a frame draws that a tick does not: the netcode's interpolation (nothing else calls
+## `interpolate_frame`), every body, every beacon. Returns bodies shown. Static so the net suite drives exactly this.
+## [param first_person] hides their own body; [param alpha] is the fraction through the tick (-1: from the engine).
 static func present_frame(
 	p_net: DotNetManager,
 	p_game: WoGame,
@@ -1637,12 +1531,9 @@ static func present_frame(
 	if networked:
 		p_net.interpolate_frame(alpha)
 
-	# Your own player is drawn at the clock's render alpha, not the engine's fraction: the
-	# clock stretches and shrinks its ticks while it settles on the server, so a physics frame
-	# now and then runs no tick or two, and drawn at the engine's fraction the eye stood still
-	# on one frame and moved double on the next. `DotFpsController.render_state` reads it from
-	# `render_clock` (dot-player-controller); by name both ways, so a shell older than either
-	# draws as before. Null offline, where every physics frame is one tick.
+	# Your own player is drawn at the clock's render alpha, not the engine's fraction: the clock stretches its ticks
+	# while settling on the server, so at the engine's fraction the eye stood still one frame and moved double the
+	# next. By name both ways, for older shells. Null offline.
 	if own != null and own.controller != null:
 		own.controller.set(&"render_clock", p_net.clock if networked else null)
 
@@ -1674,14 +1565,9 @@ static func present_frame(
 	return shown
 
 
-## Where this frame draws [param body].
-##
-## [b]Two sources, and which one is not a detail.[/b] A player somebody else simulates — any
-## [param remote] player on a connected client — is placed by the interpolator, which writes
-## their node once a frame; their controller never ticks here, so its render state is a blend
-## of two ticks that never happened. A player THIS process simulates — the local player, and
-## every offline stand-in — has a node that moves once a tick, and `render_state` is the
-## blend between the last two, which is what the camera is drawn from too.
+## Where this frame draws [param body]. A player somebody else simulates (any [param remote] on a connected client) is
+## placed by the interpolator, as its controller never ticks here; one THIS process simulates has a node that moves
+## once a tick, and `render_state` blends the last two, which the camera is drawn from too.
 static func drawn_position(body: WoPlayer, remote: bool) -> Vector3:
 	if remote or body.controller == null:
 		return body.global_position

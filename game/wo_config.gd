@@ -1,44 +1,24 @@
 extends DotConfig
 
-## Every number this game has, layered like every other [DotConfig] in the family.
-##
-## [code]exported defaults < JSON file < environment < command line[/code], identically to
-## dot-server, dot-cloud and the other games. Nothing here reads
-## [code]OS.get_cmdline_args[/code] itself.
-##
-## [b]Metres and seconds.[/b] The courses are documents in the same units (see
-## [WoCourseDoc]), so a length a mapper writes and a length this file tunes against are the
-## same number with no ratio between them.
-##
-## [b]What is NOT here is the courses.[/b] Where a platform is, how fast an arm turns and
-## where the finish line stands are the course document's, because a course is content a
-## server installs and a client is sent, not a setting an operator turns. This file is the
-## rules every course is played under.
-
-# --- The round -------------------------------------------------------------
+## Every number this game has, layered like every other [DotConfig], in metres and seconds as the course documents are.
+## Not the courses: where a platform is and how fast an arm turns are the document's ([WoCourseDoc]), content a server
+## installs and a client is sent. This file is the rules every course is played under.
 
 @export_group("The round")
 
 ## Seconds everybody stands behind the start gate before it drops.
 ##
-## [b]Not zero, and the reason is the join.[/b] Everybody is placed on the start pad in the
-## same tick, and a course that started on that tick would be won by whoever's client had
-## finished loading the course first.
+## Not zero: everyone is placed in the same tick, and a course started then is won by whoever loaded first.
 @export_range(0.0, 30.0, 0.5) var countdown_seconds: float = 4.0
 
 ## Seconds the course is open before the round is called on the clock.
 ##
-## A course document may ask for its own (`course_seconds` in the document) and this is the
-## ceiling an operator puts on it, so a mapper cannot make a server run one course for an
-## hour. Six minutes: the courses are a minute to a minute and a half for a clean run and ask
-## for four to six minutes of clock (the first play test finished the old ones in 22 s).
+## A course document may ask for its own; this is the operator's ceiling. Six minutes: clean runs take one or two.
 @export_range(10.0, 1200.0, 5.0) var course_seconds: float = 360.0
 
 ## Seconds between the course closing and the final death starting.
 ##
-## [b]Not zero, for the teleport.[/b] Everybody who finished is moved into an arena they have
-## never seen, and props and weapons arrive in the same instant; landing already being hit
-## by a thrown barrel is a death nobody could have done anything about.
+## Not zero, for the teleport: arriving already hit by a thrown barrel is a death nobody could have avoided.
 @export_range(0.0, 30.0, 0.5) var handover_seconds: float = 4.0
 
 ## Seconds the final death runs before the round is called on the clock (a draw).
@@ -46,9 +26,7 @@ extends DotConfig
 
 ## How many courses a round runs before its final death, when more than one side finishes.
 ##
-## [b]Only a course two sides finished goes on to the next.[/b] A course nobody or one side
-## finished ends the round there, as before: the second course is the reward for a close race, not a
-## second chance to be alone. 1 is the old round (one course, then the final death).
+## Only a course two sides finished goes on: the second course rewards a close race. 1 is one course.
 @export_range(1, 12, 1) var courses_per_round: int = 3
 
 ## Seconds between rounds.
@@ -60,23 +38,15 @@ extends DotConfig
 ## Seconds of warmup before the first round. 0 starts immediately.
 @export_range(0.0, 300.0, 1.0) var warmup_seconds: float = 10.0
 
-## Whether the side that got furthest wins a round nobody finished.
-##
-## [b]On, and the alternative is a draw nobody earned.[/b] A hard course on a server of four
-## can close with nobody across the line; a draw then says the person who reached the last
-## checkpoint and the person who never left the start pad played equally well.
+## Whether the side that got furthest wins a round nobody finished. On: the alternative is a draw saying the person at
+## the last checkpoint and the one who never left the pad played equally well.
 @export var progress_decides: bool = true
-
-# --- Sides -----------------------------------------------------------------
 
 @export_group("Sides")
 
-## How many teams the server plays with. 0 is every player for themselves.
-##
-## [b]Zero by default, and the course is why.[/b] An obstacle course is something one person
-## runs; teams change what finishing means (a side is through if anybody on it is) and are a
-## mode an operator chooses. Up to six, the same ceiling as mg-smash-copter for the same
-## reason: beyond that the final death is a free-for-all with bookkeeping.
+## How many teams the server plays with. 0 is every player for themselves, because a course is run by one person;
+## teams change what finishing means (a side is through if anybody is). Up to six, as mg-smash-copter, beyond which
+## the final death is a free-for-all with bookkeeping.
 @export_range(0, 6, 1) var team_count: int = 0
 
 ## Whether players may pick their own side.
@@ -84,8 +54,6 @@ extends DotConfig
 
 ## Whether the server evens the sides up between rounds.
 @export var autobalance: bool = true
-
-# --- The players -----------------------------------------------------------
 
 @export_group("The players")
 
@@ -102,10 +70,9 @@ extends DotConfig
 ## Health a hard landing costs, per metre fallen past [member fall_safe_height]. 0: never.
 @export_range(0.0, 50.0, 0.5) var fall_damage_per_metre: float = 6.0
 
-## The health fraction (of [member player_health]) at or below which the blow that knocks a
-## player out throws the body into the air as a ragdoll. Lower health, wilder flight: just under
-## this it is a quarter of [member knockout_fling_power], at no health the whole of it.
-## 0 turns the flight off, and a knockout falls as the server's ragdoll rules pick.
+## The health fraction (of [member player_health]) at or below which the blow that knocks a player out throws the body
+## as a ragdoll. Lower health, wilder flight: a quarter of [member knockout_fling_power] just under this, all of it at
+## none. 0 turns it off.
 @export_range(0.0, 1.0, 0.01) var knockout_fling_below: float = 0.5
 
 ## How hard a knockout at no health throws the body: the ragdoll's push strength, 1 being a
@@ -123,17 +90,12 @@ extends DotConfig
 
 ## Metres per second squared, for everything: players and props.
 ##
-## [b]Here rather than in `project.godot`, because a project setting does not travel with
-## a delivered game.[/b] A pack mounted into the server tool's project runs at ITS setting,
-## and what that looks like is a game that plays correctly on a developer's machine and
-## floats everywhere it is deployed. Applied to the world's own physics space by [WoGame].
+## Here, not in `project.godot`, as a delivered pack runs at the host's setting and floats. Applied by [WoGame].
 @export_range(1.0, 60.0, 0.5) var gravity: float = 20.0
 
 ## How hard an obstacle throws a player at the least, in m/s.
 ##
-## [b]A floor under the knock, because a slow arm still has to move somebody.[/b] The knock
-## is the surface's own speed where it touched them, and an arm turning at thirty degrees a
-## second is a metre a second near its hub — which reads as an obstacle that does nothing.
+## A floor under the knock: a slow arm near its hub is a metre a second, which reads as an obstacle that does nothing.
 @export_range(0.0, 40.0, 0.5) var knock_min_speed: float = 8.0
 
 ## The most an obstacle can throw a player, in m/s. A safety cap rather than a feel dial.
@@ -141,33 +103,25 @@ extends DotConfig
 
 ## How far up every knock throws a player, in m/s.
 ##
-## [b]Up as well as away, and the up is what makes it a wipeout.[/b] A knock along the
-## ground is a shove a player can run out of; one that lifts them is a flight they watch.
+## Up as well as away: a knock along the ground is a shove a player can run out of; one that lifts them is a flight.
 @export_range(0.0, 30.0, 0.5) var knock_lift: float = 5.5
 
 ## Health a knock costs on the course, per m/s it threw the player. 0: knocks never hurt.
 ##
-## [b]On by default since 2026-10-06[/b], because the brief asked for obstacles that hurt and
-## some that are fatal: at 1.0 a slow arm (8 m/s) costs 8 and the hardest throw (22 m/s) 22.
-## 1.4 was tried first and a stand-in took nine knocks before its first checkpoint, which
-## at 1.4 was out of the round; a checkpoint heals.
+## At 1.0 a slow arm (8 m/s) costs 8 and the hardest throw 22; at 1.4 stand-ins were knocked out before a checkpoint.
 @export_range(0.0, 10.0, 0.05) var knock_damage_per_speed: float = 1.0
 
 ## Whether a player whose health runs out on the course is out for the round (watching
 ## from the gallery) rather than put back at the last checkpoint. The brief's "fatal".
 @export var course_deaths_eliminate: bool = true
 
-## Instant death: a fall into the water, or any death on the course, puts the player out for
-## the rest of the ROUND (watching from the lounge, across every course of it) instead of back
-## at a checkpoint. Off by default: it is how the classic one-life obstacle courses play, and
-## those courses switch it on with their own `cfg/<course id>.cfg` in mg-wipeout-maps
-## (`wo_instant_death 1`), which mg-wipeout reverts when the next course loads.
+## Instant death: a fall into the water, or any death on the course, puts the player out for the rest of the ROUND
+## (watching from the lounge) instead of back at a checkpoint. Off by default; one-life courses switch it on with
+## their own `cfg/<course id>.cfg` (`wo_instant_death 1`), reverted when the next course loads.
 @export var instant_death: bool = false
 
 ## Whether crossing a checkpoint restores health, so one bad stretch is not a slow death.
 @export var checkpoint_heals: bool = true
-
-# --- Points -------------------------------------------------------------------
 
 @export_group("Points")
 
@@ -178,8 +132,6 @@ extends DotConfig
 
 ## Points for being on the side that wins the round, the final death included.
 @export_range(0, 100, 1) var winner_points: int = 10
-
-# --- Weather ------------------------------------------------------------------
 
 @export_group("Weather")
 
@@ -200,42 +152,30 @@ extends DotConfig
 @export_range(0.5, 20.0, 0.5) var strike_radius: float = 3.5
 @export_range(0.0, 400.0, 1.0) var strike_damage: float = 35.0
 
-# --- The courses -----------------------------------------------------------
-
 @export_group("The courses")
 
 ## Which courses this server may play, by id. Empty means every one it has.
 ##
-## [b]Ids, the shape mg-smash-copter's layout list has.[/b] An operator running one course
-## all evening, or a render of one, is a word on a line rather than a code change.
 ## `--wo-course-ids=wo_spin_cycle` is how `tools/shot.sh` looks at one.
 @export var course_ids: PackedStringArray = PackedStringArray()
 
 ## Whether the next course is drawn at random (seeded) rather than taken in order.
 @export var shuffle_courses: bool = true
 
-## The file that says which courses this server ROTATES: `maps.yml` in `cfg/server/addons/dot_map/`
-## of the `--config` directory (dot-map's `DotMapRotationFile`: named rotations, `random` or
-## `cycle`, wildcards, command names); the game ships none. Empty, or no such file, rotates every course. A course it
-## leaves out stays installed (the map menu loads it); it is only never drawn, balloted or
-## nominated. A rotation in the file replaces [member shuffle_courses]. `sv_map_rotation_file`.
+## The file that says which courses this server ROTATES: `maps.yml` in `cfg/server/addons/dot_map/` of the `--config`
+## directory (dot-map's `DotMapRotationFile`); the game ships none. Empty rotates every course. A course it leaves out
+## stays installed but is never drawn, balloted or nominated. Replaces [member shuffle_courses]. `sv_map_rotation_file`.
 @export var map_rotation_file: String = DotMapRotationFile.DEFAULT_STEM
 
 ## Where course and arena documents are read from, beside the one built into this game.
 ##
-## Relative to this game's own root, so a delivered pack reads its own copy. The directory
-## is a link to the mg-wipeout-maps repository in a checkout (see `.gitignore`).
+## Relative to the game's root, so a delivered pack reads its own copy.
 @export var course_directory: String = "courses"
 
-## Seed every random choice in a round is drawn from: the course, the arena, the spawn
-## areas, the drops.
+## Seed every random choice in a round is drawn from: the course, the arena, the spawn areas, the drops.
 ##
-## [b]A seed rather than a schedule, and reproducible on purpose.[/b] Two servers on one seed
-## play the same round, which is what makes "the arena where the barrels all landed in the
-## middle" a bug report somebody can act on.
+## A seed, not a schedule: two servers on one seed play the same round.
 @export var seed_value: int = 20261005
-
-# --- The final death --------------------------------------------------------
 
 @export_group("The final death")
 
@@ -269,24 +209,16 @@ extends DotConfig
 ## Whether a hit hurts a team-mate (blows and thrown props alike).
 @export var friendly_fire: bool = false
 
-# --- Bots ------------------------------------------------------------------
-
 @export_group("Bots")
 
 ## How many players the server keeps in the round by adding stand-ins (`bot_quota`, fill).
 ##
-## [b]Nine, so one person races eight stand-ins[/b], solo and on an empty server alike: the
-## first play test had three, and a course run against three is a time trial with company.
-## The final death needs two finishers; a field of nine nearly always has them.
+## Nine, so one person races eight even solo: the final death needs two finishers.
 @export_range(0, 24, 1) var minimum_players: int = 9
 
-## Scales every mistake a stand-in makes (`wo_bot_mistakes`): 1 is the difficulty preset's
-## (dot-bot's `bot_difficulty`, read through [WoRacer]), 0 a stand-in that is never wrong.
-##
-## [b]Not zero, and an empty server is why.[/b] A bot that never falls finishes every course
-## in the same time, every round; one that misses a jump now and then looks like a person and
-## gives a real person something to beat. 0 is for the course suite, which proves a course
-## can be finished. How a stand-in aims in a final death is dot-bot's `bot_*` settings.
+## Scales every mistake a stand-in makes (`wo_bot_mistakes`): 1 is the difficulty preset's (dot-bot's
+## `bot_difficulty`, through [WoRacer]), 0 a stand-in never wrong. Not zero: a bot that never falls finishes in the
+## same time every round. 0 is for the course suite, which proves a course can be finished.
 @export_range(0.0, 4.0, 0.05) var bot_mistakes: float = 1.0
 
 ## Metres a second a stand-in is reckoned to cover on a hop from stone to stone, landing to landing.
@@ -301,14 +233,10 @@ extends DotConfig
 ## Seconds either side of a stand-in's time on a tile that the tile must also be up. The tile warning and drop schedule stay in code: a client draws them.
 @export_range(0.0, 0.5, 0.01) var bot_tile_margin_seconds: float = 0.08
 
-# --- Watching --------------------------------------------------------------
-
 @export_group("Watching")
 
 ## Who somebody who is out may watch: 0 anybody, 1 their own side, 2 nobody.
 @export_enum("anybody", "own side", "nobody") var spectate_camera: int = 0
-
-# --- Progress --------------------------------------------------------------
 
 @export_group("Progress")
 
@@ -394,11 +322,9 @@ func describe() -> Dictionary:
 	}
 
 
-## Overridden to print what this game is tuned to rather than every field.
-##
-## The signature carries the parent's `redact_sensitive` even though nothing here is a
-## secret: a subclass that quietly narrows an override is a method that is silently the
-## parent's at every call site that passes the argument.
+## Overridden to print what this game is tuned to rather than every field. The signature keeps the parent's
+## `redact_sensitive` though nothing here is secret: a narrowed override is silently the parent's wherever the
+## argument is passed.
 func describe_lines(_redact_sensitive: bool = true) -> PackedStringArray:
 	var lines := PackedStringArray()
 	lines.append("wipeout configuration")

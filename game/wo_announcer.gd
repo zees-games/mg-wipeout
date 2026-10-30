@@ -4,19 +4,9 @@ const WoAudio := preload("wo_audio.gd")
 const WoGame := preload("wo_game.gd")
 const WoPlayer := preload("wo_player.gd")
 
-## The show's voice: what the announcer says and the crowd does about what just happened.
-##
-## [b]A course is a show, and the play test said it felt like a time trial.[/b] Nothing told a
-## runner that the bot in front of them had just gone in, that somebody had taken the lead, or
-## that ten seconds were left; the stands were empty water. This turns the facts the client
-## already hears (a fall, a checkpoint, a finish, the gate, the clock) into a line under the
-## course name ([WoHud] `announce`), a voice (Kenney's Voiceover Pack) and the crowd: a gasp, a
-## cheer, a roar, and the people in the stands jumping ([WoCourse] `cheer`).
-##
-## [b]Client only and cosmetic[/b]: it decides nothing, so its choice of words may use a local
-## random number; two players may hear different lines about the same splash, and that is fine.
-## It is rate-limited, because eight stand-ins fall a lot: one line every [constant LINE_GAP]
-## seconds unless it is about you, the leader or the winner.
+## The show's voice: turns what the client already hears (a fall, a checkpoint, a finish, the clock) into a line under
+## the course name ([WoHud] `announce`), a voice and the crowd. Client only and cosmetic, so a local random number is
+## fine. Rate-limited, as eight stand-ins fall a lot: one line per [constant LINE_GAP] unless about you or the leader.
 
 # No log channel: it decides nothing worth a log line.
 

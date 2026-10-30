@@ -1,15 +1,8 @@
 extends DotGameCheckSuite
 
-## What a subscribed map pack does to this game's course list and course vote, against a fixture
-## [DotContentIndex] and never the process's shared one.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_workshop.tscn
-## [/codeblock]
-##
-## A pack's map is a course document (the JSON `courses/` holds). Solo lists and plays it as
-## "Name [Pack]", an online session lists none, a map kind the game does not accept is left out,
-## and the game's own ids win.
+## What a subscribed map pack does to the course list and vote, against a fixture [DotContentIndex] and never the
+## shared one. Solo lists a pack's map as "Name [Pack]", an online session lists none, a map kind the game does not
+## accept is left out, and the game's own ids win.
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoCourseDoc := preload("../game/wo_course_doc.gd")

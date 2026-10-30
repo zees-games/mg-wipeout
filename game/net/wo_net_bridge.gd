@@ -15,26 +15,9 @@ const WoWorld := preload("../wo_world.gd")
 const WoCourseDoc := preload("../wo_course_doc.gd")
 const WoPlayer := preload("../wo_player.gd")
 
-## Joins an [WoGame] to a [DotNetManager]. The netcode seam, and the only file in this
-## project that names both.
-##
-## [codeblock]
-## # server
-## bridge.attach(game, net)          # dot-game's DotGameNetcode does this
-## bridge.open_link(server)          # and this
-## bridge.add_player(peer_id, userid, "Ada")
-## bridge.server_tick(tick)          # instead of the game's own loop
-##
-## # client
-## bridge.attach(game, net)
-## bridge.open_link(client_link)
-## bridge.ask_ready()
-## bridge.client_tick(tick, command, slot)
-## [/codeblock]
-##
-## The course is not replicated: it arrives once in `STAGE` and every obstacle is a function
-## of the tick, so a client poses it itself. The world ticks as a whole (course, movement,
-## falls, finish): [method ensure_game_ticked] runs it on the first behaviour through.
+## Joins an [WoGame] to a [DotNetManager]: the netcode seam, and the only file here that names both.
+## The course is not replicated: it arrives once in `STAGE` and every obstacle is a function of the tick. The world
+## ticks as a whole: [method ensure_game_ticked] runs it on the first behaviour through.
 
 const CHANNEL := "wo.net"
 
@@ -97,11 +80,8 @@ signal progress_received(player_id: int, kind: int, value: int, seconds: float)
 signal pickup_received(pickup_id: int, weapon_id: StringName, at: Vector3)
 signal pickup_gone_received(pickup_id: int, by: int)
 
-## Somebody pressed Enter. Server side, and the only thing this bridge does with chat.
-##
-## [b]The bridge carries chat and decides nothing about it.[/b] Who may say what, on which
-## channel, how often and who hears it are [DotChatRouter]'s, and the router is the services
-## layer's.
+## Somebody pressed Enter. Server side. The bridge carries chat and decides nothing about it: who may say what, how
+## often and who hears it are [DotChatRouter]'s.
 signal say_requested(peer_id: int, channel_id: StringName, text: String)
 
 ## A voice frame arrived. Server side; the payload is unparsed and must not be trusted —
@@ -144,10 +124,7 @@ const FIRST_BOT_SESSION := 900000
 var _next_bot_session: int = FIRST_BOT_SESSION
 
 ## net id -> the behaviour replicating that body, on BOTH ends.
-##
-## [b]Keyed by net id rather than by instance id, and that is what makes the tick loop the
-## same on both ends.[/b] An instance id is a counter in dot-props that a client does not
-## share; the net id is the one number both ends agree on.
+## Keyed by net id, not instance id: an instance id is a counter in dot-props a client does not share.
 var _bodies: Dictionary = {}
 
 ## Server only: `"p<instance>"` -> net id, so a removal can
@@ -159,10 +136,8 @@ var _peer_of_player: Dictionary = {}
 var _ready_peers: Dictionary = {}
 ## Carries the game's profile runtime over this manager (rows down, for a remote admin's panel).
 var profile_link: DotNetProfileLink = null
-## Server: peers whose READY came before their seat ([method add_player]). A client sends READY
-## when its link says PLAYING, which the link decides itself after sending `loaded` on another
-## channel; over ENet with loss the READY can overtake `loaded`, and a READY dropped here left
-## that client waiting for a world for ever. Admitted when seated.
+## Server: peers whose READY came before their seat ([method add_player]). Over ENet with loss READY can overtake
+## `loaded` and a dropped READY left the client waiting for a world for ever. Admitted when seated.
 var _ready_unseated: Dictionary = {}
 
 var _tick: int = 0
@@ -190,8 +165,6 @@ var _toys_stage: StringName = &""
 ## end's stage may exist, and stay registered through a stage change.
 var _toy_holder: Node3D = null
 
-
-# --- Wiring ----------------------------------------------------------------
 
 func _exit_tree() -> void:
 	# The link and the runtime hold each other through broadcast.
@@ -339,10 +312,9 @@ func open_link(parent: Node) -> void:
 		return
 
 	link = WoNetLink.attached_to(parent, self, net != null and net.is_server)
-	# Not parent.add_child: the link sits under the server (RPCs route by path) but must die
-	# with this bridge. A bare add_child left a second link after a module reload and Godot
-	# renamed the live one `@Node@n`, so RPCs to clients were lost. DotGameLink frees it with
-	# the bridge without remove_child, which errors on a busy parent.
+	# Not parent.add_child: the link sits under the server (RPCs route by path) but must die with this bridge. A bare
+	# add_child left a second link after a module reload and Godot renamed the live one, losing RPCs. DotGameLink
+	# frees it without remove_child, which errors on a busy parent.
 	DotGameLink.attach(link, parent, self, WoNetLink.NODE_NAME)
 
 
@@ -360,8 +332,6 @@ func _send(peer_id: int, payload: PackedByteArray, delivery: int) -> void:
 		link.send_request(payload)
 
 
-# --- Identity --------------------------------------------------------------
-
 static func player_key(session_id: int) -> StringName:
 	return StringName("u%d" % session_id)
 
@@ -377,8 +347,6 @@ func peer_for_player(session_id: int) -> int:
 func player_for_peer(peer_id: int) -> int:
 	return int(_player_of_peer.get(peer_id, 0))
 
-
-# --- Server: players -------------------------------------------------------
 
 ## Puts a connected peer into the game. What [DotGameRoster] calls.
 func add_player(peer_id: int, session_id: int, display_name: String) -> DotResult:
@@ -406,10 +374,7 @@ func add_player(peer_id: int, session_id: int, display_name: String) -> DotResul
 
 
 ## Somebody the world drives itself: a stand-in, or a test's player.
-##
-## [b]The same entity a peer gets, with a peer id of zero.[/b] A bot is replicated, scored
-## and crushed exactly like a person — what it does not have is a socket — and that is the
-## whole of the difference.
+## The same entity a peer gets, with a peer id of zero: replicated, scored and crushed like a person, minus a socket.
 func add_bot(display_name: String, team: int = 0) -> WoPlayer:
 	if net == null or not net.is_server or game == null:
 		return null
@@ -448,10 +413,9 @@ func remove_player(session_id: int) -> void:
 	if game.stage != null and game.stage.io != null:
 		game.stage.io.remove_peer(peer_id)
 
-	# Released BEFORE the game is told: `game.remove_player` emits `player_removed`, which
-	# `_on_player_removed` answers by releasing the entity and broadcasting the LEAVE.
-	# Releasing first empties `_behaviours`, so that handler finds nothing and this stays
-	# the one place a leaving player is announced.
+	# Released BEFORE the game is told: `game.remove_player` emits `player_removed`, whose handler releases the
+	# entity and broadcasts the LEAVE. Releasing first empties `_behaviours`, so this stays the one place a leaving
+	# player is announced.
 	_release_entity(session_id)
 	game.remove_player(player_key(session_id))
 
@@ -475,11 +439,9 @@ func _on_player_added(id: StringName) -> void:
 	if _behaviours.has(session_id):
 		return
 
-	# [b]Every id on the wire is `u<session>`, and anything else parses back to zero.[/b] A
-	# world that added a player called `bot` would replicate it under session 0 — which is
-	# also dot-net's broadcast address — and a second one would silently replace the first
-	# in this table. Refused with a line rather than accepted quietly: the symptom otherwise
-	# is one stand-in playing and the other standing still for ever.
+	# Every id on the wire is `u<session>`; anything else parses back to zero. A player called `bot` would replicate
+	# under session 0, also dot-net's broadcast address, and a second would silently replace the first. Refused with
+	# a line rather than accepted quietly.
 	if player_key(session_id) != id:
 		DotLog.warn(CHANNEL, "a player whose id is not a session key is not replicated", {
 			"id": String(id), "hint": "use add_bot() or WoNetBridge.player_key()",
@@ -533,10 +495,8 @@ func _build_entity(player: WoPlayer, peer_id: int) -> DotNetIdentity:
 	# movement a round trip behind their keys, which on a course is the difference between
 	# clearing an arm and being told it already hit you.
 	identity.authority = DotNetIdentity.Authority.SHARED
-	# [b]Always, and the map is why.[/b] Interest management is a saving where most players
-	# are out of sight; a course is open air with nothing taller than a gantry on it, so
-	# everybody can see everybody and culling would only ever produce a runner who vanishes
-	# in mid-jump.
+	# Always, and the map is why: interest management saves where most players are out of sight, but a course is open
+	# air, so culling would only make a runner vanish in mid-jump.
 	identity.always_relevant = true
 	player.add_child(identity)
 
@@ -568,8 +528,6 @@ func _release_entity(session_id: int) -> void:
 	_unregister(behaviour.identity.net_id)
 
 
-# --- Server: the world -----------------------------------------------------
-
 ## The stage is about to be rebuilt. Nothing on it is replicated, so there is nothing to
 ## let go of; the props on it go through `PROP_GONE` as dot-props removes them.
 func _on_world_clearing() -> void:
@@ -590,8 +548,6 @@ func _on_world_rebuilt() -> void:
 			game.stage.io.add_peer(int(peer_id))
 
 
-# --- Both ends: the stage's toys ------------------------------------------------------
-
 ## Server: an entity for each of the stage's toys, and TOYS naming them, after STAGE.
 func _register_toys() -> void:
 	if net == null or not net.is_server or game == null:
@@ -608,9 +564,8 @@ func _register_toys() -> void:
 	_broadcast(WoEvents.Kind.TOYS, _toys_body)
 
 
-## A toy's behaviour and identity under [param parent] (the toy on the server, a holder of the
-## client's own), registered under [param net_id] (0 allocates one: the server). Null when the
-## registry refused it. The behaviour before the identity, which collects behaviours in its
+## A toy's behaviour and identity under [param parent], registered under [param net_id] (0 allocates one: the server).
+## Null when the registry refused it. The behaviour goes before the identity, which collects behaviours in its
 ## `_ready`.
 func _toy_entity(toy: DotPropToy, parent: Node, net_id: int) -> WoToyNet:
 	var behaviour := WoToyNet.new()
@@ -796,8 +751,6 @@ func net_id_of_node(node: Node) -> int:
 	return 0
 
 
-# --- Server: the round -----------------------------------------------------
-
 func _on_round_began(number: int, _layout_id: StringName) -> void:
 	_broadcast(WoEvents.Kind.ROUND, WoEvents.write_round(number, true, 0))
 
@@ -822,11 +775,8 @@ func _on_blast(at: Vector3, radius: float) -> void:
 	_broadcast(WoEvents.Kind.BLAST, WoEvents.write_blast(at, radius))
 
 
-## A view changed on the server. Told to its owner and to nobody else.
-##
-## [b]To the one peer, because a camera is private.[/b] Who somebody is watching is a fact
-## about them that nobody else has any business knowing — and a stand-in, whose peer is
-## zero, is told nothing, which `_tell` guarantees rather than this.
+## A view changed on the server. Told to its owner only: who somebody is watching is private, and a stand-in (peer
+## zero) is told nothing, which `_tell` guarantees.
 func _on_spectate_changed(player_id: StringName) -> void:
 	if game == null or game.spectate == null or game.spectate.manager == null:
 		return
@@ -851,8 +801,6 @@ func announce_armed(player_id: StringName, weapon_id: StringName) -> void:
 	_broadcast(WoEvents.Kind.ARMED, WoEvents.write_armed(session_of(player_id), weapon_id))
 
 
-# --- Server: the tick ------------------------------------------------------
-
 func server_tick(tick: int) -> void:
 	_tick = tick
 	_game_ticked_for = -1
@@ -868,10 +816,9 @@ func server_tick(tick: int) -> void:
 
 		_unregistered_in_tick.clear()
 
-	# Belt and braces: `net.server_tick` drives the entities, and the first player behaviour
-	# through calls `ensure_game_ticked`. A server with nobody on it has no behaviours at
-	# all, and a world that only ticked when somebody was connected is a server whose round
-	# clock stops between players — which looks like the server having hung.
+	# Belt and braces: `net.server_tick` drives the entities and the first player behaviour calls
+	# `ensure_game_ticked`. A server with nobody on it has no behaviours, and a world that ticked only when somebody
+	# was connected would stop its round clock between players.
 	ensure_game_ticked(tick)
 
 	if tick % CLOCK_EVERY == 0:
@@ -909,14 +856,9 @@ func ensure_game_ticked(tick: int) -> void:
 
 	game.tick_once(tick)
 
-	# After the world moved everything, before the snapshot is built. A body pulled before
-	# the physics step would replicate where it was last tick — the family's own "produced
-	# correctly and consumed by nothing" one step along: correct data, wrong instant, and
-	# nothing errors.
-	# [b]Checked, not assumed.[/b] A behaviour lives on the body it replicates, so anything
-	# that frees a body frees its behaviour — and dot-net's registry is not told. A stale
-	# entry here is an "invalid previously freed instance" once a tick for the life of the
-	# process, which is noise rather than a crash and is therefore the kind nobody reads.
+	# After the world moved everything, before the snapshot is built: a body pulled before the physics step would
+	# replicate where it was last tick, correct data at the wrong instant.
+	# Checked for life: a freed body's behaviour is not removed from dot-net's registry.
 	for net_id in _bodies.keys():
 		var behaviour: Variant = _bodies[net_id]
 
@@ -936,8 +878,6 @@ func ensure_game_ticked(tick: int) -> void:
 		if is_instance_valid(behaviour):
 			behaviour.pull()
 
-
-# --- The client tick -------------------------------------------------------
 
 func client_tick(tick: int, command: DotFpsCommand, slot: int = 0, grab: bool = false) -> void:
 	if net == null or net.is_server or game == null:
@@ -992,8 +932,6 @@ func client_tick(tick: int, command: DotFpsCommand, slot: int = 0, grab: bool = 
 			game.course_elapsed += net.clock.tick_duration()
 
 
-# --- Receiving -------------------------------------------------------------
-
 func receive_snapshot(payload: PackedByteArray) -> DotResult:
 	if net == null or net.is_server:
 		return DotResult.fail(DotError.CODE_FORBIDDEN, "Only a client receives these.")
@@ -1044,12 +982,8 @@ func receive_input(peer_id: int, payload: PackedByteArray) -> DotResult:
 	return pushed
 
 
-## Text for one player: a refusal, a rate limit, a command's reply.
-##
-## [b]To the one person who asked, and that is the whole reason this is a method.[/b] "You
-## are talking too fast" and "you are gagged" are the two commonest things a server says,
-## and both are nobody else's business — a broadcast refusal is a punishment announced to
-## everybody.
+## Text for one player: a refusal, a rate limit, a command's reply. To the one who asked, never broadcast: a broadcast
+## refusal is a punishment announced to everybody.
 func notice(peer_id: int, text: String) -> void:
 	_tell(peer_id, WoEvents.Kind.NOTICE, WoEvents.write_notice(text))
 
@@ -1059,13 +993,9 @@ func send_chat(peer_id: int, wire: Dictionary) -> void:
 	_tell(peer_id, WoEvents.Kind.CHAT, WoEvents.write_chat(wire))
 
 
-## A voice frame, in whichever direction.
-##
-## [b]Not a [WoEvent].[/b] Voice is fifty packets a second and every event here is reliable,
-## so a talk spurt would put a hundred retransmittable messages in front of somebody
-## finishing. It also does not go through [DotNetManager]: the message registry seals a
-## message set and hashes it, and adding a fifty-hertz opaque blob buys nothing — the packet
-## has its own header, sequence and validation in [DotVoicePacket].
+## A voice frame, in whichever direction. Not a [WoEvent]: voice is fifty packets a second and every event here is
+## reliable. It also skips [DotNetManager], whose sealed message set buys nothing for an opaque blob that has its own
+## header and validation in [DotVoicePacket].
 func receive_voice(peer_id: int, payload: PackedByteArray) -> DotResult:
 	if payload.is_empty():
 		return DotResult.fail(DotError.CODE_INVALID, "An empty voice frame.")
@@ -1079,11 +1009,9 @@ func receive_voice(peer_id: int, payload: PackedByteArray) -> DotResult:
 				DotError.CODE_FORBIDDEN, "That peer has nobody in the world."
 			)
 
-		# [b]One path or the other, never both.[/b] [DotGameModule] assigns
-		# `voice_relay_fn` to the services layer's `relay_voice`; a game that ALSO connected
-		# `voice_requested` to the same router would relay every frame twice — a doubled
-		# talk spurt, a doubled rate limit, and a sequence number the jitter buffer sees go
-		# backwards.
+		# One path or the other, never both: [DotGameModule] assigns `voice_relay_fn` to the services layer, so also
+		# connecting `voice_requested` to the same router relays every frame twice (doubled rate limit, a sequence
+		# the jitter buffer sees go backwards).
 		if voice_relay_fn.is_valid():
 			voice_relay_fn.call(peer_id, payload)
 		else:
@@ -1108,8 +1036,6 @@ func receive_request(peer_id: int, payload: PackedByteArray) -> DotResult:
 
 	return net.receive(payload, peer_id)
 
-
-# --- Server: what a joining peer is told -----------------------------------
 
 func _on_request(message: DotNetMessage) -> void:
 	var ask := message as WoRequest
@@ -1148,11 +1074,8 @@ func _on_request(message: DotNetMessage) -> void:
 			_spectate_roam(peer_id)
 
 
-## Somebody who is out asked to look at somebody else. The server's list, the server's rule.
-##
-## [b]A refusal goes back as a notice rather than being dropped.[/b] "This server only lets
-## you watch your own side" is the answer to a key that did nothing, and a key that silently
-## does nothing is reported as broken.
+## Somebody who is out asked to look at somebody else. The server's list, the server's rule. A refusal goes back as a
+## notice, because a key that silently does nothing is reported as broken.
 func _spectate_step(peer_id: int, direction: int) -> void:
 	var session_id := player_for_peer(peer_id)
 
@@ -1194,10 +1117,8 @@ func _switch_team(peer_id: int, team: int) -> void:
 	if not game.players.has(id):
 		return
 
-	# [b]It lands on the next round, and that is the rule rather than a limitation.[/b] A
-	# player who changed sides half way along a course would carry their old side's progress
-	# into their new side's win —
-	# and dot-player-class documents the same decision about changing class mid-fight.
+	# It lands on the next round, by rule: a player who changed sides half way along a course would carry their old
+	# side's progress into their new side's win (dot-player-class documents the same for changing class).
 	game.sides[id] = team
 	(game.players[id] as WoPlayer).team = team
 
@@ -1206,12 +1127,9 @@ func _switch_team(peer_id: int, team: int) -> void:
 	notice(peer_id, "You are on the other side from the next round.")
 
 
-## Everything in the world, to one peer, once its own copy exists.
-##
-## [b]On READY and not on connect, and the difference is a whole join's worth of
-## messages.[/b] dot-server's signon finishes and THEN the client builds its scene; a server
-## that started talking at connect is one whose JOIN and STAGE land on a node
-## that does not exist yet and are lost, one "Node not found" per call.
+## Everything in the world, to one peer, once its own copy exists. On READY and not on connect: dot-server's signon
+## finishes and THEN the client builds its scene, so JOIN and STAGE sent at connect land on a node that does not exist
+## yet and are lost.
 func _admit(peer_id: int) -> void:
 	if peer_id <= 0:
 		return
@@ -1276,11 +1194,8 @@ func _admit(peer_id: int) -> void:
 	_tell(peer_id, WoEvents.Kind.CLOCK, _clock_body())
 
 
-## Which catalogue entry a replicated body came from.
-##
-## Read off the spawners rather than remembered beside the table: a second copy of "what
-## this is" is a second thing that can disagree with the first, and this one is only asked
-## for on a join.
+## Which catalogue entry a replicated body came from. Read off the spawners rather than remembered beside the table,
+## so there is no second copy to disagree; only asked for on a join.
 func _kind_of(behaviour: WoPropNet) -> StringName:
 	var prop := game.props.prop_for_node(behaviour.prop) if game.props != null else null
 	return prop.def.id if prop != null and prop.def != null else WoContent.CRATE
@@ -1301,13 +1216,9 @@ func _join_body(session_id: int) -> PackedByteArray:
 	)
 
 
-## Tells everybody who somebody is now: a profile that arrived after they were seated, a
-## wardrobe change, an operator's rename. Server only.
-##
-## [b]Through JOIN, which a client already applies to a player it has.[/b] A second message
-## for "this person changed" would be a second thing a joiner has to be told and a second
-## order two of them can arrive in; a JOIN is idempotent and already carries all of it.
-## An empty [param display_name] keeps the one they have.
+## Tells everybody who somebody is now (a late profile, a wardrobe change, a rename). Server only.
+## Through JOIN, which a client already applies and which is idempotent, rather than a second message with a second
+## arrival order. An empty [param display_name] keeps the current one.
 func refresh_player(session_id: int, display_name: String, avatar: DotAvatar) -> bool:
 	if net == null or not net.is_server or game == null:
 		return false
@@ -1325,12 +1236,8 @@ func refresh_player(session_id: int, display_name: String, avatar: DotAvatar) ->
 	return true
 
 
-## To every peer that has said it is ready, and to nobody else.
-##
-## [b]An empty body is dropped rather than sent.[/b] It means an encoder was handed
-## something that had already gone — a player whose entity was released before the LEAVE was
-## written — and a zero-length event decodes on the far end as a valid message about
-## nothing, which is the truncation bug this family has already paid for once.
+## To every peer that has said it is ready, and nobody else. An empty body is dropped, not sent: it means an encoder
+## was handed something already gone, and a zero-length event decodes on the far end as a valid message about nothing.
 func _broadcast(kind: int, body: PackedByteArray) -> void:
 	if net == null or not net.is_server or body.is_empty():
 		return
@@ -1339,19 +1246,14 @@ func _broadcast(kind: int, body: PackedByteArray) -> void:
 		_tell(int(peer_id), kind, body)
 
 
-## One peer, and never zero.
-##
-## `net.send(msg, 0)` is a BROADCAST in dot-net, so a helper that passed a missing peer id
-## straight through would send one player's private message to everybody. game-hungario
-## shipped exactly that.
+## One peer, and never zero: `net.send(msg, 0)` is a BROADCAST in dot-net, so passing a missing peer id straight
+## through would send one player's private message to everybody.
 func _tell(peer_id: int, kind: int, body: PackedByteArray) -> void:
 	if peer_id <= 0 or net == null or body.is_empty():
 		return
 
 	net.send(WoEvent.new(kind, body), peer_id)
 
-
-# --- Client: what it does with all that ------------------------------------
 
 func ask_ready() -> void:
 	_ask(WoEvents.Ask.READY, PackedByteArray([0]))
@@ -1562,15 +1464,9 @@ func _apply_hello(reader: DotNetReader) -> void:
 
 	local_player_id = int(hello["player_id"])
 
-	# [b]The server's tick rate, before anything is derived from it.[/b] Another game in
-	# this family shipped with HELLO carrying this and nothing reading it: a browser client
-	# counted at the 60 its export declared against a server on 128, so the correction rate
-	# was 0.96 and every replicated time was out by 128/60. Produced correctly and consumed
-	# by nothing, and invisible to a one-process suite because one process has one engine
-	# rate and both ends agree whatever the wire says.
-	#
-	# Before `sync_from_server`, because the clock converts its error and its lead through
-	# `tick_rate` and would otherwise do that arithmetic at the old rate.
+	# The server's tick rate, before anything is derived from it, and before `sync_from_server`, whose clock converts
+	# its error and lead through `tick_rate`. A client that counted at its export's 60 against a server on 128 got
+	# every replicated time wrong, and a one-process suite cannot see it because both ends share an engine rate.
 	_adopt_tick_rate(int(hello["tick_rate"]))
 
 	var rtt := float(rtt_source.call()) if rtt_source.is_valid() else 0.0
@@ -1587,16 +1483,8 @@ func _apply_hello(reader: DotNetReader) -> void:
 	hello_received.emit(local_player_id)
 
 
-## Puts the whole client — the world, every controller and the ENGINE — on the server's rate.
-##
-## That last one is not cosmetic. Measured in another game in this family at 60 against 128:
-## the simulation stayed correct, because the clock is asked how many ticks a frame is worth
-## — it just ran them in bursts of two and three, and the camera advanced 74 mm on six frames
-## out of seven and 112 mm on the seventh. A 47% change in apparent speed, eight times a
-## second.
-##
-## A server never calls this: its rate is `sv_tickrate`, and adopting a peer's would be a
-## client telling the server how fast to run.
+## Puts the whole client (world, controllers and the ENGINE) on the server's rate: at 60 against 128 the clock ran
+## ticks in bursts and the camera stuttered. A server never calls this; adopting a peer's rate is a client telling it.
 func _adopt_tick_rate(rate: int) -> void:
 	if net == null or net.is_server or game == null or rate <= 0 or rate == game.tick_rate:
 		return
@@ -1624,11 +1512,8 @@ func _adopt_tick_rate(rate: int) -> void:
 	})
 
 
-## The stage, which on a client is a document it builds exactly as the server did.
-##
-## [b]Refused with a line, never half built.[/b] A client a format behind the server decodes
-## a document it cannot read; [WoCourseDoc] says so, and the honest answer is no course and a
-## WARN rather than a course with holes in it.
+## The stage, which on a client is a document it builds exactly as the server did. Refused with a line, never half
+## built: a client a format behind gets no course and a WARN rather than a course with holes in it.
 func _apply_stage(reader: DotNetReader) -> void:
 	var told := WoEvents.read_stage(reader)
 
@@ -1677,22 +1562,9 @@ func _apply_join(reader: DotNetReader) -> void:
 		player.sampler = null
 		player.samples_input = false
 
-		# [b]This client's own player is owned by this client, and nobody else's is.[/b]
-		# Until 2026-09-25 every mirror was built with owner 0, this client's own included,
-		# so `is_owner` was false for the local player, `registry.predicted()` was empty and
-		# `client_tick` simulated nobody: the player moved only when a snapshot came back, a
-		# round trip behind the keys, and the camera — drawn from `render_state`, a blend
-		# against a previous tick the controller never recorded — lurched between where the
-		# player was last teleported and where the server had them. Every check passed
-		# anyway, because a client adopting the server's answer also agrees with the server.
-		#
-		# By session and not by a peer id on the wire: JOIN does not carry one, and what
-		# `is_owner` compares is the owner against THIS registry's local peer — so the local
-		# peer id is the only right value whatever the server calls the connection, and the
-		# wire (and therefore a published pack's server half) is unchanged. HELLO, which sets
-		# `local_player_id`, is sent before every JOIN in `_admit` on the same reliable
-		# channel; [method _apply_hello] still claims a player that got here first, because
-		# an order is a property of the server, not of this file.
+		# Owner 0 made `is_owner` false for the local player, so `client_tick` simulated nobody and every check still passed.
+		# By session, not a wire peer id (JOIN carries none): `is_owner` compares against THIS registry's local peer.
+		# HELLO precedes every JOIN, but [method _apply_hello] still claims a player that got here first.
 		var identity := _build_entity(player, _mirror_owner(session_id))
 		var registered := net.registry.register(
 			identity, int(join["net_id"]), net.clock.tick, net.config
@@ -1712,14 +1584,9 @@ func _apply_join(reader: DotNetReader) -> void:
 	roster_changed.emit(session_id)
 
 
-## Who owns a mirrored player on this client: this client, if it is this client's own
-## player, and the server's 0 otherwise.
-##
-## [b]Never the local peer for anybody else[/b], or this client would predict a person whose
-## keys it never had. And a client whose local peer is 0 claims nothing: 0 is the server's
-## owner id, and on such a registry dot-net's `is_owner` (owner == local peer) is already true
-## of every owner-0 mirror — which this function cannot undo, and which no client here runs
-## into, because `WoClient` takes its id from the multiplayer API and that never answers 0.
+## Who owns a mirrored player on this client: this client for its own, the server's 0 otherwise. Never the local peer
+## for anybody else, or it would predict a person whose keys it never had. A local peer of 0 claims nothing (0 is the
+## server's owner id; `WoClient` never gets 0).
 func _mirror_owner(session_id: int) -> int:
 	if net == null or net.local_peer_id <= 0:
 		return 0
@@ -1730,12 +1597,9 @@ func _mirror_owner(session_id: int) -> int:
 	return 0
 
 
-## The local player's mirror, claimed if it arrived before HELLO said whose it was.
-##
-## Not the order `_admit` sends in, and that is why it is belt and braces rather than a path
-## this game takes: a JOIN that reached this peer before its HELLO would otherwise leave the
-## local player unpredicted for the rest of the session, with every check still passing —
-## which is the bug [method _apply_join] documents.
+## The local player's mirror, claimed if it arrived before HELLO said whose it was. Belt and braces: `_admit` sends
+## HELLO first, but a JOIN ahead of it would leave the local player unpredicted with every check still passing (see
+## [method _apply_join]).
 func _claim_local_player() -> void:
 	var mine: WoPlayerNet = _behaviours.get(local_player_id)
 
@@ -1819,12 +1683,8 @@ func _apply_prop(reader: DotNetReader) -> void:
 	prop_arrived.emit(body.global_position, bool(info["vehicle"]))
 
 
-## Where a client finds the scene for something the server named.
-##
-## [b]Both catalogues, because the client has both and neither is the wire format.[/b] The
-## event carries a catalogue id; this build turns it into a path, and a build with a
-## different catalogue turns the same id into its own path. That is the whole point of not
-## sending a script name.
+## Where a client finds the scene for something the server named. Both catalogues, because the event carries a
+## catalogue id and each build turns it into its own path; that is why no script name is sent.
 func _scene_for(kind_id: StringName, _vehicle: bool) -> String:
 	var prop := game.props.catalogue.get_prop(kind_id) if game.props != null else null
 	return prop.scene_path if prop != null else ""
@@ -1837,11 +1697,8 @@ func _apply_prop_gone(reader: DotNetReader) -> void:
 		return
 
 	var net_id := int(info["net_id"])
-	# [b]Checked for life before it is cast.[/b] A client being disconnected frees its
-	# scene with the bridge's entries still in `_bodies`, and an event already queued then
-	# names a body that is gone -- casting a freed object is a script error, not a null.
-	# Found by dot-server-deploy's `smash_client`, the first suite to disconnect a client
-	# out of the middle of a round.
+	# Checked for life before it is cast: a client disconnected mid-round frees its scene with the bridge's entries
+	# still in `_bodies`, and casting a freed object is a script error, not a null.
 	var entry: Variant = _bodies.get(net_id)
 	_bodies.erase(net_id)
 
@@ -1873,8 +1730,6 @@ func _apply_clock(reader: DotNetReader) -> void:
 	game.remote_alive = int(clock["alive"])
 	game.remote_playable = bool(clock["playable"])
 
-
-# --- Reporting -------------------------------------------------------------
 
 func describe() -> Dictionary:
 	var out := {

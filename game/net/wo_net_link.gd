@@ -2,23 +2,9 @@ extends Node
 
 const WoNetLink := preload("wo_net_link.gd")
 
-## The five remote calls this game needs, on one node that exists on both ends.
-##
-## A copy of the other games' links in shape — deliberately, per the family rule that a game
-## copies what it needs rather than growing a shared dependency — because it encodes the one
-## thing that cost this family a day: [b]Godot refuses an RPC unless both ends declare the
-## same set of `@rpc` methods[/b], and routes it by the receiver's NODE PATH. Using the same
-## script on both ends makes the set identical by construction; naming the node the same on
-## both ends and parenting it to a node that is itself named the same ([DotServer] on one
-## side and [DotClientLink] on the other, both called `Server`) is the whole of the routing.
-##
-## [codeblock]
-## Server            <- DotServer, or DotClientLink named to match
-##   Wipeout         <- this, on both
-## [/codeblock]
-##
-## The symptom of getting it wrong is not an error. It is a client that connects, goes
-## quiet, and is timed out for not authenticating.
+## The five remote calls this game needs, on one node on both ends. Godot refuses an RPC unless both ends declare the
+## same `@rpc` set and routes by NODE PATH: the same script, named alike under a parent named alike (`Server`), is the
+## whole of the routing. Getting it wrong is a client that connects, goes quiet and times out unauthenticated.
 
 const CHANNEL := "wo.link"
 
@@ -36,18 +22,12 @@ const CHANNEL_VOICE := 2
 ## The bridge these calls are delivered to. Set by whoever creates this node.
 var bridge: Node = null
 
-## Whether this end is the authority. Used to refuse an obviously misrouted call early.
+## Whether this end is the authority, to refuse a misrouted call early.
 var is_server: bool = false
 
-## Where calls go instead of onto the network.
-##
-## Signature: `func(method: StringName, peer_id: int, payload: PackedByteArray)`, with
-## `method` one of `snapshot`, `event`, `input`, `request` or `voice`.
-##
-## [b]A test seam, and the only way this netcode can be checked at all.[/b] A real socket
-## does not reproduce the same latency, reordering and loss twice, so `headless_net` puts a
-## server and a client in one process with a lossy loopback between them. Unset — which is
-## every real deployment — every send goes out as an RPC.
+## Where calls go instead of onto the network: `func(method: StringName, peer_id: int, payload: PackedByteArray)`.
+## A test seam: `headless_net` puts a server and a client in one process with a lossy loopback, as a socket does not
+## repeat its latency and loss. Unset in every deployment.
 var loopback: Callable = Callable()
 
 ## What [method _live] last answered, so the change can be reported rather than the state.
@@ -73,13 +53,9 @@ static func attached_to(_parent: Node, p_bridge: Node, server: bool) -> WoNetLin
 	return link
 
 
-## Whether anything this end sends can actually go anywhere.
-##
-## [b]Reported on its EDGES, not per call.[/b] A link that is not live drops everything
-## silently — which is correct, because the alternative is an error per snapshot at thirty a
-## second — and a link that has gone quiet is indistinguishable from a game with nothing to
-## say. So the transition is logged once each way, at DEBUG, and the counters in
-## [method describe] are what answer "how much got through".
+## Whether anything this end sends can actually go anywhere. Reported on its EDGES, not per call (a dead link drops
+## silently, since an error per snapshot would be thirty a second): the transition is logged once each way at DEBUG,
+## and [method describe]'s counters answer how much got through.
 func _live() -> bool:
 	var live := (
 		true if loopback.is_valid()
@@ -96,14 +72,9 @@ func _live() -> bool:
 	return live
 
 
-# --- Sending ---------------------------------------------------------------
-
-## One routed chat line, to one peer.
-##
-## [b]A chat line is an EVENT on this game's own wire, not dot-server's chat manager.[/b]
-## [DotChatRouter] has the rules — the channels, the gag, the rate limit, who hears whom —
-## and a second path through the server's own chat would be a second set of rules to keep in
-## step, with the one that skipped the filter being the one that leaked admin chat.
+## One routed chat line, to one peer, as an EVENT on this game's own wire rather than dot-server's chat manager:
+## [DotChatRouter] has the rules, and a second path would be a second set of rules, the one that skipped the filter
+## leaking admin chat.
 func send_chat(peer_id: int, wire: Dictionary) -> void:
 	if bridge != null:
 		bridge.send_chat(peer_id, wire)
@@ -150,10 +121,8 @@ func send_input(payload: PackedByteArray) -> void:
 		_net_client_input.rpc_id(1, payload)
 
 
-## One encoded voice packet, in whichever direction this end is.
-##
-## [param peer_id] is the recipient on a server and is ignored on a client. **Zero is not
-## "everybody"** — the router names its listeners one at a time.
+## One encoded voice packet, in whichever direction this end is. [param peer_id] is the recipient on a server and
+## ignored on a client. Zero is not "everybody": the router names its listeners one at a time.
 func send_voice(peer_id: int, payload: PackedByteArray) -> void:
 	if not _live():
 		return
@@ -180,8 +149,6 @@ func send_request(payload: PackedByteArray) -> void:
 	else:
 		_net_request.rpc_id(1, payload)
 
-
-# --- Receiving -------------------------------------------------------------
 
 ## State from the authority. Unreliable: a newer snapshot supersedes a lost one, and
 ## resending a hundred-millisecond-old lean is worse than useless.
@@ -224,12 +191,9 @@ func _net_request(payload: PackedByteArray) -> void:
 		bridge.receive_request(multiplayer.get_remote_sender_id(), payload)
 
 
-## A voice frame, either way.
-##
-## `any_peer`, so on the server the sender is a claim until the transport is asked.
-## [method DotVoiceRouter.relay] is handed the id the TRANSPORT reported and stamps it over
-## whatever the packet's own speaker field said — without that any client can put words in
-## any other player's mouth.
+## A voice frame, either way. `any_peer`, so on the server the sender is a claim until the transport is asked: [method
+## DotVoiceRouter.relay] stamps the id the TRANSPORT reported over the packet's own speaker field, or any client could
+## put words in another's mouth.
 @rpc("any_peer", "unreliable", "call_remote", CHANNEL_VOICE)
 func _net_voice(payload: PackedByteArray) -> void:
 	voice_received += 1
@@ -238,10 +202,8 @@ func _net_voice(payload: PackedByteArray) -> void:
 		bridge.receive_voice(multiplayer.get_remote_sender_id(), payload)
 
 
-## Hands a payload to this end as though it had arrived over the wire.
-##
-## What the other end's [member loopback] calls. It goes through the same counters and the
-## same bridge entry points the RPCs do, so a test exercises the real path minus the socket.
+## Hands a payload to this end as though it had arrived over the wire: what the other end's [member loopback] calls,
+## through the same counters and bridge entry points as the RPCs, so a test exercises the real path minus the socket.
 func deliver(method: StringName, from_peer_id: int, payload: PackedByteArray) -> void:
 	if bridge == null:
 		return

@@ -1,48 +1,21 @@
 extends RefCounted
 
-## What a course and an arena ARE: a JSON document, checked here before anything is built.
-##
-## [b]A course is a document, not a scene, and that is the decision every other file in this
-## game leans on.[/b] A scene per course would be content to import, to rebase inside a
-## mounted pack and to keep in step across a server and every client; a document is a few
-## kilobytes the server reads off disk and SENDS to each client at the top of a round. So a
-## client needs no course files at all, a server can be given a new course by dropping a file
-## in a directory, and the two ends cannot disagree about where a platform is, because there
-## is only one copy and it travelled. mg-smash-copter decided the same about its platform
-## field ("the cell list travels rather than the layout id alone") and for the same reason.
-##
-## [b]Two kinds of document.[/b] A `course` is what everybody runs: a start pad, pieces,
-## checkpoints, a finish. An `arena` is where a final death is fought: pieces, the areas a
-## side can be put down in, where props and weapons arrive, and a gallery for everybody who
-## did not finish. Both are built by [WoCourse] from the same piece vocabulary, so a spinning
-## arm in an arena is the same arm a course has.
-##
-## [b]Validated, and a refused document is a line in the log, not a broken round.[/b] The
-## catalogue loads everything it can and skips what this refuses, saying why; a server with
-## one bad file plays the other nine.
-##
-## Every length is metres, every angle degrees, every time seconds. A position is the CENTRE
-## of what it places unless the field's own comment says otherwise. The mg-wipeout-maps
-## repository's README is the mapper's copy of this, with an example of every kind.
+## What a course and an arena ARE: a JSON document, validated here (a refused one is a log line, not a broken round).
+## A document, not a scene: the server SENDS it each round, so clients need no course files and cannot disagree. Metres,
+## degrees, seconds; positions are the CENTRE. The mg-wipeout-maps README is the mapper's copy.
 
 const CHANNEL := "wo.doc"
 
-## The newest format this build reads. A document written for a later one is refused rather
-## than half-built, because a piece kind this build has never heard of is a hole in the course.
-## Format 2 (2026-10-12) adds forks: route points on a `branch`, one branch `risky`. A course
-## with a fork says 2, so a build that reads only 1 refuses it with a sentence instead of
-## sending its stand-ins down both branches one after the other; every other course still
-## says 1 and plays on both.
+## The newest format this build reads; a later one is refused rather than half-built, as an unknown piece kind is a
+## hole in the course. Format 2 adds forks (route points on a `branch`, one `risky`): a build that reads only 1
+## refuses it rather than sending its stand-ins down both branches.
 const FORMAT := 2
 
 const KIND_COURSE := "course"
 const KIND_ARENA := "arena"
 
-## The largest a document may be on the wire, compressed, in bytes.
-##
-## [b]A cap because a reliable event is retransmitted until it arrives.[/b] A megabyte of
-## pieces would be a stall for every client at every round start; sixty-four kilobytes is
-## several hundred pieces, past anything a course needs.
+## The largest a document may be on the wire, compressed, in bytes. A cap because a reliable event is retransmitted
+## until it arrives; sixty-four kilobytes is several hundred pieces, past anything a course needs.
 const WIRE_LIMIT := 65536
 
 ## The most pieces one document may hold.
@@ -51,11 +24,8 @@ const MAX_PIECES := 600
 ## The most toys a course or an arena may place (dot-props' loose ones: [WoCourse] `_build_toys`).
 const MAX_TOYS := 32
 
-## Every piece kind, and the fields each one must have.
-##
-## [b]A table rather than a branch per kind,[/b] so the mapper's README, the validator and
-## the builder can be checked against one list. The meaning of each is in [WoCourse], where
-## it is built.
+## Every piece kind, and the fields each one must have. A table rather than a branch per kind, so the mapper's README,
+## the validator and the builder check against one list. Meaning is in [WoCourse].
 const PIECES := {
 	# Still things.
 	"box": ["at", "size"],
@@ -111,12 +81,9 @@ static func parse_json(text: String, origin: String = "") -> DotResult:
 	return validate(json.data as Dictionary)
 
 
-## Checks a document and returns a normalised copy of it: every optional field present, every
-## number a float, every position three of them.
-##
-## [b]A copy, so the builder never sees what a mapper wrote.[/b] It sees what this said the
-## mapper meant — which is the one version a client is also sent — so a missing `yaw` is 0.0
-## on both ends rather than "absent" on one and "0" on the other.
+## Checks a document and returns a normalised copy: every optional field present, every number a float, every position
+## three of them. A copy, so the builder sees what this said the mapper meant, the version a client is also sent: a
+## missing `yaw` is 0.0 on both ends.
 static func validate(source: Dictionary) -> DotResult:
 	var doc := source.duplicate(true)
 
@@ -165,10 +132,9 @@ static func validate(source: Dictionary) -> DotResult:
 
 	doc["pieces"] = normalised
 
-	# Toys: dot-props' placements, `{toy, at, yaw}`. Which ids exist is the catalogue's to say
-	# when the stage is built (an unknown one is left out and listed), so a course with a toy a
-	# newer dot-props has still plays on an older server. Only when present, so a document
-	# without any is byte for byte what it was.
+	# Toys: dot-props' placements, `{toy, at, yaw}`. Which ids exist is the catalogue's to say when the stage is
+	# built (an unknown one is left out and listed), so a newer toy still plays on an older server. Only when
+	# present, so a document without any is byte for byte unchanged.
 	if doc.has("toys"):
 		var toys: Array = []
 		for raw: Variant in (doc["toys"] if doc["toys"] is Array else []):
@@ -319,10 +285,8 @@ static func _route(doc: Dictionary) -> DotResult:
 	return DotResult.success(doc)
 
 
-## What a course is dressed in for the show: stands with a crowd, banners, light towers, a big
-## screen, flags. Drawn on a client only ([WoCourse] `_build_dressing`); nothing collides and
-## nothing about it is simulated, so a kind this build does not know is dropped, never refused:
-## a course with a newer client's flag on it is still the same course.
+## What a course is dressed in for the show: stands, banners, light towers, a screen, flags. Client only ([WoCourse]
+## `_build_dressing`), nothing collides; a kind this build does not know is dropped, never refused.
 const DRESSING := ["stands", "banner", "lights", "screen", "flags"]
 
 
@@ -508,14 +472,8 @@ static func _theme(source: Variant) -> Dictionary:
 	}
 
 
-# --- The wire ---------------------------------------------------------------
-
-## A normalised document as bytes: JSON, deflated, behind both its lengths.
-##
-## [b]The NORMALISED document, never the file.[/b] The server encodes what [method validate]
-## returned and a client validates what it decodes, so both ends build from the same
-## dictionary — and a client whose build is a format behind refuses it with a sentence rather
-## than building a course with holes in it.
+## A normalised document as bytes: JSON, deflated, behind both its lengths. The NORMALISED document, never the file:
+## both ends build from the same dictionary, and a client a format behind refuses it with a sentence.
 static func encode(doc: Dictionary) -> PackedByteArray:
 	var text := JSON.stringify(_to_plain(doc), "", true)
 	var raw := text.to_utf8_buffer()
@@ -589,8 +547,6 @@ static func _to_plain(value: Variant) -> Variant:
 		_:
 			return value
 
-
-# --- Small readers ----------------------------------------------------------
 
 static func _v3(value: Variant) -> Vector3:
 	if value is Vector3:

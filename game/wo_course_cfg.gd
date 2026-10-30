@@ -1,17 +1,8 @@
 extends RefCounted
 
-## A course's own settings: `cfg/<course id>.cfg` in the courses pack, applied when the course
-## is laid out and put back when the next one is.
-##
-## [b]Why the game does this and not the console's `exec`.[/b] The console runs a file and
-## forgets it: nothing would undo a one-life course's `wo_instant_death 1` when the vote moved
-## on to a course that wants the checkpoints back, and the operator's own value would be lost
-## with it. This remembers what each line replaced and puts it back, unless somebody has
-## changed that cvar since (an operator's `wo_instant_death 0` mid-round outranks a file).
-##
-## [b]Only `wo_` cvars[/b]: the file ships inside a courses pack, which anyone can publish, so it
-## must never reach `rcon_*`, `sv_*` or a command. One cvar and its value per line, `//` or `#`
-## for comments.
+## A course's own settings: `cfg/<course id>.cfg` in the courses pack, applied at layout and put back with the next
+## course. Not the console's `exec`, which forgets: this restores what each line replaced. Only `wo_` cvars, as anyone
+## can publish a courses pack and it must never reach `rcon_*`, `sv_*` or a command.
 
 const CHANNEL := "wo.course_cfg"
 

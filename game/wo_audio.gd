@@ -4,25 +4,9 @@ const WoAmbience := preload("wo_ambience.gd")
 const WoCourse := preload("wo_course.gd")
 const WoPaths := preload("wo_paths.gd")
 
-## What this game makes a noise about, and the noise, on the client.
-##
-## [b]On a course the sounds are the feedback.[/b] A splash says you are going back to the
-## checkpoint before the camera has caught up; the thud of an arm says it was the arm and
-## not your timing; a chime at a checkpoint says the restart point moved. In a final death
-## a throw and a blast behind you are the warning that works without looking.
-##
-## [b]A catalogue of ids and a table of stand-ins, which is the family's shape.[/b] dot-audio
-## decides what is audible, how many at once, how far away it stops mattering and what loses
-## to what; [method sound_catalogue] is those decisions, as a document naming paths nobody
-## has produced yet. [method sound_recipes] says which synthesised voice stands in for each
-## id until they are — and [DotAudioSinkGodot] consults the file before the stand-in, so
-## dropping a real `.ogg` into `audio/` switches that one id over with no code change.
-##
-## [b]Never on a server, and never deciding anything.[/b] Every hook here is called by
-## [WoClient] from something the world or the wire already said.
-##
-## [b]The beacon's ping is not here, deliberately[/b], as in mg-smash-copter: [DotFxBeacon]
-## synthesises its own tone, and the day real audio ships `beacon` is the id it moves to.
+## What this game makes a noise about, on the client: a splash says you are going back before the camera catches up.
+## Never on a server, never deciding anything. [method sound_catalogue] names ids, [method sound_recipes] gives each a
+## synthesised voice until an `.ogg` is dropped in ([DotAudioSinkGodot] tries the file first).
 
 const CHANNEL := "wo.audio"
 
@@ -341,8 +325,6 @@ static func _flat(id: StringName, bus: StringName, concurrent: int, priority: in
 	return def
 
 
-# --- Building ---------------------------------------------------------------
-
 func setup() -> DotResult:
 	manager = DotAudioManager.new()
 	manager.name = "Audio"
@@ -353,9 +335,8 @@ func setup() -> DotResult:
 	manager.register_as_service = false
 	# A barrage, a collapse and a firefight at once is the busiest this game gets.
 	manager.voices = 24
-	# Measured toward the family's -17 LUFS (dot-audio docs/loudness.md): a 40 s stand-in run
-	# read -21.0 LUFS with the bed, the steps and the limiter in. Once the stand-in turned off
-	# walls (2026-10-12, camera near 190 m a run): -18.6 at +3, -17.4 and -17.1 at +4.5.
+	# Measured toward the family's -17 LUFS (dot-audio docs/loudness.md): a 40 s stand-in run read -21.0 with the
+	# bed, steps and limiter in; -18.6 at +3, -17.4 and -17.1 at +4.5 once walls were off.
 	manager.loudness_trim_db = 4.5
 	add_child(manager)
 
@@ -560,13 +541,9 @@ func _flat_play(id: StringName) -> bool:
 	return manager != null and manager.play(id) != 0
 
 
-# --- The machinery, heard -----------------------------------------------------
-#
-# [b]Derived once a frame from the course, and never sent[/b] — Decision 1 again. Where an arm
-# is at any moment is a formula the client already evaluates to draw it, so "an arm just went
-# past you" is that formula at this frame's time against the last frame's. The mg-smash-copter
-# creak is the same idea. Only the machines near the ears are asked anything: the catalogue's
-# reach would cull the rest anyway, and a course is a hundred metres of them.
+# Derived once a frame from the course, never sent: where an arm is at any moment is a formula the client already
+# evaluates to draw it, so "an arm just went past you" is that formula at this frame's time against the last frame's.
+# Only machines near the ears are asked; the catalogue's reach would cull the rest.
 
 ## How near the ears a machine has to be for this frame to ask it anything, in metres.
 const MACHINE_EARSHOT := 30.0
@@ -578,12 +555,9 @@ const WHOOSH_REACH := 7.0
 var _machine_seconds: float = -1.0
 
 
-## Plays what the course's machines did between the last frame and [param seconds], heard
-## from [param listener]. Returns how many sounds it started. [param course] is a `WoCourse`.
-##
-## [b]A jump in time is not a sweep[/b]: a new stage, a reconnect or a paused frame skips more
-## than [code]0.25[/code] s, and every arm on the course would otherwise be heard passing at
-## once. The first frame after one only remembers the time.
+## Plays what the machines did between the last frame and [param seconds], heard from [param listener]; returns the
+## count. A jump in time (new stage, reconnect, pause: over 0.25 s) is not a sweep, or every arm would be heard
+## passing at once; that frame only remembers the time.
 func present_machinery(course: Node, seconds: float, listener: Vector3) -> int:
 	var before := _machine_seconds
 	_machine_seconds = seconds

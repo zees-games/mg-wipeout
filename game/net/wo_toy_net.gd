@@ -1,21 +1,8 @@
 extends DotNetBehaviour
 
-## One of the stage's toys on the wire (dot-props' [DotPropToy]): where its moving part is and
-## how it is turned, whether it is on, and how often it has been used.
-##
-## [b]The server's physics, never predicted[/b]: Godot's rigid-body solver is not the same on two
-## machines, so a client that simulated a ball would disagree with the server within a second.
-## The client's toy is frozen and posed from these ([method DotPropToy.show_state]), as
-## [WoPropNet] does for the arena's props.
-##
-## [b]Paired by index[/b]: both ends build the same toys in the same order from the stage's
-## document, so the TOYS event carries only the net ids, in toy order, and the stage's id. A
-## client's has no [member toy] until that stage is built here: it is registered anyway, because
-## a snapshot is read no further than its first unknown entity.
-##
-## [b]A use count, not a use event[/b]: a bounce moves [member net_count] by one, and a client
-## plays the sound when it sees it move, so a joiner and a lost packet cost nothing but a late
-## sound. Eight bits; it wraps. game-hide-n-seek's HsToyNet is the same file.
+## One of the stage's toys on the wire (dot-props' [DotPropToy]): its moving part, whether it is on, and a use count.
+## The server's physics, never predicted; the client's toy is frozen and posed from these. Paired by index, and
+## registered before the stage is built, as a snapshot is read no further than its first unknown entity.
 
 var toy: DotPropToy = null
 

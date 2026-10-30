@@ -2,13 +2,9 @@ extends DotNetMessage
 
 const WoEvents := preload("wo_events.gd")
 
-## Anything a client asks the authority for. Reliable, rare, to the server only.
-##
-## [b]There are three of these and none of them is a per-tick intent.[/b] Firing is a
-## BUTTON, because it is held down and has to be ordered against the movement it was aimed
-## with; this is for the other kind — "my world exists, start telling me about yours", "I
-## want to get into that chopper", "put me on the other side" — each of which happens once
-## and must not be lost.
+## Anything a client asks the authority for. Reliable, rare, to the server only: three kinds, none a per-tick intent
+## (firing is a BUTTON, ordered against its movement) but each happening once and not to be lost ("my world exists",
+## "into that chopper", "the other side").
 
 const NAME := &"wo.request"
 const KIND_BITS := 4
@@ -18,13 +14,9 @@ var kind: int = 0
 var body: PackedByteArray = PackedByteArray()
 
 
-## [b]Built with [code]new(kind, body)[/code], and this file does not preload itself.[/b]
-## It used to, for a typed [code]static func of() -> WoRequest[/code] factory. A script that
-## [code]extends DotNetMessage[/code] and preloads ITSELF, first loaded from a module a
-## running [DotServer] loads at runtime — which is how every deployed server loads this
-## game — leaks the whole script graph at exit on Godot 4.7.2. Measured in
-## mg-buses-from-hell (8ed866c) with a two-line reproduction. The registry decodes with a
-## bare [code]new()[/code], which is why both arguments default.
+## Built with `new(kind, body)`; this file does not preload itself. A script that `extends DotNetMessage` and preloads
+## ITSELF, first loaded from a module a running [DotServer] loads at runtime, leaks the whole script graph at exit on
+## Godot 4.7.2. The registry decodes with a bare `new()`, so both arguments default.
 func _init(p_kind: int = 0, p_body: PackedByteArray = PackedByteArray()) -> void:
 	kind = p_kind
 	body = p_body

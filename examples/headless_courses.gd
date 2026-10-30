@@ -6,20 +6,9 @@ const WoCourse := preload("../game/wo_course.gd")
 const WoGame := preload("../game/wo_game.gd")
 const WoPlayer := preload("../game/wo_player.gd")
 
-## Every installed course is run to the finish by a stand-in, and every arena is stood in.
-##
-## [b]A course is content, and content is checked by playing it.[/b] A document that validates
-## can still have a gap nobody clears, an arm with no window, a mover that never reaches the far
-## side or a finish nobody can get to — and none of those is an error anywhere. So each course
-## here is run by a bot that never fumbles, on the route the document gives, with every hazard
-## live and the bot waiting for its windows the way [WoGame] lets it; a course it cannot finish
-## inside its own clock is a course to fix, and this says which one and where the bot got to.
-##
-## [b]Ticks are not paced by the engine's frames[/b], because ten courses at real time is half
-## an hour. The simulation does not notice: every tick is a fixed step the suite drives itself.
-##
-## Without the mg-wipeout-maps link (a fresh clone) this runs the built-in practice course and
-## arena only, and says so.
+## Every installed course run to the finish by a stand-in, and every arena stood in: a document that validates can
+## still have a gap nobody clears. A bot that never fumbles runs each with every hazard live; one that cannot finish
+## is a course to fix, and this says where it got to. Without the maps link only the built-in course and arena run.
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -102,10 +91,9 @@ func _run() -> void:
 	_report_sections(_sections_entered, _sections_finished, sections, checks)
 
 
-## A teleport pad sends whoever stands on it to its `to`, facing its `heading`, and nobody who
-## is beside it, above it by a jump's height more or under it. Dan's Course ends on one, so a
-## stand-in finishing it (above) also proves the whole path through a round: the pad, the
-## stand-in carrying on from the nearest route point, and the finish beyond it.
+## A teleport pad sends whoever stands on it to its `to`, facing its `heading`, and nobody beside, above (by a jump's
+## height more) or under it. Dan's Course ends on one, so a stand-in finishing it also proves the whole path through a
+## round.
 func _teleport_pad(doc: Dictionary) -> void:
 	_section("a teleport pad")
 	var game := await _fresh_world(doc)
@@ -223,11 +211,9 @@ func _run_course(doc: Dictionary, risk: float = -1.0) -> void:
 	_finished()
 
 
-## A field of six at easy and six at nightmare round the same course, every mistake on: the
-## presets have to MEAN something. Nightmare's median finish is not slower than easy's, and
-## every nightmare stand-in gets home. Deterministic (seeded mistakes, ticks driven here), so
-## a change to a preset or the racing that turns this round is a change to look at; the full
-## spread is tools/race_times.
+## A field of six at easy and six at nightmare round the same course, every mistake on: the presets have to MEAN
+## something. Nightmare's median finish is not slower than easy's, and every nightmare stand-in gets home.
+## Deterministic, so a change that turns this round is one to look at; the full spread is tools/race_times.
 func _race_by_difficulty(doc: Dictionary) -> void:
 	_section("%s — a field at easy against one at nightmare" % doc["id"])
 	var medians := {}

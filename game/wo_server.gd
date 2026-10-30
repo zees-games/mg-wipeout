@@ -3,10 +3,8 @@ extends Node
 const WoConfig := preload("wo_config.gd")
 const WoGame := preload("wo_game.gd")
 
-## What a [DotServer] loads as its game scene. Never a client.
-##
-## Lives in `game/`, not `scenes/`: a game is vendored by copying `game/` and only the `.tscn`s, so a script
-## under `scenes/` never reaches the build and the module refuses to load. Everything else is in `wo_module.gd`.
+## What a [DotServer] loads as its game scene; never a client. Lives in `game/`, not `scenes/`: a vendored game copies
+## `game/` and only the `.tscn`s, so a script under `scenes/` never reaches the build. The rest is in `wo_module.gd`.
 
 const CHANNEL := "wo.server"
 

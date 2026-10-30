@@ -2,46 +2,11 @@ extends Node
 
 const WoPlayer := preload("wo_player.gd")
 
-## What a player keeps from a round: the numbers this game produces, and what they earn.
-##
-## [b]The numbers are the ones only this game has.[/b] A deathmatch counts kills; an obstacle
-## course's interesting figures are about the course — how many somebody finished, how many
-## they won outright, how often they fell in and how often an arm threw them. Each is declared
-## once, in
-## [method schema], counted as it happens and reported by dot-stats as a DELTA — "add one",
-## never "now has forty" — so two servers reporting one player add up rather than overwrite.
-##
-## [b]Achievements are rules over those numbers and nothing else.[/b] dot-achievements never
-## hears about a course or an arm; it hears that a number moved, through
-## [DotAchievementStatsLink] — which is the differencer between dot-stats' SESSION totals
-## and a lifetime total, and the reason this is not one `connect`. Wiring `recorded` straight
-## into `record` would add the running total to the lifetime total on every reading.
-##
-## [b]Stand-ins are never counted.[/b] An empty server here is a server full of them, and an
-## achievement a bot can earn is noise in every log an operator reads; a stand-in's numbers
-## are also no player's numbers, so reporting them would be filing figures against nobody.
-##
-## [b]Server side, and on an offline client — wherever the world is authoritative.[/b] A
-## connected client's world decides nothing, so it counts nothing; what a player is told is
-## a notice from the server when they earn something.
-##
-## [b]A player's numbers are filed under their scoped profile key when they have one[/b] —
-## dot-user's per-server derivation, which outlives a connection and can never carry a site
-## account id (dot-stats' reporter refuses a `backbone:` key before it leaves the process,
-## and this one is not one). [member durable_key_fn] supplies it; without one, or for a
-## guest dot-user keeps no profile for, the key is the world's id, `u<session>`, and lasts a
-## connection. The world's ids stay the world's: only what is handed to dot-stats and
-## dot-achievements changes, through [method _key].
-##
-## [b]Fixed when counting begins, for the rest of the session.[/b] Counting begins on a
-## player's first number, which is nearly always after dot-platform has admitted them; one
-## who scored before their profile arrived keeps the session key until they reconnect,
-## because moving half a session's numbers to another key mid-flight would file the second
-## half against a total the first half never reached.
+## What a player keeps from a round: the course's numbers, declared in [method schema] and reported to dot-stats as
+## DELTAs, and the achievements over them via [DotAchievementStatsLink]. Stand-ins are never counted. Filed under the
+## scoped profile key ([member durable_key_fn]) else `u<session>`, fixed when counting begins.
 
 const CHANNEL := "wo.progress"
-
-# --- The numbers -------------------------------------------------------------
 
 ## Rounds a player was in from the start to the end.
 const ROUNDS_PLAYED := &"wo.rounds_played"
@@ -94,8 +59,6 @@ var _keys: Dictionary = {}
 var _ids: Dictionary = {}
 
 
-# --- The documents -----------------------------------------------------------
-
 static func ids() -> Array[StringName]:
 	return [
 		ROUNDS_PLAYED, COURSES_FINISHED, COURSES_FIRST, ROUNDS_WON, FINALE_WINS, FINALE_KILLS,
@@ -131,14 +94,8 @@ static func _add(
 	out.stats.append(def)
 
 
-## What a player can earn, as rules over [method schema]'s numbers.
-##
-## [b]Every stat read here is one [method schema] declares and this file records[/b] — an
-## achievement over a stat nothing reports never unlocks and nothing errors, which is this
-## family's most repeated bug wearing a rosette. The suite checks it both ways.
-##
-## One stat, one merge: everything is SUM except the best round, which is HIGHEST —
-## dot-achievements refuses a catalogue that reads one number both ways.
+## What a player can earn, as rules over [method schema]'s numbers. A rule over a stat nothing reports never unlocks
+## and nothing errors (the suite checks both ways). Everything is SUM except the best round, HIGHEST.
 static func catalogue() -> DotAchievementCatalogue:
 	var made: Array[DotAchievement] = []
 
@@ -199,8 +156,6 @@ static func _sum(
 	return out
 
 
-# --- Building ---------------------------------------------------------------
-
 ## [param directory] empty keeps achievement progress in memory; see
 ## [member WoConfig.progress_directory]. [param report] is [member WoConfig.report_progress].
 func setup(directory: String, report: bool) -> DotResult:
@@ -249,15 +204,9 @@ func setup(directory: String, report: bool) -> DotResult:
 	return link.start().wrap("wipeout's stats-to-achievements link")
 
 
-# --- Counting ---------------------------------------------------------------
-
-## Files one reading for one person, and starts counting for them the first time.
-##
-## [b]Begun lazily, on the first number, and that is what keeps stand-ins out.[/b] A player
-## is added to the world before a bridge or a client marks them a stand-in, so a check at
-## join time would see every bot as a person; by the time anything is worth counting, the
-## flag is set. The memory and file stores load synchronously, so the achievement tracker
-## has them before the reading that follows.
+## Files one reading for one person, and starts counting for them the first time. Begun lazily, which keeps stand-ins
+## out: a player is added before a bridge or client marks them a stand-in, so a check at join time would count every
+## bot. The stores load synchronously, so the tracker has them before the reading that follows.
 func record(player_id: StringName, stat: StringName, value: float = 1.0) -> void:
 	if stats == null:
 		return
@@ -351,8 +300,6 @@ func session_values(player_id: StringName) -> DotStatsValues:
 func filed_under(player_id: StringName) -> StringName:
 	return _keys.get(player_id, player_id)
 
-
-# --- What the world reports -------------------------------------------------
 
 func on_round_began() -> void:
 	_in_round.clear()

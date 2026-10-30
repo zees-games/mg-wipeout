@@ -1,14 +1,9 @@
 extends "dedicated_late.gd"
 
 
-## The game as a deployed server runs it: a real [DotServer], booted from a config file, with
-## the module loaded BY PATH the way an operator names it — so the netcode, the services, the
-## cvars and the stand-ins are the ones a deployment gets, not a copy assembled for a test.
-##
-## [b]What neither of the other suites can reach.[/b] `headless_run` drives a world by hand and
-## `headless_net` joins two halves with no server; this is the only place [WoModule] loads,
-## [DotGameModule]'s order runs, a cvar is typed at a console and a round is played by
-## nothing but the stand-ins the module seats itself.
+## The game as a deployed server runs it: a real [DotServer] booted from a config file, the module loaded BY PATH as an
+## operator names it. The only place [WoModule] loads, [DotGameModule]'s order runs, a cvar is typed at a console and a
+## round is played by the stand-ins the module seats.
 
 const SECTIONS := 15
 const CHECKS := 107
@@ -246,10 +241,9 @@ func _test_a_round_runs() -> void:
 	_check(bots == game.config.minimum_players, "the module seated stand-ins up to the minimum", "%d" % bots)
 	_check(not rounds.is_empty(), "and a round was decided", str(rounds))
 	_check(not rounds.is_empty() and str(rounds[0][2]) != "", "with a sentence saying why", str(rounds))
-	# [b]A person takes a stand-in's place, and leaving gives it back[/b]: DotBotQuota's fill
-	# mode, the family's default. Driven by calling the roster check rather than waiting for
-	# its interval, with a person added through the bridge the way a test's player is (peer
-	# zero, not a stand-in), so the count is exact and nothing else moves under it.
+	# A person takes a stand-in's place, and leaving gives it back (DotBotQuota's fill mode). Driven by calling the
+	# roster check rather than waiting for its interval, with a person added through the bridge (peer zero, not a
+	# stand-in), so the count is exact.
 	var quota_module := _module()
 	var quota_bridge: Object = quota_module.get("bridge") if quota_module != null else null
 	_check(server.console.find_cvar("bot_quota") != null and server.console.find_cvar("bot_quota_mode") != null,
@@ -304,11 +298,9 @@ func _test_a_round_runs() -> void:
 	_finished()
 
 
-## A reload keeps the courses the server names. `wo_reload` reads the course directory again with
-## `load_from`, which forgets everything read before, and in two of the three games built this
-## way it stopped there: every delivered course was gone until a restart, with nothing logged.
-## A pack "mounted" on the disk and a descriptor naming it stand in for dot-cloud and the
-## deployment's map config (dot-server-deploy's cfg/content.yml), which a suite has neither of.
+## A reload keeps the courses the server names: `wo_reload` re-reads the directory with `load_from`, which forgets
+## everything before, and delivered courses were once gone until a restart with nothing logged. A pack "mounted" on
+## disk and a descriptor stand in for dot-cloud and the deployment's map config.
 func _test_a_reload_keeps_delivered_courses() -> void:
 	_section("a reload keeps the courses the server names")
 	var key := "dot-test/wo-delivered@1.0.0"
@@ -355,17 +347,9 @@ func _test_a_reload_keeps_delivered_courses() -> void:
 	_finished()
 
 
-## The players' vote decides the next course, end to end through what a player types: a
-## nomination, the ballot opening on its own clock with the nomination on it, a vote by
-## number, the round's end putting the winner on the next round, and rock-the-vote opening a
-## ballot early. Commands run at the console, which is where a `!vote` typed in chat lands
-## (`_on_chat_command` runs it as the player); the console's voter is "console", so the
-## voter list is that one name. Stand-ins are not voters, and a server of stand-ins never
-## opens a ballot by itself.
-##
-## Synchronous from the round's end to the course laid: the stand-ins' rounds are running,
-## and one that started in a frame between would lay the voted course itself and leave the
-## check reading the rotation's.
+## The players' vote decides the next course, end to end through what a player types (nomination, ballot, vote by
+## number, the round's end, rock-the-vote), at the console (the voter is "console"). Synchronous from the round's end
+## to the course laid: a stand-in round starting between would lay the course itself.
 func _test_the_course_vote() -> void:
 	_section("the course vote")
 	var module := _module()
@@ -468,7 +452,7 @@ func _test_the_course_vote() -> void:
 	var _rocked := _run_command("rtv")
 	vote.call("advance", 0.05)
 	_check(director.is_voting(), "and rock-the-vote opens a ballot before its time", str(_rocked))
-	# The director opens it under MANUAL; this game used to open it from clock.expired too.
+	# The director opens it under MANUAL.
 	_check(opened_count[0] == 1, "and opens exactly one rtv ballot, not a second from the game", str(opened_count[0]))
 	director.vote_opened.disconnect(counter)
 	_finished()
@@ -509,10 +493,9 @@ class CommandHost extends Node:
 		return null
 
 
-## A catalogue that has a real maps.yml applied must free when the last reference goes. The
-## rotation file's `fallback_in` lambda once read the catalogue's own `_defs`, which captured the
-## catalogue itself: a RefCounted cycle that nothing frees, reported only at exit as leaked objects
-## (mg-deathrun had 29), where no assertion reaches. A WeakRef is the in-process proof.
+## A catalogue with a real maps.yml applied must free when the last reference goes. The rotation file's `fallback_in`
+## lambda captured the catalogue: a RefCounted cycle, reported only at exit as leaked objects, where no assertion
+## reaches. A WeakRef is the in-process proof.
 func _test_rotation_file_frees() -> void:
 	_section("rotation file frees")
 	var path := SERVER_DIR.path_join("leak_maps.yml")
@@ -541,10 +524,9 @@ func _apply_and_drop(rotation_file: DotMapRotationFile) -> WeakRef:
 	return weakref(catalogue)
 
 
-## `maps.yml` (dot_map tiers): which courses rotate. The format is dot-map's selftest's; this is what the GAME
-## does with it: a course left out is installed and loadable and is never drawn, never on a
-## ballot, never nominated, marked in the map list; a switch of rotation takes effect; a renamed
-## command is registered; no file means every course.
+## `maps.yml` (dot_map tiers): which courses rotate. What the GAME does with it: a course left out is installed and
+## loadable but never drawn, balloted or nominated, and is marked in the map list; a rotation switch takes effect; a
+## renamed command is registered; no file means every course.
 func _test_rotation_file() -> void:
 	_section("rotation file")
 	var module := _module()

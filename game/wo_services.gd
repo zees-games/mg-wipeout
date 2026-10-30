@@ -4,17 +4,8 @@ const WoGame := preload("wo_game.gd")
 const WoNetBridge := preload("net/wo_net_bridge.gd")
 const WoPlayer := preload("wo_player.gd")
 
-## Chat, voice and moderation, wired to this game's sides.
-##
-## [b]Seventy lines, because [DotGameServices] holds the other five hundred.[/b] The five
-## games written before that base each carry their own copy — 557 to 718 lines, differing in
-## the channels, the rules and a voice range. What is left here is what is genuinely this
-## game's: who can hear whom, and where somebody is standing.
-##
-## [b]Proximity is the channel a course is played on.[/b] Everybody is on the same course,
-## mostly within a few obstacles of somebody else, and the useful conversation is with the
-## people at the same arm you are, timing it. Twenty metres reaches them and does not reach
-## the far end of a course, which is what makes it a channel rather than a second "all".
+## Chat, voice and moderation, wired to this game's sides ([DotGameServices] holds the rest). Proximity is the channel a
+## course is played on: twenty metres reaches the people at the same arm and not the far end, so it is not a second "all".
 
 # No `const CHANNEL`: [DotGameServices] declares one and GDScript refuses a redeclaration,
 # which is the right refusal — one layer, one channel an operator can turn up.
@@ -40,15 +31,9 @@ func _chat_rules() -> Object:
 	return chat_rules()
 
 
-## The same rules, as a static a CLIENT can ask for without building a services layer.
-##
-## [b]Static because the other end needs them and must not instantiate this.[/b] A services
-## layer is a [Node] with a moderation store and a router under it; a client that called
-## `new()` on one to read two numbers off it would build all of that, leak it, and — inside
-## a delivered pack — fail to compile, because a script whose base class lives in the HOST
-## build cannot hand its return type to a script in the mount. Both were measured in
-## game-buses-from-hell: seven leaked objects in a suite, and a client scene that would not
-## load at all on a real server.
+## The same rules, as a static a CLIENT can ask for without building a services layer. A services layer is a [Node]
+## with a moderation store and router; calling `new()` on one leaked it and, inside a delivered pack, failed to
+## compile (a script whose base lives in the HOST build cannot hand its return type to a script in the mount).
 static func chat_rules() -> DotChatRules:
 	var rules := DotChatRules.new()
 	rules.max_length = 140
@@ -123,20 +108,16 @@ static func chat_channels() -> Array[DotChatChannel]:
 	return out
 
 
-## The voice format, which both ends must agree on exactly.
-##
-## Static, because the CLIENT builds one too and a sample rate that differs between two peers
-## is a stream of packets the router refuses for being the wrong length, counted and said to
-## nobody. [method DotVoiceConfig.format_fingerprint] exists for that reason.
+## The voice format, which both ends must agree on exactly. Static, because the CLIENT builds one too, and a sample
+## rate that differs is a stream of packets the router refuses as the wrong length, said to nobody ([method
+## DotVoiceConfig.format_fingerprint]).
 static func voice_format() -> DotVoiceConfig:
 	var config := DotVoiceConfig.new()
 	config.sample_rate = 16000
 	config.frame_ms = 20.0
 	config.codec_id = &"adpcm"
-	# [b]Push to talk, because a course is three minutes of people shouting.[/b] Going in
-	# the water is the single loudest thing that happens to a player, and open-mic voice on a
-	# full server is twenty people reacting to twenty different splashes over the one thing
-	# anybody needed to hear.
+	# Push to talk, because a course is three minutes of people shouting: open-mic on a full server is twenty people
+	# reacting to twenty different splashes.
 	config.push_to_talk = true
 	config.activation_rms = 0.02
 	config.hangover_ms = 250.0
@@ -151,19 +132,14 @@ func _voice_config() -> Object:
 	return voice_format()
 
 
-## Voice goes to the whole server, and the map is the reason.
-##
-## mg-buses-from-hell defaults to the team because its two sides are the game. Here
-## everybody is on the same course with the same problem, and half the fun is hearing
+## Voice goes to the whole server: everybody has the same problem on the same course, and half the fun is hearing
 ## somebody else find out the arm was faster than it looked. Team voice is a key away.
 func _voice_default_channel() -> int:
 	return DotVoiceRouter.Channel.ALL
 
 
-## Which side somebody is on, for the team channel and for team voice.
-##
-## [b]Read off the game rather than cached, because sides change between rounds.[/b] Anything
-## holding a team id would put a player in the conversation they were in last round.
+## Which side somebody is on, for the team channel and team voice. Read off the game, not cached, because sides change
+## between rounds.
 func _team_of(peer_id: int) -> int:
 	var player := _player_of(peer_id)
 	return (game as WoGame).team_of(player.player_id) if player != null else 0
@@ -172,10 +148,8 @@ func _team_of(peer_id: int) -> int:
 func _position_of(peer_id: int) -> Vector3:
 	var player := _player_of(peer_id)
 
-	# [b]The simulated state, not the node.[/b] The node is wherever the last frame drew
-	# them, which on an interpolating client is between two ticks; the state is where the
-	# tick that is being resolved put them — and a proximity channel resolved against a
-	# rendered position is one whose range is a frame's worth of walking out.
+	# The simulated state, not the node: the node is wherever the last frame drew them, between two ticks on an
+	# interpolating client, and a range resolved against it is off by a frame of walking.
 	return player.controller.state.position if player != null else Vector3.ZERO
 
 
@@ -191,21 +165,9 @@ func _player_of(peer_id: int) -> WoPlayer:
 	return (game as WoGame).players.get(WoNetBridge.player_key(session_id))
 
 
-# --- dot-moderation's live tools ---------------------------------------------
-
-## What the admin set means here, one callable per ability. See `DotGameServices`.
-##
-## [b]Noclip is how a stuck runner gets looked at, freeze how a griefer blocking a beam is
-## stopped, and respawn puts somebody back at their last checkpoint[/b] — which is what a fall
-## does anyway, so it decides nothing. What is refused is refused for a reason about this
-## game: give and strip, because the weapons in a final death are the ones lying on its floor
-## and who reached which is the fight's fairness.
-##
-## [b]Blind and beacon are the two about a SCREEN rather than a body[/b], and each is one flag
-## on [WoPlayer] that `WoPlayerNet` replicates — the blind to its owner alone, the beacon to
-## everybody — and that the client draws: `WoHud` blacks the owner's screen out, `DotFxBeacon`
-## rings the player on every screen and pings. The server decides; nothing about either is a
-## client's to choose.
+## What the admin set means here, one callable per ability (see `DotGameServices`). Refused: give and strip, because
+## the weapons in a final death are the ones on its floor. Blind and beacon are one flag each on [WoPlayer], replicated
+## by `WoPlayerNet` (blind to its owner, beacon to everybody) and drawn by the client; the server decides.
 func _mod_abilities() -> Dictionary:
 	return {
 		"noclip": func(id: StringName, args: Dictionary) -> DotResult:
@@ -250,10 +212,8 @@ func _mod_abilities() -> Dictionary:
 				return _mod_absent(id)
 			p.display_name = str(args["name"]).strip_edges().substr(0, 32)
 			return DotResult.success(p.display_name),
-		# The screen and nothing else. A blinded player still moves and can still be hit; an
-		# admin who wants them to stop as well has freeze, and one verb that did both could
-		# not be used for only the first. On a beam over water, a blind alone is already most
-		# of a punishment.
+		# The screen and nothing else: a blinded player still moves and can be hit, and a verb that also froze could
+		# not be used for only the first.
 		"blind": func(id: StringName, args: Dictionary) -> DotResult:
 			var p := _mod_player(id)
 			if p == null:
@@ -286,13 +246,9 @@ func _mod_unsupported() -> Dictionary:
 	}
 
 
-## Toggles that outlive a new body here, beyond dot-moderation's own god and buddha.
-##
-## [b]Blind and beacon are about the person, not the body.[/b] A noclip or a freeze ends with
-## the round because starting a course noclipped, or frozen behind the gate, is the round
-## broken; a player an admin blinded or wanted the room to watch is
-## still that player next round, and a fall is exactly what somebody being punished would
-## otherwise use to end it.
+## Toggles that outlive a new body here, beyond dot-moderation's own god and buddha. Blind and beacon are about the
+## person, not the body: noclip or freeze ends with the round (starting frozen behind the gate breaks it), but a
+## punished player stays so next round, and a fall is how they would otherwise end it.
 const PERSIST_ON_RESPAWN: Array[String] = ["blind", "beacon"]
 
 
@@ -384,12 +340,9 @@ func _mod_hurt(id: StringName, amount: float) -> DotResult:
 	return DotResult.success(null)
 
 
-## A round is everybody's new body: a noclip or a freeze from last round ends, god carries.
-##
-## [b]And a new course is a new map.[/b] Every `return` point is a place on some course,
-## and a round on a different course has its ground somewhere else, so `return` would drop
-## a player into the water where a deck used to be. The history is cleared when the course
-## changes and kept when it does not (`[modtools-return-1]`).
+## A round is everybody's new body: a noclip or freeze from last round ends, god carries. A new course is a new map:
+## `return` points are places on some course, so the history is cleared when the course changes and kept when it does
+## not (`[modtools-return-1]`).
 func _on_round_began_for_tools(_number: int, layout: StringName) -> void:
 	for key: StringName in (game as WoGame).players:
 		mod_player_respawned(StringName(String(key).trim_prefix("u")))
@@ -403,10 +356,8 @@ func _on_round_began_for_tools(_number: int, layout: StringName) -> void:
 var _tools_layout: StringName = &""
 
 
-## The team seam dot-chat and dot-voice both ask for, which the base cannot wire.
-##
-## [DotGameServices] knows nothing about teams — a lobby has none — so the two `team_fn`
-## hooks are set here, after the base has built each router.
+## The team seam dot-chat and dot-voice both ask for, which the base cannot wire: [DotGameServices] knows nothing
+## about teams, so the two `team_fn` hooks are set here after the base has built each router.
 func setup(p_server: DotServer, p_game: Object, p_link: Object) -> DotResult:
 	var ready_now: DotResult = await super.setup(p_server, p_game, p_link)
 

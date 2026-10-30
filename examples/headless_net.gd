@@ -1,18 +1,8 @@
 extends "headless_net_workbench.gd"
 
-## The real path minus the socket: two worlds, two managers, two bridges, two links with the
-## RPC replaced by a queue — so the codec, the seal, the snapshots, the prediction and the
-## reconciliation all run, in one process, in two physics worlds.
-##
-## [b]What this suite is for is the claim the whole game rests on:[/b] a course is sent once,
-## as a document, and after that the client and the server agree about every obstacle on it
-## at every tick without one more byte about any of them. If that is false, a knock the
-## client predicts is a knock the server never decided, and the player is corrected through
-## an arm. So this asserts it from both ends — the same transform at the same tick, and a
-## knock predicted and decided — and then everything else that crosses: progress, the arena,
-## the weapons on its floor, the result.
-##
-## Sections and checks are both counted; mg-smash-copter's notes say why the second matters.
+## The real path minus the socket: two worlds, managers, bridges and links with the RPC replaced by a queue, so the
+## codec, seal, snapshots, prediction and reconciliation run in one process. Asserts a course sent once as a document
+## leaves both ends agreeing about every obstacle at every tick, a knock predicted and decided.
 
 const SECTIONS := 17
 const CHECKS := 102
@@ -57,8 +47,6 @@ func _run() -> void:
 
 	_report_sections(_sections_entered, _sections_finished, SECTIONS, CHECKS)
 
-
-# --- The codec ------------------------------------------------------------------
 
 ## Every encoder against its decoder. Nothing checks that two ends of a serialisation are
 ## inverses for you: dot-moderation once wrote "voice muted" and read back a warning.
@@ -115,8 +103,6 @@ func _test_the_codec() -> void:
 	_finished()
 
 
-# --- Bringing both halves up ---------------------------------------------------------
-
 func _build() -> bool:
 	_section("bringing both halves up")
 	var failed_before := _failed
@@ -149,10 +135,9 @@ func _build() -> bool:
 
 	_server_net = _make_manager(true, &"server", 1, server_side, SERVER_TICK_RATE)
 	_client_net = _make_manager(false, &"client", CLIENT_PEER, client_side, CLIENT_ENGINE_TICK_RATE)
-	# This harness stamps every command itself (`_tick + INPUT_LEAD`), not from the client's
-	# clock, so the client must not ask for dot-net's input-lead report: steered by reports
-	# about commands it never stamped, the clock runs away from them (only dot-net's cap
-	# holds it). By the constant map, so this parses against a dot-net from before the report.
+	# This harness stamps every command itself (`_tick + INPUT_LEAD`), so the client must not ask for dot-net's
+	# input-lead report: steered by reports about commands it never stamped, the clock runs away. By the constant
+	# map, so this parses against an older dot-net.
 	var lead_bit := int((DotNetMessageRegistry as Script).get_script_constant_map().get("FEATURE_INPUT_LEAD", 0))
 	_client_net.messages.features &= ~lead_bit
 
@@ -303,12 +288,9 @@ func _world_node(game: WoGame) -> Node3D:
 	return null
 
 
-## The start pen's toys over the wire: paired by index on both ends, frozen copies, a ball kicked on
-## the server followed on the client. Then a client without the stage (one whose STAGE never
-## came): it still registers the toys' mirrors from TOYS and reads every snapshot to its end,
-## because dot-net stops reading one at the first entity a client does not know; and pairs them
-## when the stage comes. Armed: registering the mirrors only once the stage was built here read
-## none of those snapshots.
+## The start pen's toys over the wire: paired by index on both ends, a ball kicked on the server followed on the
+## client. Then a client without the stage: it still registers the toys' mirrors from TOYS and reads every snapshot to
+## its end (dot-net stops at the first unknown entity), and pairs them when the stage comes.
 func _test_the_toys_reach_the_client() -> void:
 	_section("the start pen's toys reach the client, with or without its stage")
 	await _steps(4)
@@ -589,10 +571,9 @@ func _test_the_final_death_crosses() -> void:
 	_finished()
 
 
-## The weapon-feel pass's wire half (`WoGame.hit_landed` → HIT → `hit_received`, and the owner-only
-## magazine that `WoClient.correct_drawn` adopts). `headless_run` only proves the offline half,
-## where the world's own signal flashes the marker and nothing crosses. Armed: with the bridge's
-## HIT send removed the first check fails; sent with `_broadcast` the second does.
+## The weapon-feel pass's wire half (`WoGame.hit_landed` -> HIT -> `hit_received`, and the owner-only magazine
+## `WoClient.correct_drawn` adopts); `headless_run` proves only the offline half. Armed: removing the bridge's HIT
+## send fails the first check; `_broadcast` the second.
 func _test_a_hit_is_the_shooters() -> void:
 	_section("a shot that lands is told to the shooter alone, and the drawn gun takes the server's count")
 	var server_me: WoPlayer = _server_game.players[WoNetBridge.player_key(SESSION)]

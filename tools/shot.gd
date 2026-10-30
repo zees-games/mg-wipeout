@@ -1,25 +1,8 @@
 extends Node
 
-## Renders the game and saves a frame. The check no assertion in this repository makes.
-##
-##   tools/shot.sh                                  # a player's own eyes, a few seconds in
-##   tools/shot.sh --view=course --wo-course-ids=wo_spin_cycle
-##   tools/shot.sh --view=start                     # the start pad, from behind the runners
-##   tools/shot.sh --view=hazard                    # the first thing that throws you, close
-##   tools/shot.sh --view=race --seconds=25         # the field mid-race, over the second runner's shoulder
-##   tools/shot.sh --view=crowd --seconds=6         # the first grandstand and its crowd
-##   tools/shot.sh --view=duck --seconds=30 --wo-course-ids=wo_the_sweeper   # a stand-in ducking, close
-##   tools/shot.sh --view=falls --seconds=3 --wo-course-ids=wo_punch_alley   # the first water/slime fall
-##   tools/shot.sh --view=tiles --wo-course-ids=wo_trapdoor_run   # drop-tiles, warning in red
-##   tools/shot.sh --view=tiles --grid=2 --wo-course-ids=wo_trapdoor_run   # the third grid
-##   tools/shot.sh --view=tour --wo-course-ids=wo_dans_course   # <out>_overview.png and _1 to _3 along the route
-##   tools/shot.sh --view=third                     # third person, mid-course
-##   tools/shot.sh --view=cover                     # the loading cover, before it lifts
-##   tools/shot.sh --view=arena --arena=wo_arena_pit   # an arena, from above
-##   tools/shot.sh --view=finale                    # a real final death, from a finisher's eyes
-##   tools/shot.sh --view=third --ballot            # the course vote's ballot, mid-vote
-##
-## Any `--wo-*` is the game's own configuration (see `WoConfig`), because `WoClient` reads it.
+## Renders the game and saves a frame, the check no assertion makes. See `shot.sh` for the `--view` values (course,
+## start, hazard, race, crowd, tiles, tour, third, cover, arena, finale). Any `--wo-*` is the game's own configuration
+## (see `WoConfig`), because `WoClient` reads it.
 
 const WoClient := preload("../game/wo_client.gd")
 const WoGame := preload("../game/wo_game.gd")
