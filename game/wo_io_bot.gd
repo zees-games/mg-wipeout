@@ -31,6 +31,8 @@ const RIDE_PATIENCE := 64 * 25
 const DOCK_REACH := 1.4
 ## Metres from a hop edge's start at which the jump is pressed.
 const HOP_REACH := 0.7
+## Metres from a ladder edge's foot at which the climb starts.
+const LADDER_REACH := 0.7
 ## Metres ahead of the feet a hurt volume is looked for.
 const KILL_LOOK := 1.3
 ## Ticks held at a kill edge before the edge is given up, and ticks another mesh point is walked to in its place.
@@ -73,6 +75,9 @@ var _wander_rng := DotRandomStream.new(900).stream(&"wo_io_bot_wander")
 ## The platform leg being ridden (a link of [member DotBotLinks.platform_links]) and the ticks spent on it.
 var _clock := 0
 var _hops: Array[Dictionary] = []
+var _ladder_rides: Array[Dictionary] = []
+## The ladder being climbed (dot-bot's step function), or null.
+var _climb: DotBotClimb = null
 var _hops_for: NavigationMesh = null
 var _ride := {}
 var _ride_ticks := 0
@@ -150,6 +155,7 @@ func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, comm
 	# Moved by the map (a teleport): the path ahead is the one from before it.
 	if _last_feet.distance_to(feet) > TELEPORTED:
 		_path_tick = -REPATH_TICKS
+		_climb = null
 		if not _errand.is_empty() and _errand["kind"] == "teleport":
 			_arrived()
 	_last_feet = feet
@@ -165,6 +171,9 @@ func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, comm
 	if _route_step(feet, grounded, command):
 		return
 	if _on_platform(feet, tick, command):
+		return
+
+	if _climb_step(feet, tick, command):
 		return
 
 	var target := _into_teleport(_next_point(feet), feet)
@@ -323,19 +332,63 @@ func _kill_ahead(feet: Vector3, toward: Vector3) -> bool:
 	return false
 
 
+## Climbs a ladder edge the path crosses: begins at its foot, then follows dot-bot's [DotBotClimb] to the top.
+## Returns whether it set the command. A ladder is no hop: a jump at its foot only bounces off it.
+func _climb_step(feet: Vector3, tick: int, command: DotFpsCommand) -> bool:
+	var now := float(tick) / 64.0
+	if _climb == null:
+		if links == null or not _path_has_ladder():
+			return false
+		for ride in _ladder_rides:
+			var from: Vector3 = ride["from"]
+			if Vector2(from.x - feet.x, from.z - feet.z).length() < LADDER_REACH and absf(from.y - feet.y) < 1.0 and _path_uses(ride):
+				var ladder := links.ladder_of(int(ride["id"]))
+				if not ladder.is_empty():
+					_climb = DotBotClimb.begin(ladder, now)
+					break
+		if _climb == null:
+			return false
+	var r := _climb.step(feet, now)
+	if r["done"]:
+		_climb = null
+		_path_tick = -REPATH_TICKS
+		return false
+	if not is_nan(float(r["yaw"])):
+		command.yaw = float(r["yaw"])
+	command.move = r["move"]
+	if bool(r["jump"]):
+		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+	_edge = 0
+	return true
+
+
+func _path_has_ladder() -> bool:
+	if _hops_for != nav.mesh:
+		_index_rides()
+	return not _ladder_rides.is_empty()
+
+
 ## Whether the body stands at the start of a hop edge the path crosses: a gap is cleared by jumping off its rim.
 func _at_hop(feet: Vector3) -> bool:
 	if _hops_for != nav.mesh:
-		_hops_for = nav.mesh
-		_hops.clear()
-		for ride in nav.rides():
-			if int(ride["id"]) >= DotBotLinks.HOP_ID:
-				_hops.append(ride)
+		_index_rides()
 	for hop in _hops:
 		var from: Vector3 = hop["from"]
 		if Vector2(from.x - feet.x, from.z - feet.z).length() < HOP_REACH and absf(from.y - feet.y) < 1.0 and _path_uses(hop):
 			return true
 	return false
+
+
+func _index_rides() -> void:
+	_hops_for = nav.mesh
+	_hops.clear()
+	_ladder_rides.clear()
+	for ride in nav.rides():
+		var id := int(ride["id"])
+		if id >= DotBotLinks.LADDER_ID:
+			_ladder_rides.append(ride)
+		elif id >= DotBotLinks.HOP_ID:
+			_hops.append(ride)
 
 
 func _path_uses(leg: Dictionary) -> bool:
@@ -439,6 +492,7 @@ func clear() -> void:
 	_errand = {}
 	nav.clear()
 	links = null
+	_climb = null
 	_joined = false
 	source = null
 	_path = PackedVector3Array()
