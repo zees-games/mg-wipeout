@@ -11,7 +11,7 @@ extends "dedicated_late.gd"
 ## nothing but the stand-ins the module seats itself.
 
 const SECTIONS := 15
-const CHECKS := 106
+const CHECKS := 107
 
 
 func _ready() -> void:
@@ -152,6 +152,8 @@ func _test_the_module_loads() -> void:
 	_check(loaded.ok, "the module loads into the server", loaded.error.message if not loaded.ok else "")
 
 	var module := _module()
+	_check(game != null and game.progress != null and game.progress.durable_key_fn.is_valid(),
+		"progress is filed under dot-game's stable stats key")
 	_check(module != null and module.get("net") != null and module.get("bridge") != null,
 		"with its netcode and the game's bridge")
 
