@@ -7,6 +7,7 @@ const WoPlayer := preload("wo_player.gd")
 ## scoped profile key ([member durable_key_fn]) else `u<session>`, fixed when counting begins.
 
 const CHANNEL := "wo.progress"
+const REPORT_INTERVAL := 60.0
 
 ## Rounds a player was in from the start to the end.
 const ROUNDS_PLAYED := &"wo.rounds_played"
@@ -154,6 +155,37 @@ static func _sum(
 	out.series = series
 	out.tier = tier
 	return out
+
+
+## Turns the backbone report on or off at run time (the family cvar `stats_report`); the cvar is registered after this tracker is built.
+func set_reporting(on: bool) -> DotResult:
+	if stats == null:
+		return DotResult.fail(DotError.CODE_STATE, "There is no stats tracker.")
+
+	if achievements != null:
+		achievements.report_to_backbone = on
+
+	if not on:
+		stats.report_to_backbone = false
+		return DotResult.success(false)
+
+	stats.report_to_backbone = true
+	stats.define_on_start = true
+
+	if not stats.reporter.is_available():
+		stats.report_to_backbone = false
+		DotLog.warn(CHANNEL, "stats reporting needs a backbone client with STATS_WRITE; staying off")
+		return DotResult.fail(DotError.CODE_STATE, "No backbone client to report stats through.")
+
+	if stats.get_node_or_null("StatsReportTimer") == null:
+		var timer := Timer.new()
+		timer.name = "StatsReportTimer"
+		timer.wait_time = REPORT_INTERVAL
+		timer.autostart = true
+		timer.timeout.connect(func() -> void: stats.flush())
+		stats.add_child(timer)
+
+	return DotResult.success(true)
 
 
 ## [param directory] empty keeps achievement progress in memory; see

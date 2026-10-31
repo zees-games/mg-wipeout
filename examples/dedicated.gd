@@ -5,8 +5,8 @@ extends "dedicated_late.gd"
 ## operator names it. The only place [WoModule] loads, [DotGameModule]'s order runs, a cvar is typed at a console and a
 ## round is played by the stand-ins the module seats.
 
-const SECTIONS := 15
-const CHECKS := 107
+const SECTIONS := 16
+const CHECKS := 112
 
 
 func _ready() -> void:
@@ -36,6 +36,7 @@ func _run() -> void:
 		await _test_a_module_reload()
 		await _test_a_covered_seat_is_not_harmed()
 		await _test_ambient_cvars_reach_the_client()
+		_test_stats_report()
 		await _test_it_unloads_cleanly()
 
 	_test_no_message_preloads_itself()
@@ -754,6 +755,36 @@ func _test_a_covered_seat_is_not_harmed() -> void:
 
 	link.disconnect_from_server("done")
 	side.queue_free()
+	_finished()
+
+
+## The family cvar `stats_report` is registered, off, and turning it on makes the game's tracker report.
+func _test_stats_report() -> void:
+	_section("stats_report")
+	var cv: DotConVar = server.console.find_cvar("stats_report")
+	var game_node := _module().get("game") as WoGame
+	var progress: Node = game_node.progress if game_node != null else null
+	_check(cv != null and cv.get_string() == "0", "stats_report is registered and off by default")
+	_check(progress != null and progress.stats != null and not progress.stats.report_to_backbone,
+		"and the tracker does not report at boot")
+	if cv == null or progress == null:
+		return
+	var _off := cv.set_value("1")
+	_check(not progress.stats.report_to_backbone, "on with no backbone client stays off, not a crash")
+
+	var client := Node.new()
+	var script := GDScript.new()
+	script.source_code = "extends Node\nfunc post_integration(_a = null, _b = null, _c = null): return null\n"
+	var _reloaded := script.reload()
+	client.set_script(script)
+	DotRegistry.register(&"dot_backbone_client", client)
+	var _r0 := cv.set_value("0")
+	var _r1 := cv.set_value("1")
+	_check(progress.stats.report_to_backbone, "on with a backbone client makes the tracker report")
+	var _r2 := cv.set_value("0")
+	_check(not progress.stats.report_to_backbone, "off stops it again")
+	DotRegistry.unregister_instance(&"dot_backbone_client", client)
+	client.free()
 	_finished()
 
 

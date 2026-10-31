@@ -36,6 +36,8 @@ cvars:
   wo_teams: "0"
   wo_bots: "1"
   bot_quota: "9"
+  # 1 files the players' stats with the backbone using the server's own ticket; 0 keeps them here.
+  stats_report: "0"
 
 # The map packs a server owner names are fetched BEFORE the game loads, and `client` also sends
 # them to every player: an imported course's mesh (worlds/) is too large for the wire, so the

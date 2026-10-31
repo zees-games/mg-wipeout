@@ -740,6 +740,10 @@ func _wire_progress(world: WoGame) -> void:
 				if server != null else null
 			return String(stats_feed.key_for(session)) if session != null and stats_feed != null else ""
 
+		var report := bind_stats_report(world.progress.set_reporting)
+		if world.config.report_progress and report.get_string() != "1":
+			var _on := report.set_value("1")
+
 	world.achievement_earned.connect(func(id: StringName, title: String, points: int) -> void:
 		var peer_id: int = bridge.call("peer_for_player", WoNetBridge.session_of(id))
 
