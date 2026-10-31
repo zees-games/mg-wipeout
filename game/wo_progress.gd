@@ -31,6 +31,9 @@ const CLEAN_RUNS := &"wo.clean_runs"
 signal earned(player_id: StringName, title: String, points: int)
 
 var stats: DotStatsTracker = null
+
+## Kills and hits by body zone, through dot-stats' event feed.
+var feed: DotStatsEventFeed = null
 var achievements: DotAchievementTracker = null
 var link: DotAchievementStatsLink = null
 
@@ -82,6 +85,7 @@ static func schema() -> DotStatsSchema:
 	_add(out, FALLS, DotStatsDef.Kind.COUNTER, "Falls", "falls", true)
 	_add(out, KNOCKS, DotStatsDef.Kind.COUNTER, "Wiped out", "knocks", true)
 	_add(out, CLEAN_RUNS, DotStatsDef.Kind.COUNTER, "Clean runs", "courses", true)
+	DotStatsHitzones.declare(out)
 	return out
 
 
@@ -197,6 +201,9 @@ func setup(directory: String, report: bool) -> DotResult:
 	stats.report_to_backbone = report
 	stats.define_on_start = report
 	add_child(stats)
+	feed = DotStatsEventFeed.new(stats)
+	feed.key_of = func(id: Variant) -> StringName: return _key(StringName(str(id)))
+	feed.is_bot = func(id: Variant) -> bool: return players.has(id) and (players[id] as WoPlayer).is_bot
 
 	var counted := stats.start()
 
@@ -262,6 +269,32 @@ func record(player_id: StringName, stat: StringName, value: float = 1.0) -> void
 		DotLog.warn(CHANNEL, "a reading was refused", {
 			"player": String(player_id), "stat": String(stat), "why": filed.error.message,
 		})
+
+
+## A landed hit by body zone; a trace that met no hitbox has no zone.
+func report_hit(attacker: StringName, victim: StringName, damage: DotDamage) -> void:
+	if feed == null or damage.hit_group == DotHitGroup.GENERIC or not _begun(attacker):
+		return
+	var side := StringName(str(damage.context.get(DotHitzone.CONTEXT_SIDE, "")))
+	var _ok := feed.report_hit(attacker, victim, String(damage.weapon_id), damage.hit_group, damage.health_lost, damage.lethal, side)
+
+
+## Files a kill for the head-to-head table.
+func report_kill(killer: StringName, victim: StringName) -> void:
+	if feed != null and _begun(killer):
+		var _ok := feed.report_kill(killer, victim)
+
+
+## Starts counting for a human player (stand-ins stay out); true when they are counted.
+func _begun(player_id: StringName) -> bool:
+	var body: WoPlayer = players.get(player_id)
+	if stats == null or body == null or body.is_bot:
+		return false
+	var key := _key(player_id)
+	if not stats.has_player(key):
+		stats.begin(key, body.display_name)
+		_begin(key)
+	return true
 
 
 ## The key a player's numbers are filed under. Asked of [member durable_key_fn] once, then

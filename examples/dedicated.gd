@@ -6,7 +6,7 @@ extends "dedicated_late.gd"
 ## round is played by the stand-ins the module seats.
 
 const SECTIONS := 16
-const CHECKS := 112
+const CHECKS := 114
 
 
 func _ready() -> void:
@@ -785,6 +785,18 @@ func _test_stats_report() -> void:
 	_check(not progress.stats.report_to_backbone, "off stops it again")
 	DotRegistry.unregister_instance(&"dot_backbone_client", client)
 	client.free()
+
+	var zoned := DotDamage.make(1, 2, 5.0, game_node.combat.damage_type(&"kinetic"))
+	zoned.hit_group = DotHitGroup.NECK
+	zoned.weapon_id = &"probe"
+	progress.stats.begin(&"wo-test", "wo-test")
+	progress.feed.key_of = func(id: Variant) -> StringName: return StringName(str(id))
+	var _ok: bool = progress.feed.report_hit(&"wo-test", &"wo-victim", "probe", zoned.hit_group, 5.0)
+	_check(
+		progress.stats.session_values(&"wo-test").get_cell(DotStatsHitzones.HITS, "zone:neck") >= 1.0,
+		"a hit with a hit_group is filed by body zone through the dot-stats hitzone hook"
+	)
+	_check(preload("../game/wo_progress.gd").schema().validate().ok, "the stats schema, hitzones included, validates")
 	_finished()
 
 
