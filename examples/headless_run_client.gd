@@ -277,6 +277,49 @@ func _test_the_weapon_art_is_vendored() -> void:
 ## Weapons from a pickup: the drawn slot must hold the gun the server fired, count the
 ## magazine and show a hit. Armed: `give_everything` back fails the first check, no
 ## `correct_drawn` the fourth, no HIT path the last.
+## Walls stop a shot and bodies off the world layer do not, on the server rig and on the drawn (local) rig; both
+## rigs lower the held gun at what stops the player, which is the motor mask `_apply_body_mask` hands them.
+func _test_shots_and_walls(world: WoGame, me: WoPlayer, drawn: ZeeWeaponRig) -> void:
+	var motor := me.controller.tunables.collision_mask
+	_check(motor != 0 and me.weapons.wall_extra_mask == motor,
+		"the server rig's wall_extra_mask is the player's motor mask", "%d vs %d" % [me.weapons.wall_extra_mask, motor])
+	_check(drawn.wall_extra_mask == motor and drawn.role == ZeeWeaponRig.Role.LOCAL,
+		"and the drawn rig's too", "%d vs %d" % [drawn.wall_extra_mask, motor])
+	var view: Variant = drawn.get(&"_view")
+	var fx: Variant = drawn.get(&"_fx")
+	_check(view != null and fx != null and (int(view.get(&"wall_mask")) & motor) == motor
+		and (int(view.get(&"wall_mask")) & int(fx.get(&"collision_mask"))) == int(fx.get(&"collision_mask")),
+		"the drawn view's wall probe stops on the motor mask and the shot mask both",
+		"wall_mask %s" % str(view.get(&"wall_mask")) if view != null else "no view")
+
+	var from := Vector3(500.0, 50.0, 500.0)
+	var to := from + Vector3(0.0, 0.0, -10.0)
+	var trace := world.combat.trace
+	_check(trace.line_of_sight(from, to), "a clear line is clear")
+	var bodies: Array[StaticBody3D] = []
+	var layers := {&"world": false, &"bot": true, &"prop": true, &"footprint": true}
+	for id in layers:
+		var body := StaticBody3D.new()
+		body.collision_layer = world.physics.layer_mask(id)
+		body.collision_mask = 0
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(4.0, 4.0, 0.5)
+		shape.shape = box
+		body.add_child(shape)
+		world.add_child(body)
+		body.global_position = from + Vector3(0.0, 0.0, -5.0)
+		bodies.append(body)
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		var clear := trace.line_of_sight(from, to)
+		_check(clear == bool(layers[id]), "a %s-layer body %s the shot" % [id, "passes" if layers[id] else "blocks"],
+			"line_of_sight %s" % str(clear))
+		body.collision_layer = 0
+		world.remove_child(body)
+		body.free()
+
+
 func _test_the_drawn_gun() -> void:
 	_section("an armed racer draws the server's gun, counted on the HUD, with a marker for a hit")
 	var client: Node = (load("res://game/wo_client.gd") as GDScript).new()
@@ -302,6 +345,8 @@ func _test_the_drawn_gun() -> void:
 		held.append("%d:%s/%s" % [slot, a, b])
 		same = same and a == b
 	_check(same, "the drawn gun holds exactly the server's weapons, slot for slot", " ".join(held))
+
+	_test_shots_and_walls(world, me, drawn)
 
 	var hud: Node = client.get("hud")
 	hud.call("_process", 0.0)
