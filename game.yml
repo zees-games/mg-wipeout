@@ -44,3 +44,8 @@ cvars:
 # client reads it from the mounted pack. The documents themselves still travel in STAGE.
 metadata:
   maps_delivery: client
+
+# The stock courses pack the game suggests, not requires: a server offers it by default (suggested_maps: none turns that off)
+# and the Workshop mounts it for solo play unless the player opts out (--no-suggested, --suggested=none).
+suggested:
+  - maps=gamemann/mg-wipeout-maps
