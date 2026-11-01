@@ -303,6 +303,7 @@ func _run() -> void:
 	await _frames(3)
 	var saved := _save(_out)
 	print("saved %s (%s): %s" % [_out, _view, error_string(saved)])
+	await DotShotSeq.new().record(get_tree(), ProjectSettings.globalize_path(_out))
 	get_tree().quit(0 if saved == OK else 1)
 
 
