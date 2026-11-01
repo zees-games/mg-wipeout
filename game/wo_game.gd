@@ -289,6 +289,8 @@ func _apply_body_mask(player: WoPlayer) -> void:
 	body_rules.apply_to(player.controller, physics.collision_mask(&"player"), others)
 	# The capsule the others stop at: a player's body has no shape of its own.
 	var tunables := player.controller.tunables
+	if player.weapons != null:
+		player.weapons.wall_extra_mask = tunables.collision_mask
 	body_rules.apply_hull(player, tunables.stand_height, tunables.radius)
 
 
@@ -1668,6 +1670,7 @@ func arm(player: WoPlayer, weapon_id: StringName) -> bool:
 		rig.role = ZeeWeaponRig.Role.SERVER
 		rig.authority = authoritative
 		rig.tick_rate = tick_rate
+		rig.wall_extra_mask = player.controller.tunables.collision_mask if player.controller != null else 0
 		rig.player_ref = DotNodeRef.of_path(player.get_path())
 		player.add_child(rig)
 
