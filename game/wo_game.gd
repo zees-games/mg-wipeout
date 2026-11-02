@@ -2068,6 +2068,7 @@ func _use_io() -> void:
 		var eyes := player.eye_position()
 		var query := PhysicsRayQueryParameters3D.create(eyes, eyes + player.aim_direction() * IO_USE_REACH)
 		query.collide_with_areas = false
+		query.exclude = [player.get_rid()]
 		var hit := space.intersect_ray(query)
 
 		if hit.is_empty():
