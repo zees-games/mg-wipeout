@@ -27,6 +27,8 @@ const FALLS := &"wo.falls"
 const KNOCKS := &"wo.knocks"
 ## A course finished without falling in once.
 const CLEAN_RUNS := &"wo.clean_runs"
+## The published skill figure the site orders by (dot-stats' DotStatsRank).
+const RANK_SCORE := &"rank_score"
 
 signal earned(player_id: StringName, title: String, points: int)
 
@@ -36,6 +38,9 @@ var stats: DotStatsTracker = null
 var feed: DotStatsEventFeed = null
 var achievements: DotAchievementTracker = null
 var link: DotAchievementStatsLink = null
+
+## The skill rank: weighted figures or Elo on final-death knockouts, chosen by the wo_rank cvar.
+var rank: DotStatsRank = null
 
 ## The world's own dictionaries, shared. See [WoSpectate] for why not a reference to it.
 var players: Dictionary = {}
@@ -66,7 +71,7 @@ var _ids: Dictionary = {}
 static func ids() -> Array[StringName]:
 	return [
 		ROUNDS_PLAYED, COURSES_FINISHED, COURSES_FIRST, ROUNDS_WON, FINALE_WINS, FINALE_KILLS,
-		BEST_ROUND_KILLS, DEATHS, FALLS, KNOCKS, CLEAN_RUNS,
+		BEST_ROUND_KILLS, DEATHS, FALLS, KNOCKS, CLEAN_RUNS, RANK_SCORE,
 	]
 
 
@@ -85,6 +90,7 @@ static func schema() -> DotStatsSchema:
 	_add(out, FALLS, DotStatsDef.Kind.COUNTER, "Falls", "falls", true)
 	_add(out, KNOCKS, DotStatsDef.Kind.COUNTER, "Wiped out", "knocks", true)
 	_add(out, CLEAN_RUNS, DotStatsDef.Kind.COUNTER, "Clean runs", "courses", true)
+	DotStatsRank.declare(out, RANK_SCORE, "Rank score")
 	DotStatsHitzones.declare(out)
 	return out
 
@@ -234,6 +240,19 @@ func setup(directory: String, report: bool) -> DotResult:
 
 	achievements.unlocked.connect(_on_unlocked)
 
+	rank = DotStatsRank.new()
+	rank.stat_id = RANK_SCORE
+	# Racing and surviving the final death are all the game reports; no kill/death split exists, so a fall costs little.
+	rank.terms = [
+		{"stat": String(COURSES_FINISHED), "weight": 1.0},
+		{"stat": String(COURSES_FIRST), "weight": 2.0},
+		{"stat": String(ROUNDS_WON), "weight": 3.0},
+		{"stat": String(FINALE_WINS), "weight": 2.0},
+		{"stat": String(FINALE_KILLS), "weight": 0.5},
+		{"stat": String(FALLS), "weight": -0.05},
+	]
+	rank.record_fn = func(who: Variant, stat: StringName, value: float) -> void: record(StringName(str(who)), stat, value)
+
 	link = DotAchievementStatsLink.new()
 	link.name = "StatsLink"
 	link.tracker = achievements
@@ -283,6 +302,9 @@ func report_hit(attacker: StringName, victim: StringName, damage: DotDamage) -> 
 func report_kill(killer: StringName, victim: StringName) -> void:
 	if feed != null and _begun(killer):
 		var _ok := feed.report_kill(killer, victim)
+
+	if rank != null and rank.mode == DotStatsRank.MODE_ELO and _begun(killer) and _begun(victim):
+		var _moved := rank.duel(killer, victim)
 
 
 ## Starts counting for a human player (stand-ins stay out); true when they are counted.
@@ -403,6 +425,8 @@ func on_finished(player_id: StringName, place: int, _seconds: float) -> void:
 	if body != null and body.falls == 0:
 		record(player_id, CLEAN_RUNS)
 
+	_publish_rank(player_id)
+
 
 ## A round ended. [param winner] is a side, or 0 for a draw.
 func on_round_over(winner: int) -> void:
@@ -427,8 +451,17 @@ func on_round_over(winner: int) -> void:
 		if kills > 0:
 			record(id, BEST_ROUND_KILLS, float(kills))
 
+		_publish_rank(id)
+
 	_in_round.clear()
 	_round_kills.clear()
+
+
+## Republishes the weighted score from this session's figures; Elo files itself on each duel.
+func _publish_rank(player_id: StringName) -> void:
+	if rank == null or rank.mode != DotStatsRank.MODE_WEIGHTED or not _begun(player_id):
+		return
+	var _s := rank.publish(player_id, session_values(player_id).to_dictionary())
 
 
 ## Somebody is out. [param by] is who did it, or empty for the world.

@@ -160,6 +160,7 @@ func _game_load() -> DotResult:
 	_bind_rule_cvars(world)
 
 	_build_vote(world)
+	_add_rank_cvar(world)
 
 	_bots = add_cvar(
 		"wo_bots", "1",
@@ -188,6 +189,16 @@ func _game_load() -> DotResult:
 
 	log_info("the course is up", world.describe())
 	return DotResult.success(null)
+
+
+## `wo_rank`: "weighted", "elo", or "weighted:wo.rounds_won=3,wo.falls=-0.1" (dot-stats' DotStatsRank.apply_cvar).
+func _add_rank_cvar(world: WoGame) -> void:
+	add_cvar("wo_rank", "weighted",
+		"Skill rank formula: weighted, elo, or weighted:<stat>=<weight>,...",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			if world.progress == null or not world.progress.rank.apply_cvar(new_value):
+				log_info("wo_rank refused", {"value": new_value}))
 
 
 ## The addons' rule sets as cvars; REPLICATED where the client acts under the value.

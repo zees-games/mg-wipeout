@@ -6,7 +6,7 @@ extends "dedicated_late.gd"
 ## round is played by the stand-ins the module seats.
 
 const SECTIONS := 16
-const CHECKS := 114
+const CHECKS := 118
 
 
 func _ready() -> void:
@@ -797,6 +797,18 @@ func _test_stats_report() -> void:
 		"a hit with a hit_group is filed by body zone through the dot-stats hitzone hook"
 	)
 	_check(preload("../game/wo_progress.gd").schema().validate().ok, "the stats schema, hitzones included, validates")
+	_check(progress.rank != null and server.console.find_cvar("wo_rank") != null, "wo_rank is registered and the rank is built")
+	progress.stats.begin(&"wo-rank", "wo-rank")
+	progress.rank.record_fn = func(who: Variant, stat: StringName, value: float) -> void:
+		progress.stats.record(StringName(str(who)), stat, value)
+	var _p: float = progress.rank.publish(&"wo-rank", {"wo.rounds_won": 2.0, "wo.courses_finished": 1.0})
+	_check(progress.stats.session_values(&"wo-rank").get_value(&"rank_score", 0.0) == 7.0,
+		"the weighted rank files rank_score (2 wins x 3 + 1 finish)")
+	var _elo = server.console.find_cvar("wo_rank").set_value("elo")
+	_check(progress.rank.mode == DotStatsRank.MODE_ELO,
+		"wo_rank elo switches the mode")
+	var _back = server.console.find_cvar("wo_rank").set_value("weighted")
+	_check(progress.rank.mode == DotStatsRank.MODE_WEIGHTED, "and weighted switches it back")
 	_finished()
 
 

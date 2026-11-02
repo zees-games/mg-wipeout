@@ -109,6 +109,8 @@ Console commands:
 | `wo_reload` | Read the course folder again, for the next round |
 | `wo_net` | What the network code is doing |
 
+The `wo_rank` cvar picks the skill rank published as `rank_score`: `weighted` (courses finished, first across, rounds won, final deaths won, a small penalty per fall), `elo` (final-death knockouts), or `weighted:<stat>=<weight>,...`.
+
 ### Admin commands
 These come from [dot-moderation](https://github.com/modcommunity/dot-moderation): `noclip`, `freeze`, `speed`, `gravity`, `god`, `buddha`, `hp`, `slay`, `slap`, `rename`, the teleports, `blind` and `beacon`. `respawn` puts a runner back at their last checkpoint. `give` and `strip` are turned off, because the weapons in a final death are the ones on its floor.
 
