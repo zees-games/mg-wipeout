@@ -14,7 +14,7 @@ const CHANNEL := "wo.player"
 
 ## Metres above a player's feet that their eyes are. Here, not on the client, because it is where a shot leaves from
 ## as well as the camera: one number stops a player hitting what they are not looking at.
-const EYE_HEIGHT := 1.6
+const EYE_HEIGHT := 1.63
 
 ## Somebody shot them, threw something at them, or they fell out of the arena.
 signal died(by: StringName)
