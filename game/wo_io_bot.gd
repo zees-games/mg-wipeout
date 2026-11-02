@@ -385,7 +385,9 @@ func _index_rides() -> void:
 	_ladder_rides.clear()
 	for ride in nav.rides():
 		var id := int(ride["id"])
-		if id >= DotBotLinks.LADDER_ID:
+		if id >= DotBotLinks.STITCH_ID:
+			_hops.append(ride)
+		elif id >= DotBotLinks.LADDER_ID:
 			_ladder_rides.append(ride)
 		elif id >= DotBotLinks.HOP_ID:
 			_hops.append(ride)
