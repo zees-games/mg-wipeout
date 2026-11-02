@@ -72,8 +72,11 @@ func _bot_run_io(player: WoPlayer, command: DotFpsCommand) -> void:
 		var tunables := player.controller.tunables
 		_io_bot = WoIoBot.new()
 		stage.io.touch_doors = true
+		# Crouch height, not stand: a stand-in never crouches, but a stand-height bake drops the map's low passages
+		# (wo_lego_course loses its first leg), so the mesh keeps what a crouching body fits.
 		_io_bot.setup(stage.io, stage.io.world, stage.finish_box(), {
-			"radius": tunables.radius if tunables != null else 0.35, "height": 0.9, "climb": 0.42}, stage.io.links(),
+			"radius": tunables.radius if tunables != null else 0.4064,
+			"height": tunables.crouch_height if tunables != null else 1.372, "climb": 0.42}, stage.io.links(),
 			stage.doc.get("io_route", []))
 
 	_io_bot.steer(player.controller.state.position, player.controller.state.mode == DotFpsState.Mode.GROUND,
