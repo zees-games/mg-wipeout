@@ -1,4 +1,5 @@
 extends "headless_run_rig.gd"
+const WoBreakFx := preload("res://game/wo_break_fx.gd")
 
 ## A real offline client, booted: its settings are built and read by its sampler and its
 ## camera, and Escape opens the screen rather than only freeing the mouse.
@@ -53,6 +54,16 @@ func _test_the_client_settings() -> void:
 	tab.pressed = false
 	settings.menu.handle_event(tab)
 	_check(board != null and not board.is_open() and not settings.is_open(), "and letting go puts it away")
+
+	var fx: WoBreakFx = client.get("break_fx")
+	var world: WoGame = client.get("game")
+	fx.break_fx.config.headless = true
+	world.prop_shattered.emit(Vector3(0, 1, 0), WoBreakFx.material_of(WoContent.CRATE))
+	_check(fx != null and fx.break_fx.spawned == 1, "a broken crate throws splinters on the client",
+		(str(fx.break_fx.spawned) + " " + fx.break_fx.last_refusal) if fx != null else "no break fx")
+	fx.break_fx.config.enabled = false
+	world.prop_shattered.emit(Vector3(0, 1, 0), WoBreakFx.material_of(WoContent.BARREL))
+	_check(fx.break_fx.spawned == 1, "fx_quality 0 draws nothing", fx.break_fx.last_refusal)
 
 	remove_child(client)
 	client.free()

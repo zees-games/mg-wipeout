@@ -5,7 +5,7 @@ extends "headless_net_workbench.gd"
 ## leaves both ends agreeing about every obstacle at every tick, a knock predicted and decided.
 
 const SECTIONS := 17
-const CHECKS := 102
+const CHECKS := 103
 
 
 func _ready() -> void:
@@ -90,6 +90,10 @@ func _test_the_codec() -> void:
 	var clock := WoEvents.read_clock(DotNetReader.new(WoEvents.write_clock(2, 12.5, 40.25, WoGame.Phase.FINALE, 3, 2, true)))
 	_check(bool(clock["ok"]) and int(clock["phase"]) == WoGame.Phase.FINALE
 		and absf(float(clock["course_elapsed"]) - 40.25) < 0.1 and int(clock["finished"]) == 3, "CLOCK", str(clock))
+
+	var shatter := WoEvents.read_shatter(DotNetReader.new(WoEvents.write_shatter(Vector3(3, 1, -2), 2)))
+	_check(bool(shatter["ok"]) and int(shatter["material"]) == 2
+		and (shatter["position"] as Vector3).distance_to(Vector3(3, 1, -2)) < 0.1, "SHATTER", str(shatter))
 
 	# A kind goes out in a fixed field the writer masks without a word, so one past it aliases a
 	# smaller kind: game-zombie-zone sent HURT and AMMO as HELLO and MAP that way.

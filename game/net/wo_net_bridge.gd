@@ -256,6 +256,8 @@ func _wire_server() -> void:
 	game.phase_changed.connect(_on_phase_changed)
 	game.player_died.connect(_on_player_died)
 	game.blast.connect(_on_blast)
+	game.prop_shattered.connect(func(at: Vector3, material: int) -> void:
+		_broadcast(WoEvents.Kind.SHATTER, WoEvents.write_shatter(at, material)))
 	game.player_fell.connect(func(id: StringName, checkpoint: int) -> void:
 		_broadcast(WoEvents.Kind.PROGRESS, WoEvents.write_progress(
 			session_of(id), WoEvents.Progress.FELL, checkpoint + 1, 0.0))
@@ -1360,6 +1362,11 @@ func _on_event(message: DotNetMessage) -> void:
 
 			if bool(went_off["ok"]):
 				blast_received.emit(went_off["position"], float(went_off["radius"]))
+		WoEvents.Kind.SHATTER:
+			var burst := WoEvents.read_shatter(reader)
+
+			if bool(burst["ok"]):
+				game.prop_shattered.emit(burst["position"], int(burst["material"]))
 		WoEvents.Kind.HIT:
 			var hit := WoEvents.read_hit(reader)
 

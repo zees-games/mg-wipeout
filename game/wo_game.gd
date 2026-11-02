@@ -1,5 +1,6 @@
 extends "wo_game_bot_race.gd"
 
+const WoBreakFx := preload("wo_break_fx.gd")
 const WoAmbience := preload("wo_ambience.gd")
 const WoCatalogue := preload("wo_catalogue.gd")
 const WoContent := preload("wo_content.gd")
@@ -113,6 +114,9 @@ signal pickup_placed(pickup_id: int, weapon_id: StringName, at: Vector3)
 signal pickup_taken(pickup_id: int, by: StringName)
 
 signal blast(at: Vector3, radius: float)
+
+## A prop broke at [param at]; [param material] indexes [constant WoBreakFx.MATERIALS].
+signal prop_shattered(at: Vector3, material: int)
 
 @export var config: WoConfig = null
 
@@ -426,6 +430,8 @@ func _build_props() -> void:
 	prop_damage.authoritative = authoritative
 	props.add_child(prop_damage)
 	prop_damage.exploded.connect(_on_prop_exploded)
+	prop_damage.broken.connect(func(prop: DotPropInstance, at: Vector3, _by: StringName) -> void:
+		prop_shattered.emit(at, WoBreakFx.material_of(prop.def.id if prop.def != null else &"")))
 
 	props.removed.connect(func(prop: DotPropInstance, _reason: StringName) -> void:
 		_thrown.erase(prop.instance_id)

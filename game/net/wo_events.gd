@@ -51,6 +51,8 @@ enum Kind {
 	TOYS,
 	## A map's own state (an io course): a door, a button, a hidden brush. Deflated JSON, appended.
 	WORLD_IO,
+	## A prop broke: where and what it was made of, for the splinters. Appended last: kinds are wire numbers.
+	SHATTER,
 }
 
 enum Ask {
@@ -412,6 +414,19 @@ static func read_blast(r: DotNetReader) -> Dictionary:
 	var at := r.read_vector3_range(-WORLD_EXTENT, WORLD_EXTENT, POS_BITS)
 	var radius := r.read_float_range(0.0, 64.0, 12)
 	return {"position": at, "radius": radius, "ok": r.ok()}
+
+
+static func write_shatter(at: Vector3, material: int) -> PackedByteArray:
+	var w := _w()
+	w.write_vector3_range(at, -WORLD_EXTENT, WORLD_EXTENT, POS_BITS)
+	w.write_uint(clampi(material, 0, 7), 3)
+	return w.to_bytes()
+
+
+static func read_shatter(r: DotNetReader) -> Dictionary:
+	var at := r.read_vector3_range(-WORLD_EXTENT, WORLD_EXTENT, POS_BITS)
+	var material := r.read_uint(3)
+	return {"position": at, "material": material, "ok": r.ok()}
 
 
 ## A view dot-spectate decided, for the one player it belongs to. The death position travels: without it a mirror puts

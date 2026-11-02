@@ -70,6 +70,7 @@ func _ready() -> void:
 	_build_hud()
 	_build_chat()
 	_build_audio()
+	_build_break_fx()
 	announcer = WoAnnouncer.new(game, audio, hud)
 	_build_settings()
 	_build_killcam()
@@ -640,6 +641,8 @@ func _build_settings() -> void:
 	if _sampler != null:
 		settings.bind_look(_sampler.tunables)
 
+	break_fx.follow(settings.settings)
+
 	if audio != null:
 		settings.bind_audio(audio.manager)
 		# The server's wo_ambient* drive the quiet layer; the player's sliders multiply on top.
@@ -727,6 +730,12 @@ func _on_reveal_finished(_skipped: bool) -> void:
 		if is_instance_valid(n):
 			(n as Object).set(&"visible", _reveal_hid[n])
 	_reveal_hid.clear()
+
+
+func _build_break_fx() -> void:
+	break_fx = WoBreakFx.new()
+	add_child(break_fx)
+	game.prop_shattered.connect(break_fx.shatter)
 
 
 func _build_audio() -> void:

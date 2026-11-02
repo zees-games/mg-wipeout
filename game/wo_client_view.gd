@@ -2,6 +2,7 @@ extends Node
 ## The client's state, its weapons drawn and picked up, and the HUD, board and chat it builds.
 
 const WoAnnouncer := preload("wo_announcer.gd")
+const WoBreakFx := preload("wo_break_fx.gd")
 const WoAudio := preload("wo_audio.gd")
 const WoWeaponIcons := preload("wo_weapon_icons.gd")
 const WoBindings := preload("wo_bindings.gd")
@@ -53,6 +54,8 @@ var announcer: WoAnnouncer = null
 
 ## The player's own settings and the screen Escape opens. See [WoSettings].
 var settings: WoSettings = null
+
+var break_fx: WoBreakFx = null
 
 ## The player's console. See [method DotConsoleKit.build].
 var console: DotConsoleController = null
