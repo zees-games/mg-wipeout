@@ -179,6 +179,10 @@ func _run() -> void:
 			await _seconds_of(game.config.handover_seconds + 1.5)
 		"killcam":
 			await _view_killcam(game)
+		"break":
+			await _view_break(game)
+			get_tree().quit(0)
+			return
 		"course":
 			await _seconds_of(7.0)
 			# Further out than the straight courses needed: a course that turns is as wide as it
@@ -501,6 +505,49 @@ func _stage_action(game: WoGame) -> void:
 		var path := _out.trim_suffix(".png") + "_%s.png" % part
 		var _saved := _save(path)
 		print("wrote ", path, " action=", figure.get("action") if figure != null else "n/a")
+
+
+## --view=break: a crate, a barrel and a tyre broken one after another in front of a free camera, frames before and after (_<id>_<t>.png).
+func _view_break(game: WoGame) -> void:
+	await _seconds_of(7.0)
+	var camera := _free_camera()
+	var anchor := Vector3.ZERO
+	for id: StringName in game.players:
+		anchor = (game.players[id] as Node3D).global_position
+		break
+	for kind: StringName in [&"crate", &"barrel", &"tyre"]:
+		var prop := game.props.spawn(kind, &"world", anchor + Vector3(0.0, 0.6, 0.0))
+		if prop == null or prop.body() == null:
+			print("break %s: spawn refused" % kind)
+			continue
+		var body: Node3D = prop.body()
+		(body as Object).set(&"freeze", true)
+		var centre := body.global_position
+		print("break %s: centre %s" % [kind, centre.snapped(Vector3.ONE * 0.01)])
+		camera.look_at_from_position(centre + Vector3(2.0, 1.4, 2.6), centre)
+		var pose := camera.global_transform
+		var until := Time.get_ticks_msec() + 800
+		while Time.get_ticks_msec() < until:
+			camera.global_transform = pose
+			camera.current = true
+			await get_tree().process_frame
+		await _grab("%s_0_before" % kind)
+		var res := game.prop_damage.break_now(prop.instance_id, &"shot")
+		print("break %s: %s" % [kind, res.ok])
+		var t0 := Time.get_ticks_msec()
+		for mark in [0.1, 0.3, 1.0, 4.0]:
+			while (Time.get_ticks_msec() - t0) < int(mark * 1000.0):
+				camera.global_transform = pose
+				camera.current = true
+				await get_tree().process_frame
+			await _grab("%s_%s" % [kind, str(mark)])
+
+
+func _grab(tag: String) -> void:
+	await RenderingServer.frame_post_draw
+	var path := ProjectSettings.globalize_path(_out.get_basename() + "_" + tag + ".png")
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	print("saved %s: %s" % [path, error_string(get_viewport().get_texture().get_image().save_png(path))])
 
 
 func _free_camera() -> Camera3D:
