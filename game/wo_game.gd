@@ -577,11 +577,14 @@ func _build_spectate() -> void:
 	spectate.phase_fn = func() -> int: return phase
 	spectate.in_showdown_fn = func(p: int) -> bool:
 		return p == Phase.HANDOVER or p == Phase.FINALE
+	spectate.authoritative = authoritative
+	spectate.tick_rate = tick_rate
+	spectate.rules = spectate_rules
 	add_child(spectate)
 
 	# The config's number is only the starting point: from here `mp_forcecamera` is the rule.
 	spectate_rules.force_camera = clampi(config.spectate_camera, 0, 2)
-	var ready_now := spectate.setup(authoritative, tick_rate, spectate_rules)
+	var ready_now := spectate.setup()
 
 	if not ready_now.ok:
 		DotLog.warn(CHANNEL, "spectating is off", {"why": ready_now.error.message})
@@ -623,7 +626,7 @@ func _refresh_overviews() -> void:
 	var reach := maxf(box.size.length() * 0.5, 12.0)
 	var eye := centre + Vector3(reach * 0.6, reach * 0.55 + 10.0, reach * 0.6)
 	var view := Transform3D(Basis.IDENTITY, eye).looking_at(centre, Vector3.UP)
-	spectate.set_overviews(view, view)
+	spectate.set_course_overviews(view, view)
 
 
 ## Puts somebody in the world. [param wanted_team] is a team id, or 0 to be placed.
