@@ -1324,16 +1324,7 @@ func _on_event(message: DotNetMessage) -> void:
 			game.remove_player(player_key(session_id))
 			roster_changed.emit(session_id)
 		WoEvents.Kind.TEAM:
-			var side := WoEvents.read_team(reader)
-
-			if bool(side["ok"]):
-				var id := player_key(int(side["player_id"]))
-				game.sides[id] = int(side["team"])
-
-				if game.players.has(id):
-					(game.players[id] as WoPlayer).team = int(side["team"])
-
-				roster_changed.emit(int(side["player_id"]))
+			_apply_team(reader)
 		WoEvents.Kind.PROP:
 			_apply_prop(reader)
 		WoEvents.Kind.PROP_GONE:
@@ -1345,18 +1336,7 @@ func _on_event(message: DotNetMessage) -> void:
 		WoEvents.Kind.PHASE:
 			_apply_phase(reader)
 		WoEvents.Kind.DEATH:
-			var death := WoEvents.read_death(reader)
-
-			if bool(death["ok"]):
-				# The fall goes on the player before anybody hears of the death, so the client
-				# that draws it reads the server's pick.
-				var fell: WoPlayer = game.players.get(player_key(int(death["player_id"]))) \
-					if game != null else null
-				if fell != null and death.has("death"):
-					fell.death = death["death"]
-				death_received.emit(
-					int(death["player_id"]), int(death["by"]), death["why"], death["weapon_id"]
-				)
+			_apply_death(reader)
 		WoEvents.Kind.BLAST:
 			var went_off := WoEvents.read_blast(reader)
 
@@ -1373,16 +1353,7 @@ func _on_event(message: DotNetMessage) -> void:
 			if bool(hit["ok"]):
 				hit_received.emit(hit["point"], bool(hit["killed"]), bool(hit["headshot"]))
 		WoEvents.Kind.ARMED:
-			var armed := WoEvents.read_armed(reader)
-
-			if bool(armed["ok"]):
-				# Noted on the player here rather than by whoever listens, so every client
-				# draws the gun in a watched player's hand: see `WoPlayer.dealt`.
-				var dealt_to: WoPlayer = game.players.get(player_key(int(armed["player_id"]))) \
-					if game != null else null
-				if dealt_to != null:
-					dealt_to.note_dealt(armed["weapon_id"], game.round_number)
-				armed_received.emit(int(armed["player_id"]), armed["weapon_id"])
+			_apply_armed(reader)
 		WoEvents.Kind.CHAT:
 			var wire := WoEvents.read_chat(reader)
 
@@ -1413,6 +1384,44 @@ func _on_event(message: DotNetMessage) -> void:
 			if bool(gone["ok"]):
 				game.pickups.erase(int(gone["pickup_id"]))
 				pickup_gone_received.emit(int(gone["pickup_id"]), int(gone["by"]))
+
+
+func _apply_team(reader: DotNetReader) -> void:
+	var side := WoEvents.read_team(reader)
+
+	if bool(side["ok"]):
+		var id := player_key(int(side["player_id"]))
+		game.sides[id] = int(side["team"])
+
+		if game.players.has(id):
+			(game.players[id] as WoPlayer).team = int(side["team"])
+
+		roster_changed.emit(int(side["player_id"]))
+
+
+func _apply_death(reader: DotNetReader) -> void:
+	var death := WoEvents.read_death(reader)
+
+	if bool(death["ok"]):
+		# The fall goes on the player before anybody hears of the death, so the client
+		# that draws it reads the server's pick.
+		var fell: WoPlayer = game.players.get(player_key(int(death["player_id"])))
+		if fell != null and death.has("death"):
+			fell.death = death["death"]
+		death_received.emit(
+			int(death["player_id"]), int(death["by"]), death["why"], death["weapon_id"]
+		)
+
+
+func _apply_armed(reader: DotNetReader) -> void:
+	var armed := WoEvents.read_armed(reader)
+
+	if bool(armed["ok"]):
+		# Noted on the player here, so every client draws the gun in a watched player's hand.
+		var dealt_to: WoPlayer = game.players.get(player_key(int(armed["player_id"])))
+		if dealt_to != null:
+			dealt_to.note_dealt(armed["weapon_id"], game.round_number)
+		armed_received.emit(int(armed["player_id"]), armed["weapon_id"])
 
 
 func _apply_round(reader: DotNetReader) -> void:

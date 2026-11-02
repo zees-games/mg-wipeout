@@ -225,29 +225,7 @@ func _run() -> void:
 				var facing := Basis(Vector3.UP, deg_to_rad(float(leader.controller.state.yaw)))
 				camera.look_at_from_position(at + facing * Vector3(7.0, 6.0, 11.0), at + facing * Vector3(0.0, 0.5, -10.0))
 		"duck":
-			# The first stand-in ducking under a high arm, close and from the side: proves the
-			# person is drawn crouched when the runner is (`WoPlayer.present_body`'s motion).
-			# `--seconds` is how long to wait for one.
-			await _seconds_of(game.config.countdown_seconds)
-			var waited := 0.0
-			var ducking: Node3D = null
-			while ducking == null and waited < _seconds:
-				await _frames(1)
-				waited += get_process_delta_time()
-				for id: StringName in game.players:
-					var runner = game.players[id]
-					if runner.controller != null and runner.controller.state.crouch_fraction > 0.9:
-						ducking = runner
-						break
-			var camera := _free_camera()
-			if ducking != null:
-				await _frames(2)
-				var at := ducking.global_position
-				var facing := Basis(Vector3.UP, deg_to_rad(float(ducking.controller.state.yaw)))
-				camera.look_at_from_position(at + facing * Vector3(3.2, 1.4, -0.6), at + Vector3(0.0, 0.7, 0.0))
-				print("duck: %s crouched after %.1f s" % [ducking.name, waited])
-			else:
-				print("duck: nobody ducked in %.1f s" % waited)
+			await _view_duck(game)
 		"crowd":
 			# A grandstand and its crowd, from the course: the first stands the course has.
 			await _seconds_of(game.config.countdown_seconds + _seconds)
@@ -309,6 +287,32 @@ func _run() -> void:
 	print("saved %s (%s): %s" % [_out, _view, error_string(saved)])
 	await DotShotSeq.new().record(get_tree(), ProjectSettings.globalize_path(_out))
 	get_tree().quit(0 if saved == OK else 1)
+
+
+func _view_duck(game: WoGame) -> void:
+	# The first stand-in ducking under a high arm, close and from the side: proves the
+	# person is drawn crouched when the runner is (`WoPlayer.present_body`'s motion).
+	# `--seconds` is how long to wait for one.
+	await _seconds_of(game.config.countdown_seconds)
+	var waited := 0.0
+	var ducking: Node3D = null
+	while ducking == null and waited < _seconds:
+		await _frames(1)
+		waited += get_process_delta_time()
+		for id: StringName in game.players:
+			var runner = game.players[id]
+			if runner.controller != null and runner.controller.state.crouch_fraction > 0.9:
+				ducking = runner
+				break
+	var camera := _free_camera()
+	if ducking != null:
+		await _frames(2)
+		var at := ducking.global_position
+		var facing := Basis(Vector3.UP, deg_to_rad(float(ducking.controller.state.yaw)))
+		camera.look_at_from_position(at + facing * Vector3(3.2, 1.4, -0.6), at + Vector3(0.0, 0.7, 0.0))
+		print("duck: %s crouched after %.1f s" % [ducking.name, waited])
+	else:
+		print("duck: nobody ducked in %.1f s" % waited)
 
 
 ## One runner knocks the rest out and the round is called, then frames of the killcam, reveal and intermission.

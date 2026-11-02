@@ -285,11 +285,9 @@ func _test_the_weapon_art_is_vendored() -> void:
 	_finished()
 
 
-## Weapons from a pickup: the drawn slot must hold the gun the server fired, count the
-## magazine and show a hit. Armed: `give_everything` back fails the first check, no
-## `correct_drawn` the fourth, no HIT path the last.
-## Walls stop a shot and bodies off the world layer do not, on the server rig and on the drawn (local) rig; both
-## rigs lower the held gun at what stops the player, which is the motor mask `_apply_body_mask` hands them.
+## Pickup weapons: the drawn slot holds the gun the server fired, counts the magazine, shows a hit.
+## Walls stop shots and off-layer bodies do not, on the server and drawn rigs, which lower the
+## held gun at what stops the player (`_apply_body_mask`'s motor mask).
 func _test_shots_and_walls(world: WoGame, me: WoPlayer, drawn: ZeeWeaponRig) -> void:
 	var motor := me.controller.tunables.collision_mask
 	_check(motor != 0 and me.weapons.wall_extra_mask == motor,
