@@ -326,6 +326,11 @@ func _after_tick(tick: int, state: DotFpsState) -> void:
 
 	ladder.volumes = stage.ladder_boxes()
 	if not ladder.volumes.is_empty():
+		var cmd := controller.current_command
+		if cmd != null:
+			var view := DotFpsMotor._view_basis(state.yaw, 0.0)
+			var intent: Vector3 = view.right * cmd.move.x + view.forward * cmd.move.y
+			ladder.wish = Vector3(intent.x, 0.0, intent.z).normalized()
 		ladder.update(controller.motor, state)
 
 	# The countdown is spent in the pen: a jump over its wall is put back.
