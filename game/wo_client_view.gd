@@ -124,6 +124,8 @@ var _reloading: bool = false
 
 var _slot: int = 0
 
+var _wheel: DotWeaponWheel
+
 ## The grab key, held. Picks up or puts down a prop in a final death; see `WoGame._advance_grabs`.
 var _grab: bool = false
 

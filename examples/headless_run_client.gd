@@ -403,7 +403,30 @@ func _test_the_drawn_gun() -> void:
 	world.hit_landed.emit(&"local", Vector3(0.0, 1.0, -4.0), true, false)
 	_check(marker != null and marker.alpha() > 0.9 and marker.kill, "a hit the world confirms flashes the marker, a kill's")
 
+	_test_wheel(client, drawn)
+
 	remove_child(client)
 	client.free()
 	await get_tree().process_frame
 	_finished()
+
+
+## The client's DotWeaponWheel steps a real slot on the weapon-next action, and not with the pointer free.
+func _test_wheel(client: Node, drawn: ZeeWeaponRig) -> void:
+	var step := InputEventAction.new()
+	step.action = &"dot_menu_weapon_next"
+	step.pressed = true
+	var _given := drawn.arsenal.give(ZeeWeaponIds.PISTOL)
+	var ring: Array = drawn.arsenal.slots()
+	client.call("_wheel_pressed", InputEventAction.new())
+	var wheel: DotWeaponWheel = client.get(&"_wheel")
+	client.set(&"_slot", 0)
+	var free_took: bool = client.call("_wheel_pressed", step)
+	_check(wheel != null and not free_took and ring.size() >= 2 and int(client.get(&"_slot")) == 0,
+		"the client's DotWeaponWheel leaves a wheel step alone with the pointer free", str(ring))
+	# The pointer is never captured headless, so only that one clause of the block is lifted.
+	wheel.blocked = func() -> bool: return false
+	var took: bool = client.call("_wheel_pressed", step)
+	var want: int = ring[(ring.find(drawn.arsenal.current_slot()) + 1) % ring.size()]
+	_check(took and int(client.get(&"_slot")) == want,
+		"a wheel step wants the next carried slot", "%s want %d" % [client.get(&"_slot"), want])

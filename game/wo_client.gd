@@ -1597,6 +1597,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			settings.open()
 		return
 
+	if _wheel_pressed(event):
+		return
+
 	# The game's keys, each a row of [WoBindings] read through its action, so a key moved on
 	# the Controls page moves what it does here.
 	if event is InputEventKey:
@@ -1644,14 +1647,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				spectate_step(-1)
 			return
 
-		# The wheel goes through the weapons held, and does nothing with fewer than two:
-		# never a jump some of the time. Spectating returned above, so this is alive only.
-		if button.pressed and _pointer_ours():
-			if event.is_action_pressed(&"dot_menu_weapon_next"):
-				_wanted_cycle(1)
-			elif event.is_action_pressed(&"dot_menu_weapon_previous"):
-				_wanted_cycle(-1)
-
 		if button.button_index == MOUSE_BUTTON_LEFT:
 			_firing = button.pressed
 		elif button.button_index == MOUSE_BUTTON_RIGHT:
@@ -1677,18 +1672,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		_sampler.handle_event(event)
 
 
-## Steps the wanted slot through the slots held, skipping empty ones.
-func _wanted_cycle(step: int) -> void:
-	if weapons == null or weapons.arsenal == null:
-		return
-
-	var carried := weapons.arsenal.slots()
-
-	if carried.size() < 2:
-		return
-
-	var at := carried.find(weapons.arsenal.current_slot())
-	_slot = carried[posmod(at + step, carried.size())]
+## Steps the carried slots on the previous/next weapon actions; true when the event was one.
+func _wheel_pressed(event: InputEvent) -> bool:
+	if _wheel == null:
+		_wheel = DotWeaponWheel.new()
+		_wheel.ring_provider = func() -> Array:
+			return weapons.arsenal.slots() if weapons != null and weapons.arsenal != null else []
+		_wheel.current_provider = func() -> Variant:
+			return weapons.arsenal.current_slot()
+		_wheel.blocked = func() -> bool:
+			return not _pointer_ours() or is_spectating()
+		_wheel.chosen.connect(func(slot: Variant) -> void: _slot = int(slot))
+	return _wheel.handle_event(event)
 
 
 func describe() -> Dictionary:
