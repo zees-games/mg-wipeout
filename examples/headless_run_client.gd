@@ -358,6 +358,34 @@ func _test_the_drawn_gun() -> void:
 	_test_shots_and_walls(world, me, drawn)
 
 	var hud: Node = client.get("hud")
+	var counter := _test_the_drawn_hud(hud, drawn)
+
+	var world_count := me.weapons.arsenal.current().magazine
+	drawn.arsenal.current().magazine = maxi(world_count - 5, 0)
+	client.set("_drawn_quiet", 0.0)
+	for i in 10:
+		await get_tree().physics_frame
+	var early := drawn.arsenal.current().magazine
+	for i in 60:
+		await get_tree().physics_frame
+	_check(early == maxi(world_count - 5, 0) and drawn.arsenal.current().magazine == world_count,
+		"the drawn gun takes the server's count once quiet, and not before",
+		"after 10 ticks %d, after 70 %d, server %d" % [early, drawn.arsenal.current().magazine, world_count])
+
+	var marker: DotHitMarker = hud.get("hit_marker")
+	world.hit_landed.emit(&"local", Vector3(0.0, 1.0, -4.0), true, false)
+	_check(marker != null and marker.alpha() > 0.9 and marker.kill, "a hit the world confirms flashes the marker, a kill's")
+
+	_test_wheel(client, drawn)
+
+	remove_child(client)
+	client.free()
+	await get_tree().process_frame
+	_finished()
+
+
+## The HUD counts the drawn gun and draws its sprite above the plate, bottom right. Returns the counter.
+func _test_the_drawn_hud(hud: Node, drawn: ZeeWeaponRig) -> DotAmmoCounter:
 	hud.call("_process", 0.0)
 	var counter: DotAmmoCounter = hud.get("ammo")
 	var def := drawn.current_def() if drawn != null else null
@@ -386,29 +414,7 @@ func _test_the_drawn_gun() -> void:
 	_check(counter.anchor_left == 1.0 and counter.anchor_top == 1.0 and counter.offset_top >= -180.0
 		and counter.offset_bottom <= -100.0,
 		"it sits bottom right, above the field line and clear of the chat and the health plate")
-
-	var world_count := me.weapons.arsenal.current().magazine
-	drawn.arsenal.current().magazine = maxi(world_count - 5, 0)
-	client.set("_drawn_quiet", 0.0)
-	for i in 10:
-		await get_tree().physics_frame
-	var early := drawn.arsenal.current().magazine
-	for i in 60:
-		await get_tree().physics_frame
-	_check(early == maxi(world_count - 5, 0) and drawn.arsenal.current().magazine == world_count,
-		"the drawn gun takes the server's count once quiet, and not before",
-		"after 10 ticks %d, after 70 %d, server %d" % [early, drawn.arsenal.current().magazine, world_count])
-
-	var marker: DotHitMarker = hud.get("hit_marker")
-	world.hit_landed.emit(&"local", Vector3(0.0, 1.0, -4.0), true, false)
-	_check(marker != null and marker.alpha() > 0.9 and marker.kill, "a hit the world confirms flashes the marker, a kill's")
-
-	_test_wheel(client, drawn)
-
-	remove_child(client)
-	client.free()
-	await get_tree().process_frame
-	_finished()
+	return counter
 
 
 ## The client's DotWeaponWheel steps a real slot on the weapon-next action, and not with the pointer free.
