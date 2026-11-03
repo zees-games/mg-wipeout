@@ -2807,132 +2807,155 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 	# A jump point passed in the air is not passed: it is where the NEXT jump starts, and
 	# advancing on it mid-flight meant the bot came down on a ball, never jumped off it and
 	# slid into the water. Held until the bot is on its feet.
-	if bool(point["jump"]):
-		if not grounded:
-			racing["grounded_for"] = 0
-			return
-
-		# Not on the tick of landing: until the world has stepped once with the feet down the velocity is still the
-		# jump's, so the run-up let the next jump go at once, short.
-		racing["grounded_for"] = int(racing.get("grounded_for", 0)) + 1
-		if int(racing["grounded_for"]) < 2 and float(point["reach"]) > 0.6:
-			return
-
-		# On a top, face the next one, never the point: a landing is aimed a little past the point (see [method
-		# _bot_land_on]), so turning to it is running backwards and the take-off slows to two metres a second. Past
-		# the point and too slow for the jump, the yaw is left to the run-up below.
-		if float(point["reach"]) > 0.6 and not next.is_empty():
-			var facing: Vector3 = (next["at"] as Vector3) - at
-			facing.y = 0.0
-			var beyond := -toward.dot(facing.normalized()) if facing.length() > 0.1 else 0.0
-			var flat_now := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z)
-			var going := flat_now.dot(facing.normalized()) if facing.length() > 0.1 else 0.0
-			var need := _jump_speed_needed(at, next["at"])
-			if facing.length() > 0.1 and (beyond < 0.2 or going >= need):
-				command.yaw = rad_to_deg(atan2(-facing.x, -facing.z))
-			# Faster than the jump needs: the excess braked off on the take-off, never a wish on to full speed, or
-			# the jump is braked to a standstill just past the next top and the run-up goes down its far side, where
-			# the motor refuses a jump. Never on a log turning toward the runner, which takes the speed a jump needs.
-			if going >= need * TAKEOFF_SPARE and facing.length() > 0.1 \
-					and stage.carry(player.controller.state.ground_id, at, _tick).dot(facing) >= 0.0:
-				command.move = Vector2(0.0, -clampf((going - need * TAKEOFF_SPARE) / config.bot_ground_brake, 0.0, 1.0))
-		elif not next.is_empty():
-			# An edge's jump point already behind: the jump goes on, not back. Only once past it and still going on;
-			# before the point the run-up is left straight, and turning for a runner going back made easy finish
-			# behind medium.
-			var jump_line: Vector3 = (next["at"] as Vector3) - (point["at"] as Vector3)
-			jump_line.y = 0.0
-			var onward := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z).dot(jump_line)
-			if jump_line.length() > 0.1 and toward.dot(jump_line) < 0.0 and onward > 0.0:
-				command.yaw = rad_to_deg(atan2(-jump_line.x, -jump_line.z))
-
-		# Toward where the jump is GOING, on a point marked `onward`: a bot that landed past a pad's centre hopped
-		# backwards and wide into the water. Opt-in per point, because a gap's edge point is routinely passed before
-		# the take-off and turning there spoils a straight run-up. Before the run-up below.
-		if bool(point.get("onward", false)) and not next.is_empty():
-			var onward: Vector3 = (next["at"] as Vector3) - at
-			onward.y = 0.0
-			if onward.length() > 0.1:
-				command.yaw = rad_to_deg(atan2(-onward.x, -onward.z))
-
-		# Up to speed first, for a few ticks: a landing on a ball or a turning log costs speed,
-		# and a jump taken at four metres a second off a log falls short of the next one — a
-		# jump is cut short in the air, never stretched.
-		var flat_speed := Vector2(player.controller.state.velocity.x, player.controller.state.velocity.z).length()
-		var spent := int(_bot_runup.get(player.player_id, 0))
-
-		# Longer on a top that fights back: a log rolling toward the runner took the landing down to one and a half
-		# metres a second, a metre short at the jump. Never once past the point, where the top is going away under
-		# the feet.
-		var onward_line := (next["at"] as Vector3) - (point["at"] as Vector3) if not next.is_empty() else Vector3.ZERO
-		onward_line.y = 0.0
-		var past := -toward.dot(onward_line.normalized()) if onward_line.length() > 0.01 else 0.0
-		var top := float(point["reach"]) > 0.6
-
-		if top and not next.is_empty():
-			# On a top, run until the jump will make the next one, or the top runs out. What the next jump needs is
-			# arithmetic (distance over air time, to the next top's height); what the top allows is its reach past
-			# the point. A fixed three ticks jumped at whatever the landing left.
-			var needed := _jump_speed_needed(at, next["at"])
-			# The speed TOWARD the next top: a runner going sideways at six metres a second
-			# is not going to make it.
-			var to_next: Vector3 = (next["at"] as Vector3) - at
-			to_next.y = 0.0
-			var closing := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z).dot(to_next.normalized()) \
-				if to_next.length() > 0.01 else flat_speed
-			# And not much sideways: a pad landed on a metre and a half off its middle had the
-			# runner going across it, and the jump went across too (Spin Cycle's second pad).
-			var across := 0.0
-			if to_next.length() > 0.01:
-				var flat_velocity := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z)
-				across = (flat_velocity - to_next.normalized() * closing).length()
-			if (closing < needed * 1.05 or across > 1.5) and past < float(point["reach"]) + 0.6 and spent < RUNUP_TICKS * 3:
-				_bot_runup[player.player_id] = spent + 1
-				var ahead: Vector3 = (next["at"] as Vector3) - at
-				ahead.y = 0.0
-				if ahead.length() > 0.1:
-					command.yaw = rad_to_deg(atan2(-ahead.x, -ahead.z))
-				return
-		elif flat_speed < config.run_speed * 0.85 and spent < 3:
-			_bot_runup[player.player_id] = spent + 1
-			return
-
-		_bot_runup.erase(player.player_id)
-
-		# Too slow at an edge, back up for a run at it; a person takes three steps back. Only at an edge (a narrow
-		# reach), never on a top, where stepping back is stepping off. Also when going the wrong way: a runner that
-		# hopped an arm and landed beside an edge ran back along it and jumped sideways off it.
-		var squint := 0.0
-		if not next.is_empty() and flat_speed > 0.5:
-			var jump_line: Vector3 = (next["at"] as Vector3) - (point["at"] as Vector3)
-			jump_line.y = 0.0
-			if jump_line.length() > 0.01:
-				squint = rad_to_deg(Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z).angle_to(jump_line))
-		# Never on a turntable: the disc carries the runner sideways, which reads as a squint, and backing up under a
-		# spinner's arms is standing in their way. A seesaw still wants the run-up, or the next plank is jumped
-		# short.
-		if (flat_speed < config.run_speed * 0.6 or squint > 30.0) and float(point["reach"]) <= 0.6 \
-				and int(racing.get("backed_up", -1)) != index \
-				and stage.ground_kind(player.controller.state.ground_id) != "turntable":
-			racing["backed_up"] = index
-			racing["backup_until"] = _tick + int(0.4 * float(tick_rate))
-
-		if _tick < int(racing.get("backup_until", 0)):
-			command.move = Vector2(0.0, -1.0)
-			return
-
-		# Late: still running, for as many ticks as this take-off is late by. Off an edge
-		# point that is a step past the edge, and the water.
-		if int(racing["late"]) > 0:
-			racing["late"] = int(racing["late"]) - 1
-			return
-
-		# A fumble is a jump not taken, decided once per bot, point and attempt.
-		if not bool(racing["fumble"]):
-			command.set_button(DotFpsCommand.BUTTON_JUMP, true)
-
+	if bool(point["jump"]) and not _bot_takeoff(player, command, racing, point, next, toward, index):
+		return
 
 	_bot_route[player.player_id] = next_index
+
+
+## The take-off at a jump point: face, run up, back up, late or fumbled. False when the tick is spent, true when
+## the bot has jumped (or is done) and the route moves on.
+func _bot_takeoff(player: WoPlayer, command: DotFpsCommand, racing: Dictionary, point: Dictionary, next: Dictionary,
+		toward: Vector3, index: int) -> bool:
+	var at := player.controller.state.position
+	var grounded := player.controller.state.mode == DotFpsState.Mode.GROUND
+	if not grounded:
+		racing["grounded_for"] = 0
+		return false
+
+	# Not on the tick of landing: until the world has stepped once with the feet down the velocity is still the
+	# jump's, so the run-up let the next jump go at once, short.
+	racing["grounded_for"] = int(racing.get("grounded_for", 0)) + 1
+	if int(racing["grounded_for"]) < 2 and float(point["reach"]) > 0.6:
+		return false
+
+	_bot_takeoff_aim(player, command, point, next, toward, at)
+
+	if _bot_takeoff_runup(player, command, point, next, toward, at):
+		return false
+
+	var flat_speed := Vector2(player.controller.state.velocity.x, player.controller.state.velocity.z).length()
+	# Too slow at an edge, back up for a run at it; a person takes three steps back. Only at an edge (a narrow
+	# reach), never on a top, where stepping back is stepping off. Also when going the wrong way: a runner that
+	# hopped an arm and landed beside an edge ran back along it and jumped sideways off it.
+	var squint := 0.0
+	if not next.is_empty() and flat_speed > 0.5:
+		var jump_line: Vector3 = (next["at"] as Vector3) - (point["at"] as Vector3)
+		jump_line.y = 0.0
+		if jump_line.length() > 0.01:
+			squint = rad_to_deg(Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z).angle_to(jump_line))
+	# Never on a turntable: the disc carries the runner sideways, which reads as a squint, and backing up under a
+	# spinner's arms is standing in their way. A seesaw still wants the run-up, or the next plank is jumped
+	# short.
+	if (flat_speed < config.run_speed * 0.6 or squint > 30.0) and float(point["reach"]) <= 0.6 \
+			and int(racing.get("backed_up", -1)) != index \
+			and stage.ground_kind(player.controller.state.ground_id) != "turntable":
+		racing["backed_up"] = index
+		racing["backup_until"] = _tick + int(0.4 * float(tick_rate))
+
+	if _tick < int(racing.get("backup_until", 0)):
+		command.move = Vector2(0.0, -1.0)
+		return false
+
+	# Late: still running, for as many ticks as this take-off is late by. Off an edge
+	# point that is a step past the edge, and the water.
+	if int(racing["late"]) > 0:
+		racing["late"] = int(racing["late"]) - 1
+		return false
+
+	# A fumble is a jump not taken, decided once per bot, point and attempt.
+	if not bool(racing["fumble"]):
+		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+	return true
+
+
+## Where a take-off faces: the next top, or onward past an edge, braking off any excess speed.
+func _bot_takeoff_aim(player: WoPlayer, command: DotFpsCommand, point: Dictionary, next: Dictionary, toward: Vector3,
+		at: Vector3) -> void:
+	# On a top, face the next one, never the point: a landing is aimed a little past the point (see [method
+	# _bot_land_on]), so turning to it is running backwards and the take-off slows to two metres a second. Past
+	# the point and too slow for the jump, the yaw is left to the run-up below.
+	if float(point["reach"]) > 0.6 and not next.is_empty():
+		var facing: Vector3 = (next["at"] as Vector3) - at
+		facing.y = 0.0
+		var beyond := -toward.dot(facing.normalized()) if facing.length() > 0.1 else 0.0
+		var flat_now := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z)
+		var going := flat_now.dot(facing.normalized()) if facing.length() > 0.1 else 0.0
+		var need := _jump_speed_needed(at, next["at"])
+		if facing.length() > 0.1 and (beyond < 0.2 or going >= need):
+			command.yaw = rad_to_deg(atan2(-facing.x, -facing.z))
+		# Faster than the jump needs: the excess braked off on the take-off, never a wish on to full speed, or
+		# the jump is braked to a standstill just past the next top and the run-up goes down its far side, where
+		# the motor refuses a jump. Never on a log turning toward the runner, which takes the speed a jump needs.
+		if going >= need * TAKEOFF_SPARE and facing.length() > 0.1 \
+				and stage.carry(player.controller.state.ground_id, at, _tick).dot(facing) >= 0.0:
+			command.move = Vector2(0.0, -clampf((going - need * TAKEOFF_SPARE) / config.bot_ground_brake, 0.0, 1.0))
+	elif not next.is_empty():
+		# An edge's jump point already behind: the jump goes on, not back. Only once past it and still going on;
+		# before the point the run-up is left straight, and turning for a runner going back made easy finish
+		# behind medium.
+		var jump_line: Vector3 = (next["at"] as Vector3) - (point["at"] as Vector3)
+		jump_line.y = 0.0
+		var onward := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z).dot(jump_line)
+		if jump_line.length() > 0.1 and toward.dot(jump_line) < 0.0 and onward > 0.0:
+			command.yaw = rad_to_deg(atan2(-jump_line.x, -jump_line.z))
+
+	# Toward where the jump is GOING, on a point marked `onward`: a bot that landed past a pad's centre hopped
+	# backwards and wide into the water. Opt-in per point, because a gap's edge point is routinely passed before
+	# the take-off and turning there spoils a straight run-up. Before the run-up below.
+	if bool(point.get("onward", false)) and not next.is_empty():
+		var onward: Vector3 = (next["at"] as Vector3) - at
+		onward.y = 0.0
+		if onward.length() > 0.1:
+			command.yaw = rad_to_deg(atan2(-onward.x, -onward.z))
+
+
+## Up to speed before the jump. True while the bot is still running up (the tick is spent).
+func _bot_takeoff_runup(player: WoPlayer, command: DotFpsCommand, point: Dictionary, next: Dictionary, toward: Vector3,
+		at: Vector3) -> bool:
+	# Up to speed first, for a few ticks: a landing on a ball or a turning log costs speed,
+	# and a jump taken at four metres a second off a log falls short of the next one — a
+	# jump is cut short in the air, never stretched.
+	var flat_speed := Vector2(player.controller.state.velocity.x, player.controller.state.velocity.z).length()
+	var spent := int(_bot_runup.get(player.player_id, 0))
+
+	# Longer on a top that fights back: a log rolling toward the runner took the landing down to one and a half
+	# metres a second, a metre short at the jump. Never once past the point, where the top is going away under
+	# the feet.
+	var onward_line := (next["at"] as Vector3) - (point["at"] as Vector3) if not next.is_empty() else Vector3.ZERO
+	onward_line.y = 0.0
+	var past := -toward.dot(onward_line.normalized()) if onward_line.length() > 0.01 else 0.0
+	var top := float(point["reach"]) > 0.6
+
+	if top and not next.is_empty():
+		# On a top, run until the jump will make the next one, or the top runs out. What the next jump needs is
+		# arithmetic (distance over air time, to the next top's height); what the top allows is its reach past
+		# the point. A fixed three ticks jumped at whatever the landing left.
+		var needed := _jump_speed_needed(at, next["at"])
+		# The speed TOWARD the next top: a runner going sideways at six metres a second
+		# is not going to make it.
+		var to_next: Vector3 = (next["at"] as Vector3) - at
+		to_next.y = 0.0
+		var closing := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z).dot(to_next.normalized()) \
+			if to_next.length() > 0.01 else flat_speed
+		# And not much sideways: a pad landed on a metre and a half off its middle had the
+		# runner going across it, and the jump went across too (Spin Cycle's second pad).
+		var across := 0.0
+		if to_next.length() > 0.01:
+			var flat_velocity := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z)
+			across = (flat_velocity - to_next.normalized() * closing).length()
+		if (closing < needed * 1.05 or across > 1.5) and past < float(point["reach"]) + 0.6 and spent < RUNUP_TICKS * 3:
+			_bot_runup[player.player_id] = spent + 1
+			var ahead: Vector3 = (next["at"] as Vector3) - at
+			ahead.y = 0.0
+			if ahead.length() > 0.1:
+				command.yaw = rad_to_deg(atan2(-ahead.x, -ahead.z))
+			return true
+	elif flat_speed < config.run_speed * 0.85 and spent < 3:
+		_bot_runup[player.player_id] = spent + 1
+		return true
+	_bot_runup.erase(player.player_id)
+	return false
 
 
 ## The stock death reactions plus this game's [constant FLING]. One list for both ends.

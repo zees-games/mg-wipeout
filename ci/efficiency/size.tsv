@@ -18,8 +18,8 @@ game/wo_client.gd::_unhandled_input	94
 game/wo_course.gd	1958
 game/wo_course.gd::_make_piece	89
 game/wo_course_doc.gd::_course	87
-game/wo_game.gd	3227
-game/wo_game.gd::_bot_run	482
+game/wo_game.gd	3131
+game/wo_game.gd::_bot_run	307
 game/wo_hud.gd::_build	130
 game/wo_module.gd	870
 game/wo_module.gd::_build_vote	101
