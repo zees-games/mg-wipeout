@@ -100,7 +100,10 @@ func _register_net_vars() -> void:
 	replicate(&"net_checkpoint", DotNetVar.Type.UINT).bits(6)
 	replicate(&"net_finished", DotNetVar.Type.BOOL)
 	replicate(&"net_points", DotNetVar.Type.UINT).bits(16)
-	replicate(&"net_ping", DotNetVar.Type.UINT).bits(10)
+	var ping := replicate(&"net_ping", DotNetVar.Type.UINT).bits(10)
+	# Only the server measures it, so a replay cannot predict it (dot-net API 17; by name for an older shell).
+	if ping.has_method(&"server_driven"):
+		ping.call(&"server_driven")
 	replicate(&"net_watching", DotNetVar.Type.BOOL)
 	replicate(&"net_carrying", DotNetVar.Type.BOOL)
 
@@ -170,15 +173,15 @@ func pull() -> void:
 	net_checkpoint = clampi(player.checkpoint + 1, 0, 63)
 	net_finished = player.finished
 	net_points = clampi(player.points, 0, 65535)
-	net_ping = clampi(player.ping_ms, 0, 1023)
 	net_watching = player.watching
 	net_carrying = player.grab != null and player.grab.is_carrying()
 	net_blind = player.blinded
 	net_beacon = player.beacon
-	# Server-owned: a predicting client counts its own placements differently, and writing it made the
-	# predictor see a mismatch on a variable it cannot predict.
+	# Server-owned (placements, ping): a predicting client writing them made the predictor see a
+	# mismatch on a variable it cannot predict.
 	if identity == null or identity.is_authoritative:
 		net_warp = player.warps & 0xF
+		net_ping = clampi(player.ping_ms, 0, 1023)
 
 	# After the arsenal has simulated, which on this end it has: the whole world ticks before anything is pulled. A
 	# rig that does not exist yet leaves these at zero, which is a carrier holding nothing, and true.

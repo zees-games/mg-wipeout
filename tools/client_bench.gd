@@ -2,6 +2,7 @@ extends DotGameClientBench
 
 const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
+const WoWorld := preload("../game/wo_world.gd")
 
 ## Client prediction bench (dot-game's DotGameClientBench): see that class for the flags.
 ## `--bots N` seats N stand-ins through minimum_players (fill mode); `--play` supplies the movement.
@@ -10,6 +11,9 @@ const WoGame := preload("../game/wo_game.gd")
 func _configure() -> void:
 	client_scene = "res://game/wo.tscn"
 	forward_action = &"dot_fps_forward"
+	# A real client reads an io course's mesh from the mounted maps pack; none is mounted here, and without
+	# it the client predicts on the pad alone while the server walks the map.
+	WoWorld.add_dir("res://worlds")
 
 
 func _boot_server(bots_wanted: int, data_dir: String) -> DotNetManager:
