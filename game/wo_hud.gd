@@ -31,6 +31,7 @@ var strip: DotScoreStrip = null
 ## quarter. Hidden on a course; see the class note.
 var vitals: DotVitals = null
 var _field: Label = null
+var _touch_room := false
 var _special: Label = null
 var _shout: Label = null
 
@@ -89,6 +90,20 @@ static func piece_theme() -> Theme:
 ## and at every change, and applies the player's HUD size. Duck-typed and called by name, for a client shell older
 ## than dot-menu 7.
 var _menu: Object = null
+
+
+## Moves the bottom-right line left of the phone's button cluster (290 px in from the right) and above the progress line.
+func make_room_for_touch() -> void:
+	_touch_room = true
+	_place_field()
+
+
+func _place_field() -> void:
+	if _field != null and _touch_room:
+		_field.offset_right = -300.0
+		_field.offset_left = -600.0
+		_field.offset_top = -150.0
+		_field.offset_bottom = -100.0
 
 
 func follow_menu(menu: Object) -> void:
@@ -266,6 +281,7 @@ func _build_gun(size: int) -> void:
 	_field.offset_top = -80.0
 	_field.offset_bottom = -26.0
 	_field.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_place_field()
 
 
 ## dot-ui's DotCrosshair as a plain dot (no arms, no spread) where the host has it (API 14), else the old square.
