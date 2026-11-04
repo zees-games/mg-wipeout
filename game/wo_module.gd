@@ -99,7 +99,7 @@ func _net_config() -> DotNetConfig:
 	# A dozen platforms, up to a hundred and ten props, a couple of choppers and everybody
 	# playing — all of it always relevant, because the map is open air and a player can see
 	# the whole of it.
-	config.max_entities_per_snapshot = 192
+	config.max_entities_per_snapshot = 0
 	return config
 
 
