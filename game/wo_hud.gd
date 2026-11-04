@@ -502,7 +502,11 @@ func _phase_line() -> String:
 			if player != null and player.watching:
 				return "watching the final death"
 			if player != null and player.grab != null and player.grab.is_carrying():
+				if DotPlatform.has_touch():
+					return "carrying — FIRE to throw, GRAB to drop"
 				return "carrying — click to throw, E to drop"
+			if DotPlatform.has_touch():
+				return "last one standing — GRAB picks things up"
 			return "last one standing — E picks things up"
 		_:
 			return "between rounds"
