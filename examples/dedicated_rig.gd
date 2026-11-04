@@ -11,8 +11,8 @@ const WoNetLink := preload("../game/net/wo_net_link.gd")
 ## The booted server of dedicated: its constants, state and the console helpers.
 
 const SERVER_DIR := "user://wo_dedicated"
-const PORT := 28931
-const QUERY_PORT := 28932
+var PORT := WOTestPorts.free_port(2)
+var QUERY_PORT := PORT + 1
 const TICK_RATE := 60
 
 var _sections_entered := 0
