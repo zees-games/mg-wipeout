@@ -1592,6 +1592,8 @@ func _build_touch() -> void:
 		return
 	_touch = WoTouch.new()
 	hud.make_room_for_touch()
+	if blurb_label != null:
+		blurb_label.touch = true
 	var _built := _touch.build(hud, _active_sampler, {
 		WoTouch.FIRE: func(down: bool) -> void: _firing = down and not is_spectating(),
 		WoTouch.ALT: func(down: bool) -> void: _alt = down and not is_spectating(),

@@ -175,6 +175,9 @@ static func new_chat() -> DotGameChatClient:
 	]
 	box.max_length = WoServices.chat_rules().max_length
 	box.voice_config = WoServices.voice_format()
+	if DotPlatform.has_touch():
+		# Three rows in the corner left of the buttons, clear of the blurb and the bar (WoHud.touch_rects).
+		box.window_settings = {"max_lines": 3, "width": WoHud.TOUCH_CHAT_WIDTH, "margin_left": 12.0, "margin_bottom": 8.0}
 	return box
 
 
