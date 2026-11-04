@@ -267,3 +267,38 @@ func _cover_lifted(module: Object, link: DotClientLink, peer: int, victim: WoPla
 	game._fell(victim)
 	_check(victim.falls == falls + 1 or game.stage.is_arena(), "and a fall counts again",
 		"falls %d -> %d" % [falls, victim.falls])
+
+
+func _rotation_ballot_checks(catalogue, vote: Node) -> void:
+	if vote != null:
+		vote.call("refresh_courses")
+		var ballot: Array = []
+		for choice in (vote.get("source") as DotVoteListSource).entries:
+			ballot.append(String(choice.id))
+		_check(ballot.has("rot_0") and not ballot.has("rot_2"), "never on a ballot", str(ballot))
+		var refused := _run_command("nominate rot_2")
+		_check(not _said(refused, "Nominated"), "refused by nominate", ", ".join(refused))
+		var accepted := _run_command("nominate rot_0")
+		# A ballot may be running from the section before, which refuses any nomination; what
+		# matters is that a course in the rotation is known to nominate, an unlisted one is not.
+		_check(not _said(accepted, "nothing called"), "while one in the rotation is known to it", ", ".join(accepted))
+	else:
+		_check(false, "never on a ballot", "no vote")
+		_check(false, "refused by nominate", "no vote")
+		_check(false, "while one in the rotation is known to it", "no vote")
+
+
+func _rotation_course_list_checks(catalogue) -> void:
+	var out_row: Dictionary = {}
+	var in_row: Dictionary = {}
+	for row: Dictionary in game.course_rows():
+		if row["id"] == "rot_2":
+			out_row = row
+		elif row["id"] == "rot_0":
+			in_row = row
+	_check(not out_row.is_empty() and not bool(out_row["in_rotation"])
+			and str(out_row["name"]).contains("not in rotation"), "the course list marks it")
+	_check(not in_row.is_empty() and bool(in_row["in_rotation"])
+			and not str(in_row["name"]).contains("not in rotation"), "and leaves the rotating ones alone")
+	_check(game.change_course_now(&"rot_2").ok, "while an admin's course change still loads it",
+		str(game.stage.id()))

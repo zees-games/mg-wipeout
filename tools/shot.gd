@@ -133,50 +133,13 @@ func _run() -> void:
 			get_tree().quit(0)
 			return
 		"arena":
-			await _frames(4)
-			var doc: Dictionary = game.catalogue.arenas.get(StringName(_arena), {}) if _arena != "" \
-				else game.catalogue.pick_arena(game.config.arena_ids, DotRandomStream.new(3))
-			if doc.is_empty():
-				doc = game.catalogue.pick_arena(PackedStringArray(), DotRandomStream.new(3))
-			var _built := game.build_stage(doc)
-			await _frames(6)
-			_overview(game, 0.9)
+			await _view_arena(game)
 		"maps":
-			# M: the solo course list, with the Workshop's course among the game's own.
-			# Past the load gate's cover, which holds the screen for the first seconds.
-			await _seconds_of(6.0)
-			var settings: Object = _client.get("settings")
-			var menu: Variant = settings.get("menu")
-			menu.call(&"open_maps")
-			var picker: Variant = menu.get("picker")
-			if picker != null:
-				# Past the last row and back: the fixture sorts after the shipped ids of its letter.
-				var rows := game.course_rows()
-				for i in range(rows.size()):
-					if str(rows[i]["id"]) == "fixture_hill":
-						picker.call(&"turn", 99)
-						picker.call(&"turn", i - rows.size() + 1)
-			await _seconds_of(_seconds)
+			await _view_maps(game)
 		"pack":
-			# A subscribed pack's course, chosen the way the M menu does, built and looked at.
-			# Past the load gate's cover, which holds the screen for the first seconds.
-			await _seconds_of(6.0)
-			var chosen := game.change_course_now(&"fixture_hill")
-			print("chosen: %s" % chosen.ok)
-			await _seconds_of(2.0)
-			print("built: %s" % game.stage.id())
-			_overview(game, 1.3)
+			await _view_pack(game)
 		"finale":
-			await _seconds_of(game.config.countdown_seconds + 1.5)
-			# Everybody across, so the course closes into a final death the way a real one does.
-			for id: StringName in game.players:
-				var runner = game.players[id]
-				if runner.finished:
-					continue
-				game._finish_count += 1
-				runner.finished = true
-				runner.place = game._finish_count
-			await _seconds_of(game.config.handover_seconds + 1.5)
+			await _view_finale(game)
 		"killcam":
 			await _view_killcam(game)
 		"break":
@@ -191,85 +154,27 @@ func _run() -> void:
 		"tour":
 			await _view_tour(game)
 		"look":
-			await _seconds_of(maxf(_seconds, 7.0))
-			var camera := _free_camera()
-			if _look.size() == 6:
-				camera.look_at_from_position(Vector3(_look[0], _look[1], _look[2]), Vector3(_look[3], _look[4], _look[5]))
+			await _view_look(game)
 		"start":
-			# Past the load gate's cover, which holds an io course's first seconds.
-			await _seconds_of(maxf(_seconds, 7.0))
-			var camera := _free_camera()
-			var start: Vector3 = game.course_doc["start"]["at"]
-			camera.look_at_from_position(start + Vector3(0, 5.5, 10.0), start + Vector3(0, 0, -14.0))
+			await _view_start(game)
 		"tiles":
-			await _seconds_of(_seconds)
-			var camera := _free_camera()
-			var seen := 0
-			for piece in game.stage.pieces:
-				if str(piece["kind"]) == "tiles":
-					if seen == _grid:
-						var at: Vector3 = piece["spec"]["at"]
-						camera.look_at_from_position(at + Vector3(6.0, 6.0, 7.0), at)
-						break
-					seen += 1
+			await _view_tiles(game)
 		"race":
-			# The field mid-race, from over the shoulder of whoever is leading: the stand-ins
-			# spread out over the course, the stands and the show round them.
-			await _seconds_of(game.config.countdown_seconds + _seconds)
-			var order := game.race_order()
-			var leader: Node3D = game.players.get(order[mini(1, order.size() - 1)]) if not order.is_empty() else null
-			var camera := _free_camera()
-			if leader != null:
-				# Behind and to the right of the way the runner faces, not of -Z: a course turns.
-				var at := leader.global_position
-				var facing := Basis(Vector3.UP, deg_to_rad(float(leader.controller.state.yaw)))
-				camera.look_at_from_position(at + facing * Vector3(7.0, 6.0, 11.0), at + facing * Vector3(0.0, 0.5, -10.0))
+			await _view_race(game)
 		"duck":
 			await _view_duck(game)
 		"crowd":
-			# A grandstand and its crowd, from the course: the first stands the course has.
-			await _seconds_of(game.config.countdown_seconds + _seconds)
-			var camera := _free_camera()
-			for item: Dictionary in game.course_doc.get("dressing", []):
-				if str(item["kind"]) == "stands":
-					var at: Vector3 = item["at"]
-					var facing := Basis(Vector3.UP, deg_to_rad(float(item["yaw"]))) * Vector3(0.0, 0.0, -1.0)
-					camera.look_at_from_position(at + facing * 9.0 + Vector3(0.0, 2.5, 6.0), at + Vector3(0.0, 2.0, 0.0))
-					break
+			await _view_crowd(game)
 		"falls":
-			# The first curtain of water or slime, from the deck in front of it, mid-pour.
-			await _seconds_of(_seconds)
-			var camera := _free_camera()
-			for piece in game.stage.pieces:
-				if str(piece["kind"]) == "fall":
-					var at: Vector3 = piece["spec"]["at"]
-					camera.look_at_from_position(at + Vector3(3.5, 2.6, 7.5), at + Vector3(0.0, 1.6, 0.0))
-					break
+			await _view_falls(game)
 		"knockout":
 			await _view_knockout(game)
 		"hurt":
-			# The local player at 60 health, just hit: the health bar and the red flash.
-			await _seconds_of(game.config.countdown_seconds + 0.6)
-			var me = _client.get("player")
-			if me != null:
-				me.health.health = 85.0
-				await _frames(2)
-				me.health.health = 55.0
-				await _frames(2)
+			await _view_hurt(game)
 		"crosshair":
-			# Alive saves to --out; then the same frame dead, to <out>_dead.png (the dot must be gone).
-			await _seconds_of(game.config.countdown_seconds + 0.6)
-			await _frames(3)
-			await RenderingServer.frame_post_draw
-			_save(_out)
-			_client.get("player").health.alive = false
-			await _seconds_of(0.5)
-			_out = _out.get_basename() + "_dead.png"
+			await _view_crosshair(game)
 		"hazard":
-			await _seconds_of(_seconds)
-			var hazard := _first_hazard(game)
-			var camera := _free_camera()
-			camera.look_at_from_position(hazard + Vector3(7.0, 5.0, 7.0), hazard + Vector3(0, 0.6, 0))
+			await _view_hazard(game)
 		_:
 			await _seconds_of(_seconds)
 
@@ -287,6 +192,153 @@ func _run() -> void:
 	print("saved %s (%s): %s" % [_out, _view, error_string(saved)])
 	await DotShotSeq.new().record(get_tree(), ProjectSettings.globalize_path(_out))
 	get_tree().quit(0 if saved == OK else 1)
+
+
+func _view_look(game: WoGame) -> void:
+	await _seconds_of(maxf(_seconds, 7.0))
+	var camera := _free_camera()
+	if _look.size() == 6:
+		camera.look_at_from_position(Vector3(_look[0], _look[1], _look[2]), Vector3(_look[3], _look[4], _look[5]))
+
+
+func _view_start(game: WoGame) -> void:
+	# Past the load gate's cover, which holds an io course's first seconds.
+	await _seconds_of(maxf(_seconds, 7.0))
+	var camera := _free_camera()
+	var start: Vector3 = game.course_doc["start"]["at"]
+	camera.look_at_from_position(start + Vector3(0, 5.5, 10.0), start + Vector3(0, 0, -14.0))
+
+
+func _view_crosshair(game: WoGame) -> void:
+	# Alive saves to --out; then the same frame dead, to <out>_dead.png (the dot must be gone).
+	await _seconds_of(game.config.countdown_seconds + 0.6)
+	await _frames(3)
+	await RenderingServer.frame_post_draw
+	_save(_out)
+	_client.get("player").health.alive = false
+	await _seconds_of(0.5)
+	_out = _out.get_basename() + "_dead.png"
+
+
+func _view_hazard(game: WoGame) -> void:
+	await _seconds_of(_seconds)
+	var hazard := _first_hazard(game)
+	var camera := _free_camera()
+	camera.look_at_from_position(hazard + Vector3(7.0, 5.0, 7.0), hazard + Vector3(0, 0.6, 0))
+
+
+func _view_arena(game: WoGame) -> void:
+	await _frames(4)
+	var doc: Dictionary = game.catalogue.arenas.get(StringName(_arena), {}) if _arena != "" \
+		else game.catalogue.pick_arena(game.config.arena_ids, DotRandomStream.new(3))
+	if doc.is_empty():
+		doc = game.catalogue.pick_arena(PackedStringArray(), DotRandomStream.new(3))
+	var _built := game.build_stage(doc)
+	await _frames(6)
+	_overview(game, 0.9)
+
+
+func _view_maps(game: WoGame) -> void:
+	# M: the solo course list, with the Workshop's course among the game's own.
+	# Past the load gate's cover, which holds the screen for the first seconds.
+	await _seconds_of(6.0)
+	var settings: Object = _client.get("settings")
+	var menu: Variant = settings.get("menu")
+	menu.call(&"open_maps")
+	var picker: Variant = menu.get("picker")
+	if picker != null:
+		# Past the last row and back: the fixture sorts after the shipped ids of its letter.
+		var rows := game.course_rows()
+		for i in range(rows.size()):
+			if str(rows[i]["id"]) == "fixture_hill":
+				picker.call(&"turn", 99)
+				picker.call(&"turn", i - rows.size() + 1)
+	await _seconds_of(_seconds)
+
+
+func _view_pack(game: WoGame) -> void:
+	# A subscribed pack's course, chosen the way the M menu does, built and looked at.
+	# Past the load gate's cover, which holds the screen for the first seconds.
+	await _seconds_of(6.0)
+	var chosen := game.change_course_now(&"fixture_hill")
+	print("chosen: %s" % chosen.ok)
+	await _seconds_of(2.0)
+	print("built: %s" % game.stage.id())
+	_overview(game, 1.3)
+
+
+func _view_finale(game: WoGame) -> void:
+	await _seconds_of(game.config.countdown_seconds + 1.5)
+	# Everybody across, so the course closes into a final death the way a real one does.
+	for id: StringName in game.players:
+		var runner = game.players[id]
+		if runner.finished:
+			continue
+		game._finish_count += 1
+		runner.finished = true
+		runner.place = game._finish_count
+	await _seconds_of(game.config.handover_seconds + 1.5)
+
+
+func _view_tiles(game: WoGame) -> void:
+	await _seconds_of(_seconds)
+	var camera := _free_camera()
+	var seen := 0
+	for piece in game.stage.pieces:
+		if str(piece["kind"]) == "tiles":
+			if seen == _grid:
+				var at: Vector3 = piece["spec"]["at"]
+				camera.look_at_from_position(at + Vector3(6.0, 6.0, 7.0), at)
+				break
+			seen += 1
+
+
+func _view_race(game: WoGame) -> void:
+	# The field mid-race, from over the shoulder of whoever is leading: the stand-ins
+	# spread out over the course, the stands and the show round them.
+	await _seconds_of(game.config.countdown_seconds + _seconds)
+	var order := game.race_order()
+	var leader: Node3D = game.players.get(order[mini(1, order.size() - 1)]) if not order.is_empty() else null
+	var camera := _free_camera()
+	if leader != null:
+		# Behind and to the right of the way the runner faces, not of -Z: a course turns.
+		var at := leader.global_position
+		var facing := Basis(Vector3.UP, deg_to_rad(float(leader.controller.state.yaw)))
+		camera.look_at_from_position(at + facing * Vector3(7.0, 6.0, 11.0), at + facing * Vector3(0.0, 0.5, -10.0))
+
+
+func _view_crowd(game: WoGame) -> void:
+	# A grandstand and its crowd, from the course: the first stands the course has.
+	await _seconds_of(game.config.countdown_seconds + _seconds)
+	var camera := _free_camera()
+	for item: Dictionary in game.course_doc.get("dressing", []):
+		if str(item["kind"]) == "stands":
+			var at: Vector3 = item["at"]
+			var facing := Basis(Vector3.UP, deg_to_rad(float(item["yaw"]))) * Vector3(0.0, 0.0, -1.0)
+			camera.look_at_from_position(at + facing * 9.0 + Vector3(0.0, 2.5, 6.0), at + Vector3(0.0, 2.0, 0.0))
+			break
+
+
+func _view_falls(game: WoGame) -> void:
+	# The first curtain of water or slime, from the deck in front of it, mid-pour.
+	await _seconds_of(_seconds)
+	var camera := _free_camera()
+	for piece in game.stage.pieces:
+		if str(piece["kind"]) == "fall":
+			var at: Vector3 = piece["spec"]["at"]
+			camera.look_at_from_position(at + Vector3(3.5, 2.6, 7.5), at + Vector3(0.0, 1.6, 0.0))
+			break
+
+
+func _view_hurt(game: WoGame) -> void:
+	# The local player at 60 health, just hit: the health bar and the red flash.
+	await _seconds_of(game.config.countdown_seconds + 0.6)
+	var me = _client.get("player")
+	if me != null:
+		me.health.health = 85.0
+		await _frames(2)
+		me.health.health = 55.0
+		await _frames(2)
 
 
 func _view_duck(game: WoGame) -> void:

@@ -569,37 +569,25 @@ func _test_rotation_file() -> void:
 		"and stays installed and loadable")
 	_check(not catalogue.rotating(game.config.course_ids).has(&"rot_2"), "but is not what the rotation offers")
 
+	_rotation_ballot_checks(catalogue, vote)
+
+	_rotation_course_list_checks(catalogue)
+
+	_rotation_switch_checks(catalogue, vote, keep_b)
+
+	# Put the world back: the other suites share this catalogue.
+	for id in made:
+		var _gone: bool = catalogue.courses.erase(id)
+	catalogue._rebuild_order()
+	catalogue.rotation_file = kept
+	catalogue.apply_rotation(game.config.course_ids)
+	game.config.course_ids = kept_ids
 	if vote != null:
 		vote.call("refresh_courses")
-		var ballot: Array = []
-		for choice in (vote.get("source") as DotVoteListSource).entries:
-			ballot.append(String(choice.id))
-		_check(ballot.has("rot_0") and not ballot.has("rot_2"), "never on a ballot", str(ballot))
-		var refused := _run_command("nominate rot_2")
-		_check(not _said(refused, "Nominated"), "refused by nominate", ", ".join(refused))
-		var accepted := _run_command("nominate rot_0")
-		# A ballot may be running from the section before, which refuses any nomination; what
-		# matters is that a course in the rotation is known to nominate, an unlisted one is not.
-		_check(not _said(accepted, "nothing called"), "while one in the rotation is known to it", ", ".join(accepted))
-	else:
-		_check(false, "never on a ballot", "no vote")
-		_check(false, "refused by nominate", "no vote")
-		_check(false, "while one in the rotation is known to it", "no vote")
+	_finished()
 
-	var out_row: Dictionary = {}
-	var in_row: Dictionary = {}
-	for row: Dictionary in game.course_rows():
-		if row["id"] == "rot_2":
-			out_row = row
-		elif row["id"] == "rot_0":
-			in_row = row
-	_check(not out_row.is_empty() and not bool(out_row["in_rotation"])
-			and str(out_row["name"]).contains("not in rotation"), "the course list marks it")
-	_check(not in_row.is_empty() and bool(in_row["in_rotation"])
-			and not str(in_row["name"]).contains("not in rotation"), "and leaves the rotating ones alone")
-	_check(game.change_course_now(&"rot_2").ok, "while an admin's course change still loads it",
-		str(game.stage.id()))
 
+func _rotation_switch_checks(catalogue, vote: Node, keep_b: Array) -> void:
 	_check(catalogue.switch_rotation("b").ok
 			and catalogue.rotating(game.config.course_ids) == ([&"rot_2", &"rot_3"] as Array[StringName]),
 		"a rotation switch takes effect")
@@ -628,17 +616,6 @@ func _test_rotation_file() -> void:
 	catalogue.apply_rotation(game.config.course_ids)
 	_check(catalogue.rotating(game.config.course_ids) == catalogue.playable_courses(game.config.course_ids)
 			and catalogue.in_rotation(&"rot_2"), "with no file every course is in the rotation")
-
-	# Put the world back: the other suites share this catalogue.
-	for id in made:
-		var _gone: bool = catalogue.courses.erase(id)
-	catalogue._rebuild_order()
-	catalogue.rotation_file = kept
-	catalogue.apply_rotation(game.config.course_ids)
-	game.config.course_ids = kept_ids
-	if vote != null:
-		vote.call("refresh_courses")
-	_finished()
 
 
 ## The family cvar `stats_report` is registered, off, and turning it on makes the game's tracker report.

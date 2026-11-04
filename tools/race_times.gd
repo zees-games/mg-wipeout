@@ -123,6 +123,82 @@ func _race(doc: Dictionary, difficulty: String, bots: int, round_index: int, dam
 		_world.free()
 		await get_tree().process_frame
 
+	var game := _new_world(doc, difficulty, round_index, damage, mistakes, overrides, extra)
+	var field := _add_bots(game, bots)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	# Where each fall happened and what the bot meant to do there: the route point it was
+	# heading for and the plan it had drawn for it.
+	var last_at := {}
+	# A grid of tiles: which column each crossing of it went down (counted on the first tile
+	# of it a runner stands on), and how many falls were from it or the deck's edge before it.
+	var columns := {}
+	var tile_falls := [0]
+	if verbose:
+		_watch_falls(game, last_at, tile_falls)
+
+	# Knocked out of the round (health gone on the course) while the course was open, which
+	# is not the same as still running when it closed: then everybody not home watches.
+	var eliminated := {}
+	game.player_died.connect(func(id: StringName, _by: StringName, why: StringName, _weapon: StringName) -> void:
+		if game.phase == WoGame.Phase.COURSE:
+			eliminated[id] = true
+		if verbose:
+			print("  died  %-10s t=%5.1f why=%s" % [(game.players.get(id) as WoPlayer).display_name if game.players.has(id) else String(id), game.course_elapsed, why])
+	)
+
+	if verbose:
+		game.phase_changed.connect(func(to: int) -> void:
+			print("  phase %d at course %.1f s" % [to, game.course_elapsed]))
+
+	game.start()
+	var limit := game.course_limit() + game.config.countdown_seconds + 1.0
+	var started := false
+	# What each runner had done at the last tick the course was open: read after the loop the runner has already been
+	# reset (a course everybody finishes closes at once and the next countdown clears `finished`), so every field
+	# read 0/N.
+	var last := {}
+
+	for i in range(int(limit * TICK_RATE)):
+		game.simulate(TICK)
+
+		if game.phase == WoGame.Phase.COURSE:
+			for bot in field:
+				var seen: Dictionary = last.get(bot.player_id, {})
+				if not seen.get("finished", false):
+					seen = {"finished": bot.finished, "seconds": bot.finish_seconds if bot.finished else game.course_elapsed}
+				seen["falls"] = bot.falls
+				seen["knocks"] = bot.knocks
+				last[bot.player_id] = seen
+
+		if verbose:
+			_trace_bots(game, field, follow, last_at, columns)
+
+		if i % 512 == 0:
+			await get_tree().process_frame
+
+		if game.phase == WoGame.Phase.COURSE:
+			started = true
+		elif started:
+			break
+
+	var out: Array[Dictionary] = []
+
+	if verbose:
+		_print_end(game, field, columns, tile_falls)
+
+	for bot in field:
+		out.append({
+			"name": bot.display_name, "finished": last[bot.player_id]["finished"],
+			"seconds": last[bot.player_id]["seconds"],
+			"falls": last[bot.player_id]["falls"], "knocks": last[bot.player_id]["knocks"],
+			"out": eliminated.has(bot.player_id) and not last[bot.player_id]["finished"],
+		})
+
+	return out
+
+
+func _new_world(doc: Dictionary, difficulty: String, round_index: int, damage: bool, mistakes: float, overrides: Dictionary, extra: String) -> WoGame:
 	var config := WoConfig.new()
 	config.wind_chance = 0.0
 	config.storm_chance = 0.0
@@ -150,7 +226,10 @@ func _race(doc: Dictionary, difficulty: String, bots: int, round_index: int, dam
 		var _added := game.catalogue.add_directory(extra)
 	for field: String in overrides:
 		var _over := game.racer.set_value(field, str(overrides[field]))
+	return game
 
+
+func _add_bots(game: WoGame, bots: int) -> Array[WoPlayer]:
 	var field: Array[WoPlayer] = []
 	var taken: Array = []
 
@@ -160,113 +239,52 @@ func _race(doc: Dictionary, difficulty: String, bots: int, round_index: int, dam
 		var bot := game.add_player(StringName("u%d" % (900100 + i)), bot_name)
 		bot.is_bot = true
 		field.append(bot)
+	return field
 
-	await get_tree().physics_frame
-	await get_tree().physics_frame
 
-	# Where each fall happened and what the bot meant to do there: the route point it was
-	# heading for and the plan it had drawn for it.
-	var last_at := {}
-	# A grid of tiles: which column each crossing of it went down (counted on the first tile
-	# of it a runner stands on), and how many falls were from it or the deck's edge before it.
-	var columns := {}
-	var tile_falls := [0]
-	if verbose:
-		game.player_fell.connect(func(id: StringName, checkpoint: int) -> void:
-			var who: WoPlayer = game.players.get(id)
-			var where: Vector3 = last_at.get(id, Vector3.ZERO)
-			for reach: Vector3 in [Vector3.ZERO, Vector3(2, 0, 0), Vector3(-2, 0, 0), Vector3(0, 0, 2), Vector3(0, 0, -2)]:
-				if not game.stage.tile_cell(where + reach).is_empty():
-					tile_falls[0] += 1
-					break
-			print("  fall  %-10s t=%5.1f cp=%d last on the ground at %s" % [who.display_name if who else id,
-				game.course_elapsed, checkpoint, (last_at.get(id, Vector3.ZERO) as Vector3).snapped(Vector3.ONE * 0.1)])
-		)
-
-	# Knocked out of the round (health gone on the course) while the course was open, which
-	# is not the same as still running when it closed: then everybody not home watches.
-	var eliminated := {}
-	game.player_died.connect(func(id: StringName, _by: StringName, why: StringName, _weapon: StringName) -> void:
-		if game.phase == WoGame.Phase.COURSE:
-			eliminated[id] = true
-		if verbose:
-			print("  died  %-10s t=%5.1f why=%s" % [(game.players.get(id) as WoPlayer).display_name if game.players.has(id) else String(id), game.course_elapsed, why])
-	)
-
-	if verbose:
-		game.phase_changed.connect(func(to: int) -> void:
-			print("  phase %d at course %.1f s" % [to, game.course_elapsed]))
-
-	game.start()
-
-	var limit := game.course_limit() + config.countdown_seconds + 1.0
-	var started := false
-	# What each runner had done at the last tick the course was open: read after the loop the runner has already been
-	# reset (a course everybody finishes closes at once and the next countdown clears `finished`), so every field
-	# read 0/N.
-	var last := {}
-
-	for i in range(int(limit * TICK_RATE)):
-		game.simulate(TICK)
-
-		if game.phase == WoGame.Phase.COURSE:
-			for bot in field:
-				var seen: Dictionary = last.get(bot.player_id, {})
-				if not seen.get("finished", false):
-					seen = {"finished": bot.finished, "seconds": bot.finish_seconds if bot.finished else game.course_elapsed}
-				seen["falls"] = bot.falls
-				seen["knocks"] = bot.knocks
-				last[bot.player_id] = seen
-
-		if verbose:
-			for bot in field:
-				var grounded := bot.controller.state.mode == DotFpsState.Mode.GROUND
-				if bot.display_name == follow:
-					var st := bot.controller.state
-					print("  %-10s t=%6.2f at=%s v=%s %s route=%s" % [follow, game.course_elapsed, st.position.snapped(Vector3.ONE * 0.01),
-						st.velocity.snapped(Vector3.ONE * 0.1), "G" if grounded else "A", game._bot_route.get(bot.player_id, -1)])
-				if grounded:
-					last_at[bot.player_id] = bot.controller.state.position
-					var tile := game.stage.tile_under(bot.controller.state.ground_id)
-					var crossing := "%d/%d" % [int(tile.get("piece", -1)), bot.falls]
-					if not tile.is_empty() and bot.get_meta(&"crossing", "") != crossing:
-						bot.set_meta(&"crossing", crossing)
-						var counts: Array = columns.get(int(tile["piece"]), [0, 0, 0, 0, 0])
-						counts[int(tile["col"])] += 1
-						columns[int(tile["piece"])] = counts
-				elif bot.get_meta(&"was_grounded", false):
-					var v := bot.controller.state.velocity
-					print("  air   %-10s t=%5.2f at=%s v=(%.1f flat, %.1f up) route=%s" % [bot.display_name, game.course_elapsed,
-						bot.controller.state.position.snapped(Vector3.ONE * 0.1), Vector2(v.x, v.z).length(), v.y, game._bot_route.get(bot.player_id, -1)])
-				bot.set_meta(&"was_grounded", grounded)
-				if bot.knocks > int(bot.get_meta(&"knocks_told", 0)):
-					bot.set_meta(&"knocks_told", bot.knocks)
-					print("  knock %-10s t=%5.1f at=%s" % [bot.display_name, game.course_elapsed, bot.controller.state.position.snapped(Vector3.ONE * 0.1)])
-
-		if i % 512 == 0:
-			await get_tree().process_frame
-
-		if game.phase == WoGame.Phase.COURSE:
-			started = true
-		elif started:
-			break
-
-	var out: Array[Dictionary] = []
-
-	if verbose:
-		for piece: int in columns:
-			print("  tiles piece %d: crossings by column %s" % [piece, columns[piece]])
-		print("  tiles falls from the tiles or the deck before them: %d" % tile_falls[0])
+func _trace_bots(game: WoGame, field: Array[WoPlayer], follow: String, last_at: Dictionary, columns: Dictionary) -> void:
 		for bot in field:
-			print("  end   %-10s %s at %s route %s falls %d" % [bot.display_name, "home %.1f s" % bot.finish_seconds if bot.finished else "out" if bot.watching else "running",
-				bot.controller.state.position.snapped(Vector3.ONE * 0.1), game._bot_route.get(bot.player_id, -1), bot.falls])
+			var grounded := bot.controller.state.mode == DotFpsState.Mode.GROUND
+			if bot.display_name == follow:
+				var st := bot.controller.state
+				print("  %-10s t=%6.2f at=%s v=%s %s route=%s" % [follow, game.course_elapsed, st.position.snapped(Vector3.ONE * 0.01),
+					st.velocity.snapped(Vector3.ONE * 0.1), "G" if grounded else "A", game._bot_route.get(bot.player_id, -1)])
+			if grounded:
+				last_at[bot.player_id] = bot.controller.state.position
+				var tile := game.stage.tile_under(bot.controller.state.ground_id)
+				var crossing := "%d/%d" % [int(tile.get("piece", -1)), bot.falls]
+				if not tile.is_empty() and bot.get_meta(&"crossing", "") != crossing:
+					bot.set_meta(&"crossing", crossing)
+					var counts: Array = columns.get(int(tile["piece"]), [0, 0, 0, 0, 0])
+					counts[int(tile["col"])] += 1
+					columns[int(tile["piece"])] = counts
+			elif bot.get_meta(&"was_grounded", false):
+				var v := bot.controller.state.velocity
+				print("  air   %-10s t=%5.2f at=%s v=(%.1f flat, %.1f up) route=%s" % [bot.display_name, game.course_elapsed,
+					bot.controller.state.position.snapped(Vector3.ONE * 0.1), Vector2(v.x, v.z).length(), v.y, game._bot_route.get(bot.player_id, -1)])
+			bot.set_meta(&"was_grounded", grounded)
+			if bot.knocks > int(bot.get_meta(&"knocks_told", 0)):
+				bot.set_meta(&"knocks_told", bot.knocks)
+				print("  knock %-10s t=%5.1f at=%s" % [bot.display_name, game.course_elapsed, bot.controller.state.position.snapped(Vector3.ONE * 0.1)])
 
+
+func _print_end(game: WoGame, field: Array[WoPlayer], columns: Dictionary, tile_falls: Array) -> void:
+	for piece: int in columns:
+		print("  tiles piece %d: crossings by column %s" % [piece, columns[piece]])
+	print("  tiles falls from the tiles or the deck before them: %d" % tile_falls[0])
 	for bot in field:
-		out.append({
-			"name": bot.display_name, "finished": last[bot.player_id]["finished"],
-			"seconds": last[bot.player_id]["seconds"],
-			"falls": last[bot.player_id]["falls"], "knocks": last[bot.player_id]["knocks"],
-			"out": eliminated.has(bot.player_id) and not last[bot.player_id]["finished"],
-		})
+		print("  end   %-10s %s at %s route %s falls %d" % [bot.display_name, "home %.1f s" % bot.finish_seconds if bot.finished else "out" if bot.watching else "running",
+			bot.controller.state.position.snapped(Vector3.ONE * 0.1), game._bot_route.get(bot.player_id, -1), bot.falls])
 
-	return out
+
+func _watch_falls(game: WoGame, last_at: Dictionary, tile_falls: Array) -> void:
+	game.player_fell.connect(func(id: StringName, checkpoint: int) -> void:
+		var who: WoPlayer = game.players.get(id)
+		var where: Vector3 = last_at.get(id, Vector3.ZERO)
+		for reach: Vector3 in [Vector3.ZERO, Vector3(2, 0, 0), Vector3(-2, 0, 0), Vector3(0, 0, 2), Vector3(0, 0, -2)]:
+			if not game.stage.tile_cell(where + reach).is_empty():
+				tile_falls[0] += 1
+				break
+		print("  fall  %-10s t=%5.1f cp=%d last on the ground at %s" % [who.display_name if who else id,
+			game.course_elapsed, checkpoint, (last_at.get(id, Vector3.ZERO) as Vector3).snapped(Vector3.ONE * 0.1)])
+	)

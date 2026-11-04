@@ -110,6 +110,55 @@ func bind(p_game: WoGame, p_player: WoPlayer) -> void:
 
 
 func _build() -> void:
+	_build_root_and_blind()
+
+	var size := 22
+
+	# The glance pieces read their colours from the theme on the type DotHudPiece; set on
+	# the root, every piece under it inherits them. See [method piece_theme].
+	_root.theme = piece_theme()
+	_follow()
+
+	_build_top_lines(size)
+
+	_build_vitals()
+
+	_build_gun(size)
+
+	# Bottom middle, above where the chat box's input line opens, and under nothing else:
+	# the health number is bottom-left and the field bottom-right, and a player who is out
+	# has no use for either.
+	watching_label = _label(size)
+	watching_label.name = "Watching"
+	watching_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	watching_label.offset_left = -520.0
+	watching_label.offset_right = 520.0
+	watching_label.offset_top = -140.0
+	watching_label.offset_bottom = -104.0
+	watching_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	watching_label.add_theme_color_override("font_color", Color(0.80, 0.90, 1.0))
+
+	_build_tilt()
+
+	# Over the progress bar: where you are in the race, the number a runner glances for.
+	_place = _label(size)
+	_place.name = "Place"
+	_place.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_place.offset_left = -150.0
+	_place.offset_right = 150.0
+	_place.offset_top = -82.0
+	_place.offset_bottom = -50.0
+	_place.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	# A dot rather than a cross. For the whole first half there is nothing to aim at, and in
+	# the second half every weapon in the pack has its own spread — so what a player needs is
+	# "the point I am looking at", which is one pixel.
+	_root.add_child(_make_crosshair())
+
+
+
+
+func _build_root_and_blind() -> void:
 	# A full-rect Control between the CanvasLayer and the labels: a CanvasLayer is not a Control and does not lay out
 	# its children, so anchors on a Label parented straight to one resolve against nothing and every label lands top-
 	# left on top of the others.
@@ -131,13 +180,8 @@ func _build() -> void:
 	blind_overlay.visible = false
 	_root.add_child(blind_overlay)
 
-	var size := 22
 
-	# The glance pieces read their colours from the theme on the type DotHudPiece; set on
-	# the root, every piece under it inherits them. See [method piece_theme].
-	_root.theme = piece_theme()
-	_follow()
-
+func _build_top_lines(size: int) -> void:
 	# The clock, and the phase line under it. Full width, because the strip centres itself
 	# on its own middle; the course name sits under it.
 	strip = DotScoreStrip.new()
@@ -174,6 +218,8 @@ func _build() -> void:
 	_shout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_shout.add_theme_color_override("font_color", Color(0.99, 0.86, 0.40))
 
+
+func _build_vitals() -> void:
 	# Above the chat box, which also draws bottom-left: the health number and the first chat line overlapped, which a
 	# headless suite cannot see (its viewport is 64 x 64). The plate ends 206 pixels off the bottom, above the FULL
 	# eight-row log, which reaches 202 (checked in headless_run).
@@ -194,41 +240,6 @@ func _build() -> void:
 	_hurt_wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hurt_wash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(_hurt_wash)
-
-
-	_build_gun(size)
-
-	# Bottom middle, above where the chat box's input line opens, and under nothing else:
-	# the health number is bottom-left and the field bottom-right, and a player who is out
-	# has no use for either.
-	watching_label = _label(size)
-	watching_label.name = "Watching"
-	watching_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	watching_label.offset_left = -520.0
-	watching_label.offset_right = 520.0
-	watching_label.offset_top = -140.0
-	watching_label.offset_bottom = -104.0
-	watching_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	watching_label.add_theme_color_override("font_color", Color(0.80, 0.90, 1.0))
-
-	_build_tilt()
-
-	# Over the progress bar: where you are in the race, the number a runner glances for.
-	_place = _label(size)
-	_place.name = "Place"
-	_place.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	_place.offset_left = -150.0
-	_place.offset_right = 150.0
-	_place.offset_top = -82.0
-	_place.offset_bottom = -50.0
-	_place.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-	# A dot rather than a cross. For the whole first half there is nothing to aim at, and in
-	# the second half every weapon in the pack has its own spread — so what a player needs is
-	# "the point I am looking at", which is one pixel.
-	_root.add_child(_make_crosshair())
-
-
 ## The bottom-right widgets: ammo, weapon icon, hit marker and the field line.
 func _build_gun(size: int) -> void:
 	# Bottom right, above the field line: what is in hand and how much is in it. The play test

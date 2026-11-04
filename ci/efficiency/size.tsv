@@ -1,6 +1,5 @@
 # size
 # Baselines only shrink: scripts/<gate> --update lowers or drops entries and refuses to add.
-examples/dedicated.gd::_test_rotation_file	114
 examples/dedicated.gd::_test_the_course_vote	108
 examples/headless_net.gd::_build	82
 examples/headless_net.gd::_test_a_hit_is_the_shooters	98
@@ -15,9 +14,6 @@ game/wo_client.gd::_unhandled_input	89
 game/wo_course_base.gd	1540
 game/wo_course_doc.gd::_course	87
 game/wo_game.gd	2683
-game/wo_hud.gd::_build	121
 game/wo_module.gd::_build_vote	101
-tools/race_times.gd::_race	153
 tools/race_times.gd::_run	94
-tools/shot.gd::_run	169
 tools/trace_course.gd::_ready	81
