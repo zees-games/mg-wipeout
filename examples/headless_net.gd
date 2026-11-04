@@ -4,8 +4,8 @@ extends "headless_net_workbench.gd"
 ## codec, seal, snapshots, prediction and reconciliation run in one process. Asserts a course sent once as a document
 ## leaves both ends agreeing about every obstacle at every tick, a knock predicted and decided.
 
-const SECTIONS := 17
-const CHECKS := 103
+const SECTIONS := 18
+const CHECKS := 107
 
 
 func _ready() -> void:
@@ -34,6 +34,7 @@ func _run() -> void:
 		await _test_free_roam_crosses()
 		await _test_the_final_death_crosses()
 		await _test_an_imported_mesh_arrives()
+		await _test_a_missing_mesh_refuses_the_stage()
 		await _test_leaving()
 
 	_test_the_remote_workbench()
@@ -281,6 +282,35 @@ func _test_an_imported_mesh_arrives() -> void:
 		path = path.get_base_dir()
 
 	DirAccess.remove_absolute("res://dot_cloud")
+	_finished()
+
+
+## A client with no mesh for an io course must not build it: that would predict on the start pad alone.
+func _test_a_missing_mesh_refuses_the_stage() -> void:
+	_section("a client without the course's mesh refuses the stage and keeps its cover")
+	var kept := WoWorld.dirs.duplicate()
+	var kept_ids := _server_game.config.course_ids
+	_server_game.config.course_ids = PackedStringArray(["wo_practice", "wo_office_course"])
+	var refused: Array = []
+	_client_bridge.stage_refused.connect(func(id: StringName, missing: PackedStringArray) -> void: refused.append([id, missing]))
+	var before := String(_client_game.stage.doc.get("id", ""))
+	WoWorld.dirs = PackedStringArray()
+	var chosen := _server_game.change_course_now(&"wo_office_course")
+	_check(chosen.ok, "the server changes to the Office Course", str(chosen.error) if not chosen.ok else "")
+	# The server keeps its own mesh: only the client's search path is empty. Both share this process, so the
+	# server's world is already built; the client must still find nothing.
+	_exchange()
+	await _steps(6)
+	_check(not refused.is_empty() and refused[0][0] == &"wo_office_course" and not (refused[0][1] as PackedStringArray).is_empty(),
+		"the bridge said which mesh is missing", str(refused))
+	_check(String(_client_game.stage.doc.get("id", "")) == before and _world_node(_client_game) == null,
+		"the client built no course on the pad", String(_client_game.stage.doc.get("id", "")))
+	WoWorld.dirs = kept
+	var back := _server_game.change_course_now(&"wo_practice")
+	_exchange()
+	await _steps(6)
+	_check(back.ok and String(_client_game.stage.doc.get("id", "")) == "wo_practice", "and it follows the next stage once the mesh is back")
+	_server_game.config.course_ids = kept_ids
 	_finished()
 
 

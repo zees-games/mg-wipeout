@@ -166,6 +166,9 @@ static func _mounted_dirs() -> PackedStringArray:
 	var out := PackedStringArray()
 	var root := "res://dot_cloud"
 
+	if not DirAccess.dir_exists_absolute(root):
+		return out
+
 	for owner in DirAccess.get_directories_at(root):
 		for pack in DirAccess.get_directories_at(root.path_join(owner)):
 			for version in DirAccess.get_directories_at(root.path_join(owner).path_join(pack)):

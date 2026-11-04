@@ -73,6 +73,9 @@ signal prop_arrived(at: Vector3, vehicle: bool)
 ## camera and the HUD names the course.
 signal stage_received(stage_id: StringName, is_arena: bool)
 
+## A stage was not built because its world mesh is not here; the client holds its cover until a later one is.
+signal stage_refused(stage_id: StringName, missing: PackedStringArray)
+
 ## Client side: somebody fell, crossed a checkpoint or finished. See [enum WoEvents.Progress].
 signal progress_received(player_id: int, kind: int, value: int, seconds: float)
 
@@ -1550,6 +1553,16 @@ func _apply_stage(reader: DotNetReader) -> void:
 
 		if not got.ok:
 			DotLog.warn(CHANNEL, "a course mesh would not download", {"mesh": mesh, "why": got.error.message})
+
+	# Building without the mesh would predict on the start pad alone while the server walks the real map.
+	var still := WoWorld.missing(decoded.value)
+
+	if not still.is_empty():
+		DotLog.error(CHANNEL, "a course's world mesh is not here, so the stage is refused", {
+			"stage": str(decoded.value.get("id", "?")), "missing": ", ".join(still),
+		})
+		stage_refused.emit(StringName(str(decoded.value.get("id", ""))), still)
+		return
 
 	var built := game.build_stage(decoded.value)
 

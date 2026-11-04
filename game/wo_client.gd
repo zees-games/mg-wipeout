@@ -344,6 +344,8 @@ func _build_netcode() -> DotResult:
 	bridge.armed_received.connect(_on_armed)
 	bridge.hit_received.connect(_on_hit)
 	bridge.stage_received.connect(_on_stage)
+	bridge.stage_refused.connect(func(_id: StringName, missing: PackedStringArray) -> void:
+		gate.hold(&"map", "Course files missing: %s" % ", ".join(missing)))
 	bridge.progress_received.connect(_on_progress)
 	bridge.pickup_received.connect(_on_pickup)
 	bridge.pickup_gone_received.connect(_on_pickup_gone)
