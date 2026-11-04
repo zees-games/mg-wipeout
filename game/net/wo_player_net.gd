@@ -175,7 +175,10 @@ func pull() -> void:
 	net_carrying = player.grab != null and player.grab.is_carrying()
 	net_blind = player.blinded
 	net_beacon = player.beacon
-	net_warp = player.warps & 0xF
+	# Server-owned: a predicting client counts its own placements differently, and writing it made the
+	# predictor see a mismatch on a variable it cannot predict.
+	if identity == null or identity.is_authoritative:
+		net_warp = player.warps & 0xF
 
 	# After the arsenal has simulated, which on this end it has: the whole world ticks before anything is pulled. A
 	# rig that does not exist yet leaves these at zero, which is a carrier holding nothing, and true.
