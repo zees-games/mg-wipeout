@@ -15,8 +15,7 @@ game/wo_client.gd::_unhandled_input	89
 game/wo_course.gd	1865
 game/wo_course.gd::_make_piece	89
 game/wo_course_doc.gd::_course	87
-game/wo_game.gd	3127
-game/wo_game.gd::_bot_run	176
+game/wo_game.gd	2683
 game/wo_hud.gd::_build	121
 game/wo_module.gd::_build_vote	101
 tools/race_times.gd::_race	153
