@@ -4,7 +4,6 @@ game/wo_client.gd::_key::string_build	1
 game/wo_client.gd::_present_course::string_build	1
 game/wo_game.gd::_begin_handover::alloc_array	1
 game/wo_game.gd::_begin_handover::duplicate	1
-game/wo_game.gd::_bot_run::duplicate	2
 game/wo_game.gd::_check_finale::alloc_dict	1
 game/wo_game.gd::_check_finale::string_build	2
 game/wo_game.gd::_close_course::string_build	3

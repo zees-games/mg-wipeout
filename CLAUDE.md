@@ -16,7 +16,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first, and each addon's own before 
 
 | Path | What |
 | --- | --- |
-| `game/wo_course.gd` | THE FILE. A document built into pieces; every piece a function of the tick |
+| `game/wo_course_base.gd` (+ `wo_course.gd`, the dressing layer on top) | THE FILE. A document built into pieces; every piece a function of the tick |
 | `game/wo_course_doc.gd` | what a course and an arena are: JSON, validated, normalised, sent on the wire |
 | `game/wo_catalogue.gd` | every document the server has, one built-in course and arena, which is next |
 | `game/wo_game.gd` | the simulation: phases, falls, checkpoints, the finish, weather, the final death, bots, `race_order()` |

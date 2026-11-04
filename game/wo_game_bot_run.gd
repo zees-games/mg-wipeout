@@ -46,25 +46,7 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 	command.yaw = rad_to_deg(atan2(-toward.x, -toward.z))
 	command.move = Vector2(0.0, 1.0)
 
-	# In the air, aimed at a top (or something to board) to land on: brake if the jump would carry past it.
-	if not grounded and (bool(point["jump"]) or bool(point.get("bounce", false)) or bool(point["board"])):
-		_bot_land_on(player, command, point["at"], (point["at"] as Vector3) - before, float(point["reach"]) > 0.6)
-	elif not grounded and before_index >= 0 and _bot_save_landing(player, command, point["at"],
-			(point["at"] as Vector3) - before):
-		return
-
-	# A bouncer is ground for one tick: its point is reached by coming down over it, or past it on the way up.
-	var over_it := toward.length() < 2.5 and toward.dot((point["at"] as Vector3) - before) < 0.0
-	if bool(point.get("bounce", false)) and (toward.length() < float(point["reach"]) or over_it) \
-			and player.controller.state.velocity.y > 0.0 and not grounded:
-		_bot_route[player.player_id] = next_index
-		return
-
-	# A point ON a mover is reached by standing on it, wherever it has got to, not by chasing its start.
-	if bool(point["ride"]) and grounded and stage.carries(player.controller.state.ground_id):
-		_bot_wait.erase(player.player_id)
-		_bot_route[player.player_id] = next_index
-		command.move = Vector2.ZERO
+	if _bot_run_air(player, command, point, next_index, before, before_index, toward, grounded):
 		return
 
 	# Something to land on: nothing is started until it will be there, asked every tick so a bot riding a mover
@@ -74,23 +56,7 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 		if point.is_empty():
 			return
 
-	# Walked into, for its last metre and a half, a point it may have to stop at (a run slides a metre past, off the
-	# edge beside a mover). Never on the tiles (see [method _bot_may_board]).
-	var stops := bool(point["wait"]) or (not next.is_empty() and bool(next["board"]) and not on_tile)
-
-	# Only on the way IN: a window timed at a run is missed by a bot that walks through it.
-	if bool(point["walk"]) or (stops and toward.length() < 1.6 and toward.length() > float(point["reach"])):
-		command.set_button(DotFpsCommand.BUTTON_WALK, true)
-
-	# Onto a tile at a walk (a running jump overshoots a row of two metres), once on them at a run.
-	if bool(point["board"]) and not bool(point["ride"]) and not on_tile \
-			and not stage.tile_columns(point["at"]).is_empty():
-		command.set_button(DotFpsCommand.BUTTON_WALK, true)
-
-	# Two seconds at the most behind anybody: whoever is in front may be stuck themselves.
-	if bool(point["jump"]) and toward.length() < 4.0 and int(racing.get("queued", 0)) < _rate() * 2 \
-			and _bot_queue(player, command, point["at"]):
-		racing["queued"] = int(racing.get("queued", 0)) + 1
+	if _bot_run_stops(player, command, racing, point, next, toward, on_tile):
 		return
 
 	var running := command.move != Vector2.ZERO
@@ -105,17 +71,15 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 	if running and command.move == Vector2.ZERO and bool(point["jump"]):
 		return
 
-	# A hop that carries past the jump point ahead is the jump: the route moves on and the landing is steered onto
-	# what is beyond the gap.
-	if grounded and command.is_pressed(DotFpsCommand.BUTTON_JUMP) and bool(point["jump"]) \
-			and float(point["reach"]) <= 0.6 and not next.is_empty():
-		var airtime := 2.0 * sqrt(2.0 * _cfg().gravity * _cfg().jump_height) / _cfg().gravity
-		var flat := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z)
-		if flat.length() * airtime > toward.length() and stage.supported(at + flat * airtime + Vector3(0.0, 0.1, 0.0),
-				_tick + int(airtime * float(_rate()))):
-			_bot_route[player.player_id] = next_index
-			return
+	if _bot_hop_is_jump(player, point, next, next_index, toward, at, grounded, command):
+		return
 
+	_bot_run_reach(player, command, racing, point, next, next_index, index, toward, at, grounded, ground_id, on_tile)
+
+
+## The second half of [method _bot_run]: unstick, board the edge, back up, take off, then move on along the route.
+func _bot_run_reach(player: WoPlayer, command: DotFpsCommand, racing: Dictionary, point: Dictionary, next: Dictionary,
+		next_index: int, index: int, toward: Vector3, at: Vector3, grounded: bool, ground_id: int, on_tile: bool) -> void:
 	_bot_unstick(player, command)
 
 	if bool(point["board"]) and grounded:
@@ -174,6 +138,7 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 		return
 
 	_bot_route[player.player_id] = next_index
+
 
 
 ## Heading for something to land on, the jump is at whatever edge the bot reaches first, which on a moving floor
@@ -445,4 +410,70 @@ func _bot_takeoff_runup(player: WoPlayer, command: DotFpsCommand, point: Diction
 		_bot_runup[player.player_id] = spent + 1
 		return true
 	_bot_runup.erase(player.player_id)
+	return false
+
+
+## The air and mover cases of [method _bot_run]. True when the tick is done.
+func _bot_run_air(player: WoPlayer, command: DotFpsCommand, point: Dictionary, next_index: int, before: Vector3,
+		before_index: int, toward: Vector3, grounded: bool) -> bool:
+	# In the air, aimed at a top (or something to board) to land on: brake if the jump would carry past it.
+	if not grounded and (bool(point["jump"]) or bool(point.get("bounce", false)) or bool(point["board"])):
+		_bot_land_on(player, command, point["at"], (point["at"] as Vector3) - before, float(point["reach"]) > 0.6)
+	elif not grounded and before_index >= 0 and _bot_save_landing(player, command, point["at"],
+			(point["at"] as Vector3) - before):
+		return true
+
+	# A bouncer is ground for one tick: its point is reached by coming down over it, or past it on the way up.
+	var over_it := toward.length() < 2.5 and toward.dot((point["at"] as Vector3) - before) < 0.0
+	if bool(point.get("bounce", false)) and (toward.length() < float(point["reach"]) or over_it) \
+			and player.controller.state.velocity.y > 0.0 and not grounded:
+		_bot_route[player.player_id] = next_index
+		return true
+
+	# A point ON a mover is reached by standing on it, wherever it has got to, not by chasing its start.
+	if bool(point["ride"]) and grounded and stage.carries(player.controller.state.ground_id):
+		_bot_wait.erase(player.player_id)
+		_bot_route[player.player_id] = next_index
+		command.move = Vector2.ZERO
+		return true
+	return false
+
+
+## Walk, queue and window rules of [method _bot_run]. True when the tick is done.
+func _bot_run_stops(player: WoPlayer, command: DotFpsCommand, racing: Dictionary, point: Dictionary, next: Dictionary,
+		toward: Vector3, on_tile: bool) -> bool:
+	# Walked into, for its last metre and a half, a point it may have to stop at (a run slides a metre past, off the
+	# edge beside a mover). Never on the tiles (see [method _bot_may_board]).
+	var stops := bool(point["wait"]) or (not next.is_empty() and bool(next["board"]) and not on_tile)
+
+	# Only on the way IN: a window timed at a run is missed by a bot that walks through it.
+	if bool(point["walk"]) or (stops and toward.length() < 1.6 and toward.length() > float(point["reach"])):
+		command.set_button(DotFpsCommand.BUTTON_WALK, true)
+
+	# Onto a tile at a walk (a running jump overshoots a row of two metres), once on them at a run.
+	if bool(point["board"]) and not bool(point["ride"]) and not on_tile \
+			and not stage.tile_columns(point["at"]).is_empty():
+		command.set_button(DotFpsCommand.BUTTON_WALK, true)
+
+	# Two seconds at the most behind anybody: whoever is in front may be stuck themselves.
+	if bool(point["jump"]) and toward.length() < 4.0 and int(racing.get("queued", 0)) < _rate() * 2 \
+			and _bot_queue(player, command, point["at"]):
+		racing["queued"] = int(racing.get("queued", 0)) + 1
+		return true
+	return false
+
+
+## True when the hop under way carries past the jump point ahead, which makes it the jump: the route moves on.
+func _bot_hop_is_jump(player: WoPlayer, point: Dictionary, next: Dictionary, next_index: int, toward: Vector3,
+		at: Vector3, grounded: bool, command: DotFpsCommand) -> bool:
+	# A hop that carries past the jump point ahead is the jump: the route moves on and the landing is steered onto
+	# what is beyond the gap.
+	if grounded and command.is_pressed(DotFpsCommand.BUTTON_JUMP) and bool(point["jump"]) \
+			and float(point["reach"]) <= 0.6 and not next.is_empty():
+		var airtime := 2.0 * sqrt(2.0 * _cfg().gravity * _cfg().jump_height) / _cfg().gravity
+		var flat := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z)
+		if flat.length() * airtime > toward.length() and stage.supported(at + flat * airtime + Vector3(0.0, 0.1, 0.0),
+				_tick + int(airtime * float(_rate()))):
+			_bot_route[player.player_id] = next_index
+			return true
 	return false

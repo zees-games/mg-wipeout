@@ -12,8 +12,7 @@ game/wo_audio.gd::sound_catalogue	107
 game/wo_client.gd	1721
 game/wo_client.gd::_build_netcode	87
 game/wo_client.gd::_unhandled_input	89
-game/wo_course.gd	1865
-game/wo_course.gd::_make_piece	89
+game/wo_course_base.gd	1540
 game/wo_course_doc.gd::_course	87
 game/wo_game.gd	2683
 game/wo_hud.gd::_build	121
