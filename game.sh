@@ -33,7 +33,7 @@
 GAME_NAME="Wipeout"
 PACK="wipeout"
 EXTRA_PACKS="wipeout_maps:mg-wipeout-maps"
-SUITES="headless_config headless_workbench headless_mapcfg headless_run headless_courses headless_io headless_routes headless_io_bots headless_ladder_bot headless_net headless_workshop dedicated"
+SUITES="headless_config headless_workbench headless_mapcfg headless_run headless_courses headless_io headless_routes headless_io_bots headless_ladder_bot headless_net headless_workshop headless_touch dedicated"
 # --------------------------------------------------------------------------------
 
 set -uo pipefail
