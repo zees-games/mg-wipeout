@@ -32,6 +32,13 @@ var strip: DotScoreStrip = null
 var vitals: DotVitals = null
 var _field: Label = null
 var _touch_room := false
+var _touch_vitals := Rect2()
+var _tilt_left := -150.0
+var _tilt_width := 300.0
+const TOUCH_BLURB_WIDTH := 180.0
+const TOUCH_BLURB_LINES := 4.0
+const TOUCH_CHAT_WIDTH := 200.0
+const TOUCH_CHAT_HEIGHT := 94.0
 var _special: Label = null
 var _shout: Label = null
 
@@ -92,18 +99,57 @@ static func piece_theme() -> Theme:
 var _menu: Object = null
 
 
-## Moves the bottom-right line left of the phone's button cluster (290 px in from the right) and above the progress line.
+## Where each HUD piece sits on a phone of [param view] pixels: the touch buttons own the right 290 px, the Menu button
+## the top left corner, the chat box (see [method WoClient.new_chat]) the bottom left. A pure function of the view so a
+## suite can check that no two pieces overlap.
+static func touch_rects(view: Vector2) -> Dictionary:
+	var w := view.x
+	var h := view.y
+	return {
+		"vitals": Rect2(16.0, 70.0, 300.0, 56.0),
+		"blurb": Rect2(16.0, 132.0, TOUCH_BLURB_WIDTH, TOUCH_BLURB_LINES * 16.0),
+		"shout": Rect2(TOUCH_BLURB_WIDTH + 20.0, 164.0, w - TOUCH_BLURB_WIDTH - 20.0 - 300.0, 30.0),
+		"field": Rect2(w - 600.0, h - 150.0, 300.0, 50.0),
+		"place": Rect2(w - 440.0, h - 100.0, 140.0, 32.0),
+		"tilt": Rect2(w - 440.0, h - 46.0, 140.0, 16.0),
+		"chat": Rect2(12.0, h - TOUCH_CHAT_HEIGHT, TOUCH_CHAT_WIDTH, TOUCH_CHAT_HEIGHT),
+	}
+
+
+## Moves the pieces clear of the phone's button cluster, the Menu button and the chat box.
 func make_room_for_touch() -> void:
 	_touch_room = true
-	_place_field()
+	_apply_touch_layout()
+	if _root != null and not _root.resized.is_connected(_apply_touch_layout):
+		_root.resized.connect(_apply_touch_layout)
 
 
-func _place_field() -> void:
-	if _field != null and _touch_room:
-		_field.offset_right = -300.0
-		_field.offset_left = -600.0
-		_field.offset_top = -150.0
-		_field.offset_bottom = -100.0
+func _place_rect(control: Control, r: Rect2) -> void:
+	control.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	control.offset_left = r.position.x
+	control.offset_top = r.position.y
+	control.offset_right = r.end.x
+	control.offset_bottom = r.end.y
+
+
+func _apply_touch_layout() -> void:
+	if not _touch_room or _root == null:
+		return
+	var rects := touch_rects(_root.get_viewport_rect().size)
+	var vitals_rect: Rect2 = rects["vitals"]
+	_touch_vitals = vitals_rect
+	_place_rect(vitals, vitals_rect)
+	_place_rect(_shout, rects["shout"])
+	_shout.add_theme_font_size_override("font_size", 16)
+	_place_rect(_field, rects["field"])
+	_place_rect(_place, rects["place"])
+	_place_rect(_tilt_back, rects["tilt"])
+	var tilt: Rect2 = rects["tilt"]
+	_tilt_left = tilt.position.x
+	_tilt_width = tilt.size.x
+	_place_rect(_tilt_fill, tilt)
+	_tilt_fill.offset_right = _tilt_left
+	_place.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 
 func follow_menu(menu: Object) -> void:
@@ -281,7 +327,6 @@ func _build_gun(size: int) -> void:
 	_field.offset_top = -80.0
 	_field.offset_bottom = -26.0
 	_field.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_place_field()
 
 
 ## dot-ui's DotCrosshair as a plain dot (no arms, no spread) where the host has it (API 14), else the old square.
@@ -461,6 +506,13 @@ func _feel_damage(health: float, delta: float) -> void:
 	_hurt_wash.color.a = 0.28 * k
 	var t := float(Time.get_ticks_msec())
 	var shake := Vector2(sin(t * 0.09), cos(t * 0.13)) * 6.0 * k
+	if _touch_room:
+		var at := _touch_vitals.position + shake
+		vitals.offset_left = at.x
+		vitals.offset_right = at.x + _touch_vitals.size.x
+		vitals.offset_top = at.y
+		vitals.offset_bottom = at.y + _touch_vitals.size.y
+		return
 	vitals.offset_left = 24.0 + shake.x
 	vitals.offset_right = 24.0 + 340.0 + shake.x
 	vitals.offset_top = -262.0 + shake.y
@@ -540,7 +592,7 @@ func _draw_progress() -> void:
 	var steps := game.stage.checkpoint_count() + 1
 	var done := steps if player.finished else player.checkpoint + 1
 	var fraction := clampf(float(done) / float(maxi(steps, 1)), 0.0, 1.0)
-	_tilt_fill.offset_right = -150.0 + 300.0 * fraction
+	_tilt_fill.offset_right = _tilt_left + _tilt_width * fraction
 	_tilt_fill.color = Color(0.98, 0.80, 0.30, 0.95) if player.finished \
 		else Color(0.40, 0.72, 0.95, 0.9)
 

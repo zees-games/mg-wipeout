@@ -22,6 +22,8 @@
 #   tools/shot.sh --view=third --board                 # with the Tab scoreboard held open
 #   tools/shot.sh --view=third --ballot                # the course vote's ballot, mid-vote
 #   tools/shot.sh --action emote dance                # the local runner, third person, playing an avatar action (action_a/_b.png)
+#   tools/shot.sh --view=carry --touch                 # the final death with a prop in hand: the carrying line
+#   tools/shot.sh --touch --resolution=844x390        # a phone: touch buttons, no key hints
 #   tools/shot.sh --console="net_stat 3"               # a line typed at the player's console first
 #
 # xvfb-run because this needs a rendering context and the machines this runs on have no
@@ -40,6 +42,7 @@ out=""
 config=("--wo-warmup-seconds=0" "--wo-countdown-seconds=1")
 
 take=0
+res="1280x720"
 for arg in "$@"; do
     if [ "$take" -gt 0 ]; then config+=("$arg"); take=$((take - 1)); continue; fi
     case "$arg" in
@@ -55,6 +58,8 @@ for arg in "$@"; do
         --ballot)    config+=("$arg") ;;
         --workshop)  config+=("$arg") ;;
         --console=*) config+=("$arg") ;;
+        --touch)     config+=("$arg") ;;
+        --resolution=*) res="${arg#*=}" ;;
         *)           echo "unknown argument: $arg" >&2; exit 2 ;;
     esac
 done
@@ -63,5 +68,5 @@ done
 
 scene="res://tools/shot.tscn"
 
-exec xvfb-run -a "${GODOT:-godot}" --path . --resolution 1280x720 \
+exec xvfb-run -a "${GODOT:-godot}" --path . --resolution "$res" --rendering-driver opengl3 \
     "$scene" -- "--seconds=$seconds" "--view=$view" "--out=$out" "${config[@]}"
