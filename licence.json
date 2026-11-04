@@ -1,0 +1,52 @@
+[
+  {
+    "paths": [
+      ""
+    ],
+    "licence": "MIT",
+    "author": "TMC",
+    "url": "https://github.com/zees-games/mg-wipeout",
+    "title": "mg-wipeout (original content; bundled addons carry their own licences in their repositories)"
+  },
+  {
+    "paths": [
+      "assets/ammo/",
+      "assets/blaster-kit/",
+      "assets/melee/",
+      "assets/kenney/",
+      "textures/prototype/"
+    ],
+    "licence": "CC0-1.0",
+    "author": "Kenney",
+    "url": "https://kenney.nl",
+    "title": "Kenney kits and Prototype Textures"
+  },
+  {
+    "paths": [
+      "assets/arms/"
+    ],
+    "licence": "CC0-1.0",
+    "author": "para; Kenney",
+    "url": "https://opengameart.org/content/fps-arms-rigged-only",
+    "title": "FPS arms (para) and Blocky Characters (Kenney)"
+  },
+  {
+    "paths": [
+      "assets/low-poly-guns/"
+    ],
+    "licence": "CC0-1.0",
+    "author": "Quaternius",
+    "url": "https://opengameart.org/content/low-poly-guns-pack",
+    "title": "Ultimate Low Poly Guns Pack (kitbashed)"
+  },
+  {
+    "paths": [
+      "audio/voice_",
+      "audio/LICENSE-kenney"
+    ],
+    "licence": "CC0-1.0",
+    "author": "Kenney",
+    "url": "https://kenney.nl",
+    "title": "Kenney Voiceover Pack and Voiceover Pack Fighter"
+  }
+]
