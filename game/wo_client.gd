@@ -1055,6 +1055,10 @@ func _physics_process(delta: float) -> void:
 
 	# The clock says how many ticks this frame is worth, which on a client whose engine runs
 	# at the server's rate is almost always exactly one.
+	# Snapshots read since the last frame are reconciled before the clock moves: the replay runs to the clock's tick, and
+	# after `advance` that is a tick `predict_tick` has yet to simulate, so it was played twice.
+	net.flush_reconcile()
+
 	var ticks := net.clock.advance(delta)
 
 	# Each pass is its own tick. `advance` has already moved the clock by all of them, so `input_tick()` is the LAST

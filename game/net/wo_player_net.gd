@@ -96,16 +96,14 @@ func _register_net_vars() -> void:
 		if spec["property"] == &"net_crouch":
 			declaration.range_of(0.0, 1.0)
 
-	replicate(&"net_health", DotNetVar.Type.FLOAT_RANGE).range_of(0.0, 1000.0).bits(12)
+	# Server-driven (dot-net API 17): only the server's game writes these, never the owner's prediction, so a bump is not a misprediction.
+	_server_only(replicate(&"net_health", DotNetVar.Type.FLOAT_RANGE).range_of(0.0, 1000.0).bits(12))
 	replicate(&"net_checkpoint", DotNetVar.Type.UINT).bits(6)
 	replicate(&"net_finished", DotNetVar.Type.BOOL)
-	replicate(&"net_points", DotNetVar.Type.UINT).bits(16)
-	var ping := replicate(&"net_ping", DotNetVar.Type.UINT).bits(10)
-	# Only the server measures it, so a replay cannot predict it (dot-net API 17; by name for an older shell).
-	if ping.has_method(&"server_driven"):
-		ping.call(&"server_driven")
-	replicate(&"net_watching", DotNetVar.Type.BOOL)
-	replicate(&"net_carrying", DotNetVar.Type.BOOL)
+	_server_only(replicate(&"net_points", DotNetVar.Type.UINT).bits(16))
+	_server_only(replicate(&"net_ping", DotNetVar.Type.UINT).bits(10))
+	_server_only(replicate(&"net_watching", DotNetVar.Type.BOOL))
+	_server_only(replicate(&"net_carrying", DotNetVar.Type.BOOL))
 
 	for spec in ZeeWeaponNet.all_specs():
 		var declaration := replicate(spec["property"], DotNetVar.Type[spec["type"]])
@@ -122,9 +120,16 @@ func _register_net_vars() -> void:
 	# State rather than an event, so a late joiner or a lost snapshot is corrected by the next baseline. The blind goes
 	# to its owner alone, or an opponent would know the moment somebody could not see. No relevance change for a beacon:
 	# turning `always_relevant` off would drop the player from everybody's snapshot.
-	var _blind := replicate(&"net_blind", DotNetVar.Type.BOOL).to_owner_only()
-	replicate(&"net_beacon", DotNetVar.Type.BOOL)
-	replicate(&"net_warp", DotNetVar.Type.UINT).bits(4)
+	var _blind := _server_only(replicate(&"net_blind", DotNetVar.Type.BOOL).to_owner_only())
+	_server_only(replicate(&"net_beacon", DotNetVar.Type.BOOL))
+	_server_only(replicate(&"net_warp", DotNetVar.Type.UINT).bits(4))
+
+
+## By name, so a pack still loads on a client shell older than dot-net API 17.
+func _server_only(declaration: DotNetVar) -> DotNetVar:
+	if declaration.has_method(&"server_driven"):
+		declaration.call(&"server_driven")
+	return declaration
 
 
 func _net_apply_input(input: DotNetInput, _tick: int) -> void:
