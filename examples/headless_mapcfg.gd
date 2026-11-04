@@ -6,6 +6,9 @@ const WoMapConfig := preload("../game/wo_map_config.gd")
 ## The cvars start away from the fixture's values, so a default cannot show through as "got them".
 
 const CHECKS := 7
+var _entered := 0
+var _finished := 0
+
 const DIR := "res://cfg/game/mg-wipeout/dot_map/map/"
 
 
@@ -16,6 +19,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	print("mg-wipeout: per-map cvars from cfg/game/mg-wipeout/dot_map/map")
+	_entered += 1
 	DotAddonConfig.game = "mg-wipeout"
 	var fixture := DIR + "wo_mapcfg_fixture_*.yml"
 	DirAccess.make_dir_recursive_absolute(DIR)
@@ -48,4 +52,5 @@ func _run() -> void:
 	cfg.restore()
 	DirAccess.remove_absolute(fixture)
 
-	_report(CHECKS)
+	_finished += 1
+	_report_sections(_entered, _finished, 1, CHECKS)

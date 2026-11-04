@@ -8,6 +8,10 @@ const WoWorld := preload("../game/wo_world.gd")
 const ROOT := "user://wo_cfgtest"
 const GAME := "mg-wipeout"
 const CHECKS := 36
+const SECTIONS := 5
+
+var _entered := 0
+var _finished := 0
 
 
 func _ready() -> void:
@@ -20,6 +24,7 @@ func _run() -> void:
 		_probe()
 		return
 	print("mg-wipeout: config binder")
+	_entered += 1
 	var config := WoConfig.new()
 	var binder := WoConfig.make_binder(config)
 	binder.strict = true
@@ -49,9 +54,15 @@ func _run() -> void:
 	_check(not strict.load_layers().ok, "strict: an unknown key is refused")
 	DirAccess.remove_absolute("user://wo_config_bad.json")
 
+	_finished += 1
+	_entered += 1
 	_layers()
+	_finished += 1
+	_entered += 1
 	_templates(binder)
+	_finished += 1
 
+	_entered += 1
 	var wb := DotGameWorkbench.new()
 	wb.panel_mode = 1
 	wb.config = {"enabled": false}
@@ -78,16 +89,11 @@ func _run() -> void:
 
 	wb.free()
 	console.free()
+	_finished += 1
+	_entered += 1
 	_check_look()
-	print("")
-	print("%d passed, %d failed" % [_passed, _failed])
-	for line in _failures:
-		print("  FAIL  %s" % line)
-	if _passed + _failed != CHECKS:
-		print("ERROR: %d checks ran, %d expected." % [_passed + _failed, CHECKS])
-		get_tree().quit(1)
-		return
-	get_tree().quit(1 if _failed > 0 else 0)
+	_finished += 1
+	_report_sections(_entered, _finished, SECTIONS, CHECKS)
 
 
 ## The course blurb stays off the middle of every window shape, and an imported bake's cast is bounded.

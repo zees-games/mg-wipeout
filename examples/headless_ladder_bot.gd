@@ -35,6 +35,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	print("wipeout: a stand-in climbs a ladder")
+	var entered := 1
 	var root := Node3D.new()
 	add_child(root)
 	var still := StaticBody3D.new()
@@ -105,4 +106,4 @@ func _run() -> void:
 	_check(reached_tick >= 0, "it reaches the platform only the ladder leads to", "ended at %s" % str(feet))
 	bot.clear()
 	root.queue_free()
-	_report(6)
+	_report_sections(entered, 1, 1, 6)
