@@ -307,7 +307,7 @@ func _build_netcode() -> DotResult:
 	# Off on a client: rewinding is what a server does to resolve somebody's shot, and a
 	# client resolves nobody's.
 	config.enable_lag_compensation = false
-	config.max_entities_per_snapshot = 192
+	config.max_entities_per_snapshot = 0
 	# From the game, not written here. Two files holding this number is how another game in
 	# this family ended up decoding positions against a range the server never used.
 	config.world_extent = WoGame.NET_WORLD_EXTENT
