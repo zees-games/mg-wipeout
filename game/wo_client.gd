@@ -1612,6 +1612,8 @@ func _build_touch() -> void:
 			if down and window != null and window.has_method(&"open"):
 				window.call(&"open"),
 	})
+	if platform != null:
+		platform.fit_touch_buttons(_touch.buttons, WoTouch.layout())
 	# By name: an older dot-menu has no such property.
 	var menu: Object = platform.menu if platform != null else null
 	var menu_config: Object = menu.get(&"config") if menu != null else null
