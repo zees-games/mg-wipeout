@@ -112,8 +112,8 @@ static func touch_rects(view: Vector2) -> Dictionary:
 		"blurb": Rect2(16.0, 132.0, TOUCH_BLURB_WIDTH, TOUCH_BLURB_LINES * 16.0),
 		"shout": Rect2(TOUCH_BLURB_WIDTH + 20.0, 164.0, cx - TOUCH_BLURB_WIDTH - 20.0, 30.0),
 		"special": Rect2(w - 216.0, 10.0, 204.0, 26.0),
-		"ticker": Rect2(w - 216.0, 38.0, 204.0, 26.0),
-		"watching": Rect2(w - 216.0, 66.0, 204.0, 28.0),
+		"ticker": Rect2(w - 216.0, 38.0, 204.0, 38.0),
+		"watching": Rect2(w - 216.0, 78.0, 204.0, 24.0),
 		"ammo": Rect2(220.0, h - 168.0, cx - 220.0, 70.0),
 		"field": Rect2(220.0, h - 86.0, cx - 220.0, 28.0),
 		"place": Rect2(w - 440.0, h - 56.0, 140.0, 30.0),
@@ -154,6 +154,9 @@ func _apply_touch_layout() -> void:
 		_place_rect(piece, rects[pair[1]])
 		piece.add_theme_font_size_override("font_size", pair[2])
 		piece.clip_text = true
+	# A centred line wider than its box lost its first letter to the clip; wrap it onto a second line instead.
+	_ticker.clip_text = false
+	_ticker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if ammo != null:
 		_place_rect(ammo, rects["ammo"])
 	if weapon_icon != null:
