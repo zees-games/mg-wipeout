@@ -100,18 +100,24 @@ var _menu: Object = null
 
 
 ## Where each HUD piece sits on a phone of [param view] pixels: the touch buttons own the right 290 px, the Menu button
-## the top left corner, the chat box (see [method WoClient.new_chat]) the bottom left. A pure function of the view so a
-## suite can check that no two pieces overlap.
+## the top left corner, the chat box (see [method WoClient.new_chat]) the bottom left, the course name, announcer and
+## spectator line the top right, the ammo counter left of the buttons (no weapon icon: it has no room). A pure function
+## of the view so a suite can check that no two pieces overlap.
 static func touch_rects(view: Vector2) -> Dictionary:
 	var w := view.x
 	var h := view.y
+	var cx := w - 300.0
 	return {
 		"vitals": Rect2(16.0, 70.0, 300.0, 56.0),
 		"blurb": Rect2(16.0, 132.0, TOUCH_BLURB_WIDTH, TOUCH_BLURB_LINES * 16.0),
-		"shout": Rect2(TOUCH_BLURB_WIDTH + 20.0, 164.0, w - TOUCH_BLURB_WIDTH - 20.0 - 300.0, 30.0),
-		"field": Rect2(w - 600.0, h - 150.0, 300.0, 50.0),
-		"place": Rect2(w - 440.0, h - 100.0, 140.0, 32.0),
-		"tilt": Rect2(w - 440.0, h - 46.0, 140.0, 16.0),
+		"shout": Rect2(TOUCH_BLURB_WIDTH + 20.0, 164.0, cx - TOUCH_BLURB_WIDTH - 20.0, 30.0),
+		"special": Rect2(w - 216.0, 10.0, 204.0, 26.0),
+		"ticker": Rect2(w - 216.0, 38.0, 204.0, 26.0),
+		"watching": Rect2(w - 216.0, 66.0, 204.0, 28.0),
+		"ammo": Rect2(220.0, h - 168.0, cx - 220.0, 70.0),
+		"field": Rect2(220.0, h - 86.0, cx - 220.0, 28.0),
+		"place": Rect2(w - 440.0, h - 56.0, 140.0, 30.0),
+		"tilt": Rect2(w - 440.0, h - 22.0, 140.0, 16.0),
 		"chat": Rect2(12.0, h - TOUCH_CHAT_HEIGHT, TOUCH_CHAT_WIDTH, TOUCH_CHAT_HEIGHT),
 	}
 
@@ -142,6 +148,16 @@ func _apply_touch_layout() -> void:
 	_place_rect(_shout, rects["shout"])
 	_shout.add_theme_font_size_override("font_size", 16)
 	_place_rect(_field, rects["field"])
+	_field.add_theme_font_size_override("font_size", 18)
+	for pair: Array in [[_special, "special", 16], [_ticker, "ticker", 14], [watching_label, "watching", 14]]:
+		var piece := pair[0] as Label
+		_place_rect(piece, rects[pair[1]])
+		piece.add_theme_font_size_override("font_size", pair[2])
+		piece.clip_text = true
+	if ammo != null:
+		_place_rect(ammo, rects["ammo"])
+	if weapon_icon != null:
+		weapon_icon.visible = false
 	_place_rect(_place, rects["place"])
 	_place_rect(_tilt_back, rects["tilt"])
 	var tilt: Rect2 = rects["tilt"]
@@ -168,6 +184,9 @@ func bind(p_game: WoGame, p_player: WoPlayer) -> void:
 
 	if _root == null:
 		_build()
+		# make_room_for_touch runs before the first bind, when there is no root to place anything on.
+		if _touch_room:
+			make_room_for_touch()
 
 
 func _build() -> void:
