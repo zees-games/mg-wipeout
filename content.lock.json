@@ -1,0 +1,15 @@
+{
+	"format": 1,
+	"mirrors": [],
+	"origin": "https://dev.dotgames.org/content",
+	"packs": [
+		{
+			"id": "gamemann/mg-wipeout",
+			"into": "",
+			"kind": "pack",
+			"manifest_sha256": "b76ea21cf6476946ebca7160f55d417f29d057647f69ee23bc674918c75a776c",
+			"optional": false,
+			"version": "1.0.0"
+		}
+	]
+}
