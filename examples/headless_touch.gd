@@ -9,7 +9,7 @@ extends DotGameCheckSuite
 const WoTouch := preload("../game/wo_touch.gd")
 const WoHud := preload("../game/wo_hud.gd")
 
-const CHECKS := 22
+const CHECKS := 25
 var _entered := 0
 var _finished := 0
 
@@ -71,13 +71,16 @@ func _run() -> void:
 
 	for view: Vector2 in [Vector2(844, 390), Vector2(667, 375), Vector2(932, 430)]:
 		_check_no_overlap(view)
+		# DotGameScreenFit stretches a phone to a canvas with a 720 unit short side: the view the HUD is laid out in.
+		var canvas := Vector2(DotGameScreenFit.plan_for(view, Vector2(1152, 648))["size"])
+		_check_no_overlap(canvas, false)
 
 	_finished += 1
 	_report_sections(_entered, _finished, 1, CHECKS)
 
 
 ## Every HUD piece's rectangle clear of every other's, of every touch button and of the Menu button, in one phone view.
-func _check_no_overlap(view: Vector2) -> void:
+func _check_no_overlap(view: Vector2, with_buttons: bool = true) -> void:
 	var rects: Dictionary = WoHud.touch_rects(view)
 	rects["menu"] = Rect2(0.0, 0.0, 110.0, 64.0)
 	var clear := true
@@ -92,7 +95,7 @@ func _check_no_overlap(view: Vector2) -> void:
 			if a.intersects(rects[names[j]]):
 				clear = false
 				culprit = "%s and %s" % [names[i], names[j]]
-		for b: Dictionary in WoTouch.layout():
+		for b: Dictionary in (WoTouch.layout() if with_buttons else []):
 			var centre := view - (b["offset"] as Vector2)
 			var radius := float(b["radius"])
 			var nearest := centre.clamp(a.position, a.end)
