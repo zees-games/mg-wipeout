@@ -9,7 +9,7 @@ extends DotGameCheckSuite
 const WoTouch := preload("../game/wo_touch.gd")
 const WoHud := preload("../game/wo_hud.gd")
 
-const CHECKS := 18
+const CHECKS := 22
 var _entered := 0
 var _finished := 0
 
@@ -30,8 +30,19 @@ func _run() -> void:
 		fits = fits and off.y + float(b["radius"]) <= 375.0 and off.y - float(b["radius"]) >= 0.0
 	_check(ids.size() == WoTouch.layout().size(), "every button id is unique")
 	_check(fits, "every button fits a 375 px tall screen")
-	for id: StringName in [WoTouch.FIRE, WoTouch.ALT, WoTouch.JUMP, WoTouch.DUCK, WoTouch.GRAB, WoTouch.RELOAD]:
+	for id: StringName in [WoTouch.FIRE, WoTouch.ALT, WoTouch.JUMP, WoTouch.CROUCH, WoTouch.GRAB, WoTouch.RELOAD]:
 		_check(ids.has(id), "%s has a button" % id)
+
+	var built := DotGameTouchLayout.build(DotGameTouchLayout.FPS, {DotGameTouchLayout.USE: null, WoTouch.GRAB: &"inner"})
+	_check(built.ok and WoTouch.touch_layout().validate().ok, "the layout is the fps preset and validates")
+	var canon := true
+	for id: StringName in WoTouch.touch_layout().ids():
+		canon = canon and DotGameTouchLayout.canonical_id(id) == id
+	_check(canon, "no button keeps a pre-canonical id")
+	_check(not ids.has(&"duck") and not ids.has(&"use") and ids.has(&"crouch"), "duck is crouch, and use is dropped")
+	var homes := WoTouch.touch_layout()
+	_check(homes.row(WoTouch.FIRE)["offset"] == Vector2(80, 84) and homes.row(WoTouch.JUMP)["offset"] == Vector2(80, 172)
+		and homes.row(WoTouch.GRAB)["offset"] == Vector2(190, 150), "fire, jump and grab sit where the player's thumb learnt them")
 
 	var tunables := DotFpsTunables.new()
 	var sampler := DotFpsTouchSampler.new(tunables)
