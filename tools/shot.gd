@@ -9,6 +9,7 @@ const WoGame := preload("../game/wo_game.gd")
 const WoVote := preload("../game/wo_vote.gd")
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoCourseDoc := preload("../game/wo_course_doc.gd")
+const WoContent := preload("../game/wo_content.gd")
 
 var _view := "eyes"
 var _seconds := 4.0
@@ -81,6 +82,8 @@ func _ready() -> void:
 			_seconds = arg.trim_prefix("--seconds=").to_float()
 		elif arg.begins_with("--out="):
 			_out = arg.trim_prefix("--out=")
+		elif arg == "--touch":
+			DotPlatform.touch_override = 1
 		elif arg == "--board":
 			_board = true
 		elif arg == "--ballot":
@@ -140,6 +143,23 @@ func _run() -> void:
 			await _view_pack(game)
 		"finale":
 			await _view_finale(game)
+		"carry":
+			# The final death with a crate in the local player's hands, for the carrying line.
+			await _seconds_of(game.config.countdown_seconds + 1.5)
+			game._begin_finale()
+			await _seconds_of(1.0)
+			print("phase: %s" % game.phase)
+			var me = _client.get("player")
+			if me != null:
+				var ahead: Vector3 = me.eye_position() + me.aim_direction() * 1.6
+				var _crate = game.props.spawn(WoContent.CRATE, WoContent.WORLD_OWNER, ahead)
+				await _frames(3)
+				# Put it in the hands directly: the grab key's ray misses a prop spawned this close.
+				if me.grab != null:
+					me.grab.carried = _crate
+				await _frames(8)
+				print("carrying: %s" % (me.grab != null and me.grab.is_carrying()))
+				await _seconds_of(0.5)
 		"killcam":
 			await _view_killcam(game)
 		"break":
@@ -175,6 +195,8 @@ func _run() -> void:
 			await _view_crosshair(game)
 		"hazard":
 			await _view_hazard(game)
+		"armed":
+			await _view_armed(game)
 		_:
 			await _seconds_of(_seconds)
 
@@ -218,6 +240,13 @@ func _view_crosshair(game: WoGame) -> void:
 	_client.get("player").health.alive = false
 	await _seconds_of(0.5)
 	_out = _out.get_basename() + "_dead.png"
+
+
+## The local runner carrying a gun, so the HUD draws the weapon icon plate over the ammunition counter.
+func _view_armed(game: WoGame) -> void:
+	await _seconds_of(game.config.countdown_seconds + 0.6)
+	var _armed := game.arm(_client.get("player"), ZeeWeaponIds.SMG)
+	await _seconds_of(3.0)
 
 
 func _view_hazard(game: WoGame) -> void:

@@ -1,4 +1,6 @@
 extends Label
+
+const WoHud := preload("wo_hud.gd")
 ## A course's one-paragraph introduction, top left: wrapped to a fixed share of the screen, outlined, gone after a few seconds.
 
 const MARGIN := Vector2(16.0, 72.0)
@@ -6,6 +8,11 @@ const MAX_WIDTH := 420.0
 ## The widest share of the view it may take, so a narrow or 4:3 window keeps the middle (the runner) clear.
 const MAX_SHARE := 0.28
 const MAX_CHARS := 260
+const TOUCH_CHARS := 100
+const TOUCH_FONT := 13
+
+## On a phone: small, in the box [method WoHud.touch_rects] reserves.
+var touch := false
 
 var _left: float = 0.0
 
@@ -28,8 +35,9 @@ static func rect_for(view: Vector2, lines: int = 7, line_height: float = 24.0) -
 ## Shows [param text] for [param seconds]; empty text hides it.
 func show_blurb(text: String, seconds: float = 9.0) -> void:
 	text = text.strip_edges()
-	if text.length() > MAX_CHARS:
-		text = text.substr(0, MAX_CHARS - 1).strip_edges() + "…"
+	var limit := TOUCH_CHARS if touch else MAX_CHARS
+	if text.length() > limit:
+		text = text.substr(0, limit - 1).strip_edges() + "…"
 	self.text = text
 	_left = seconds if text != "" else 0.0
 	visible = _left > 0.0
@@ -38,7 +46,11 @@ func show_blurb(text: String, seconds: float = 9.0) -> void:
 
 ## Takes the rectangle [method rect_for] gives for the current view.
 func layout() -> void:
-	var r := rect_for(get_viewport_rect().size if is_inside_tree() else Vector2(1280.0, 720.0))
+	var view := get_viewport_rect().size if is_inside_tree() else Vector2(1280.0, 720.0)
+	var r := rect_for(view)
+	if touch:
+		r = WoHud.touch_rects(view)["blurb"]
+		add_theme_font_size_override("font_size", TOUCH_FONT)
 	set_anchors_preset(Control.PRESET_TOP_LEFT)
 	position = r.position
 	size = Vector2(r.size.x, 0.0)
