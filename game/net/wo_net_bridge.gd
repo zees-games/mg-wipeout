@@ -72,6 +72,8 @@ signal prop_arrived(at: Vector3, vehicle: bool)
 ## Client side: the stage was rebuilt from what the server sent. The client re-places its
 ## camera and the HUD names the course.
 signal stage_received(stage_id: StringName, is_arena: bool)
+## A stage this client would not build: [param meshes] are the world meshes no mounted pack holds, even after a fetch.
+signal stage_refused(meshes: PackedStringArray)
 
 ## Client side: somebody fell, crossed a checkpoint or finished. See [enum WoEvents.Progress].
 signal progress_received(player_id: int, kind: int, value: int, seconds: float)
@@ -1550,6 +1552,15 @@ func _apply_stage(reader: DotNetReader) -> void:
 
 		if not got.ok:
 			DotLog.warn(CHANNEL, "a course mesh would not download", {"mesh": mesh, "why": got.error.message})
+
+	# A world without its mesh would be predicted on the start pad alone while the server walks the map, so the stage
+	# is held back (the client keeps what it had) rather than built without it.
+	var still := WoWorld.missing(decoded.value)
+
+	if not still.is_empty():
+		DotLog.warn(CHANNEL, "a stage was refused: its world mesh is not here", {"meshes": ", ".join(still)})
+		stage_refused.emit(still)
+		return
 
 	var built := game.build_stage(decoded.value)
 

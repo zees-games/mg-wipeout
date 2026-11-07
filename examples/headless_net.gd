@@ -4,8 +4,8 @@ extends "headless_net_workbench.gd"
 ## codec, seal, snapshots, prediction and reconciliation run in one process. Asserts a course sent once as a document
 ## leaves both ends agreeing about every obstacle at every tick, a knock predicted and decided.
 
-const SECTIONS := 17
-const CHECKS := 103
+const SECTIONS := 18
+const CHECKS := 108
 
 
 func _ready() -> void:
@@ -34,6 +34,7 @@ func _run() -> void:
 		await _test_free_roam_crosses()
 		await _test_the_final_death_crosses()
 		await _test_an_imported_mesh_arrives()
+		await _test_a_missing_mesh_refuses_the_stage()
 		await _test_leaving()
 
 	_test_the_remote_workbench()
@@ -281,6 +282,35 @@ func _test_an_imported_mesh_arrives() -> void:
 		path = path.get_base_dir()
 
 	DirAccess.remove_absolute("res://dot_cloud")
+	_finished()
+
+
+## The same course with no mesh anywhere: the client refuses the stage and keeps the course it had.
+func _test_a_missing_mesh_refuses_the_stage() -> void:
+	_section("a client without the course's world mesh refuses the stage")
+	var kept := WoWorld.dirs.duplicate()
+	var kept_ids := _server_game.config.course_ids
+	var refused: Array = []
+	var on_refused := func(meshes: PackedStringArray) -> void: refused.append(meshes)
+	_client_bridge.stage_refused.connect(on_refused)
+	var _added := _server_game.catalogue.add_directory("res://courses")
+	_server_game.config.course_ids = PackedStringArray(["wo_practice", "wo_office_course"])
+	var before := String(_client_game.stage.doc.get("id", ""))
+	var chosen := _server_game.change_course_now(&"wo_office_course")
+	_check(chosen.ok, "the server changes to the Office Course", str(chosen.error) if not chosen.ok else "")
+	WoWorld.dirs = PackedStringArray()
+	_exchange()
+	await _steps(6)
+	_check(not refused.is_empty(), "the client said it refused")
+	_check(String(_client_game.stage.doc.get("id", "")) == before, "and kept the course it had", before)
+	_check(_world_node(_client_game) == null, "with no world-less copy of the map built")
+	WoWorld.dirs = kept
+	var back := _server_game.change_course_now(&"wo_practice")
+	_exchange()
+	await _steps(6)
+	_check(back.ok, "then the server goes back to the practice course")
+	_client_bridge.stage_refused.disconnect(on_refused)
+	_server_game.config.course_ids = kept_ids
 	_finished()
 
 
