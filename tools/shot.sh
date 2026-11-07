@@ -7,6 +7,7 @@
 #   tools/shot.sh --view=look --look=x,y,z,tx,ty,tz   # a free camera at the first point, facing the second
 #   tools/shot.sh --view=start                         # the start pad, from behind the runners
 #   tools/shot.sh --view=cover                         # the loading cover, before it lifts
+#   tools/shot.sh --view=armed                         # carrying a gun: the weapon icon plate over the ammo counter
 #   tools/shot.sh --view=hazard --seconds=2            # the first thing that throws you, close
 #   tools/shot.sh --view=knockout                      # a stand-in at 5 hp struck by a spinner: the body flung
 #   --view=hurt      the local health bar after a hit
