@@ -1,6 +1,6 @@
 extends Node3D
 
-## What the weather looks like: rain round the camera on a stormy course, and each
+## What the weather looks like: rain (a DotWeather) round the camera on a stormy course, and each
 ## lightning strike drawn on the tick it lands. Client side, drawing only; what the weather
 ## DOES is [WoCourse.wind] and [WoCourse.strike], which every machine computes from the tick.
 
@@ -12,7 +12,10 @@ var camera: Camera3D = null
 ## The game's tick, as a Callable, so this reads the same clock the simulation does.
 var tick_fn: Callable = Callable()
 
-var _rain: CPUParticles3D = null
+## dot-weather draws the rain round the camera; the strikes below stay this view's own, because
+## they are gameplay (WoCourse.strike_at) and must land on the tick the simulation says.
+var _weather: DotWeather = null
+var _stormy: bool = false
 var _last_tick: int = -1
 var _bolts: Array[Dictionary] = []
 
@@ -22,27 +25,24 @@ var _clear_light: float = -1.0
 
 
 func _ready() -> void:
-	_rain = CPUParticles3D.new()
-	_rain.name = "Rain"
-	_rain.amount = 900
-	_rain.lifetime = 0.9
-	_rain.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	_rain.emission_box_extents = Vector3(14.0, 0.5, 14.0)
-	_rain.direction = Vector3(0.0, -1.0, 0.0)
-	_rain.spread = 4.0
-	_rain.initial_velocity_min = 22.0
-	_rain.initial_velocity_max = 28.0
-	_rain.gravity = Vector3.ZERO
-	var drop := BoxMesh.new()
-	drop.size = Vector3(0.015, 0.35, 0.015)
-	var wet := StandardMaterial3D.new()
-	wet.albedo_color = Color(0.75, 0.82, 0.95, 0.5)
-	wet.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	wet.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	drop.material = wet
-	_rain.mesh = drop
-	_rain.emitting = false
-	add_child(_rain)
+	_weather = DotWeather.new()
+	_weather.name = "Rain"
+	add_child(_weather)
+
+
+## The document that draws a stormy course: heavy rain, leaning with the course's gusts.
+## The push itself is [WoCourse.wind], which no picture reproduces gust for gust.
+static func doc_for(course: WoCourse) -> Dictionary:
+	if course == null or not course.is_stormy():
+		return {}
+	var doc := {"precipitation": {"kind": "rain", "density": 2.0, "colour": Color(0.78, 0.84, 0.95, 0.6).to_html(true)}}
+	var lean := Vector2.ZERO
+	for gust in course.gusts:
+		lean += (gust["dir"] as Vector2) * float(gust["strength"])
+	if lean.length() > 0.01:
+		var dir := lean.normalized()
+		doc["wind"] = {"vector": [dir.x * 3.0, 0.0, dir.y * 3.0], "gust": 0.8, "gust_period": 7.0}
+	return doc
 
 
 func _process(delta: float) -> void:
@@ -50,10 +50,15 @@ func _process(delta: float) -> void:
 		return
 
 	var stormy := stage.is_stormy()
-	_rain.emitting = stormy
+	if stormy != _stormy:
+		_stormy = stormy
+		if stormy:
+			_weather.apply(doc_for(stage))
+		else:
+			_weather.clear()
 	_dim(stormy)
 	if stormy and camera != null:
-		_rain.global_position = camera.global_position + Vector3(0.0, 9.0, 0.0)
+		_weather.advance(delta, camera.global_position)
 
 	var now := int(tick_fn.call()) if tick_fn.is_valid() else -1
 	if now > _last_tick and _last_tick >= 0 and now - _last_tick < 64:
