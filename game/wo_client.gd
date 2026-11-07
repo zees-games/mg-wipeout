@@ -282,6 +282,8 @@ func _follow_server_cvars() -> void:
 		var _ambient := game.ambient_rules.follow_cvars(link)
 		# And sv_toys*: this end hides the toys the server took away.
 		var _toys := game.toy_rules.follow_cvars(link)
+		# And zee_ads_rules: this end predicts the server's aimed pace and spread.
+		var _ads := game.ads_rules.follow_cvars(link)
 		# And mp_forcecamera / mp_freeroam*: this end flies the spectator's free camera.
 		var _spectate := game.spectate_rules.follow_cvars(link)
 		_follow_killcam_cvar()

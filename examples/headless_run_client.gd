@@ -355,6 +355,9 @@ func _test_the_drawn_gun() -> void:
 		same = same and a == b
 	_check(same, "the drawn gun holds exactly the server's weapons, slot for slot", " ".join(held))
 
+	_check(drawn != null and me.weapons != null and drawn.ads_rules == world.ads_rules and me.weapons.ads_rules == world.ads_rules and drawn.ads_move_scale() == 1.0,
+		"both rigs take the game's zee_ads_rules and are not slowed unaimed")
+
 	_test_shots_and_walls(world, me, drawn)
 
 	var hud: Node = client.get("hud")

@@ -165,6 +165,10 @@ var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
 ## The ambience cvars (`wo_ambient*`): bound by the module (REPLICATED), followed by a client through its link.
 var ambient_rules: DotAmbienceRules = WoAmbience.make_rules()
 
+## Aim-down-sights numbers (`zee_ads_rules`, REPLICATED): the server's cfg over the shipped defaults, handed to every weapon
+## rig. Bound by the module and followed by a client. Nothing sets the aim bit yet.
+var ads_rules: ZeeAdsRules = ZeeAdsRules.load_config()
+
 ## Binds [member config] to cvars, the cfg/ yml layers and the workbench; made by the server scene or the client.
 var config_binder: DotGameConfigBinder = null
 
@@ -1687,6 +1691,7 @@ func arm(player: WoPlayer, weapon_id: StringName) -> bool:
 		rig.tick_rate = tick_rate
 		rig.wall_extra_mask = player.controller.tunables.collision_mask if player.controller != null else 0
 		rig.player_ref = DotNodeRef.of_path(player.get_path())
+		rig.ads_rules = ads_rules
 		player.add_child(rig)
 
 		var ready_now := rig.setup()
