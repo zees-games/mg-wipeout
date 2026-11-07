@@ -374,20 +374,20 @@ func _test_the_course_vote() -> void:
 	var director: DotVoteDirector = vote.get("director")
 	_check(server.hibernation_changed.is_connected(director.set_hibernating),
 		"the vote follows the server's hibernation without a line of this game's")
-	vote.set("_opened_this_course", true)
+	vote.set("_opened_this_map", true)
 	server.console.execute("sv_hibernate_when_empty 1")
 	_check(server.is_hibernating() and director.hibernating, "an empty server sleeps, and the vote with it",
 		server.state_name())
-	var on_course: float = vote.get("_on_course_sec")
+	var on_course: float = vote.get("_on_map_sec")
 	vote.call("advance", 600.0)
-	_check(is_equal_approx(vote.get("_on_course_sec"), on_course), "ten minutes asleep do not count towards the ballot")
+	_check(is_equal_approx(vote.get("_on_map_sec"), on_course), "ten minutes asleep do not count towards the ballot")
 	server.console.execute("sv_hibernate_when_empty 0")
-	_check(is_zero_approx(vote.get("_on_course_sec")) and not vote.get("_opened_this_course") and not director.hibernating,
+	_check(is_zero_approx(vote.get("_on_map_sec")) and not vote.get("_opened_this_map") and not director.hibernating,
 		"waking wakes the vote, and the course ballot is owed again from the top")
 
 	# Every course in the directory, not only this suite's practice course.
 	game.config.course_ids = PackedStringArray()
-	vote.call("refresh_courses")
+	vote.call("refresh_maps")
 	var ids: Array = []
 
 	for choice: DotVoteChoice in (vote.get("source") as DotVoteListSource).entries:
@@ -409,8 +409,8 @@ func _test_the_course_vote() -> void:
 
 	_check(_said(_run_command("nominate %s" % wanted), "Nominated"), "a player nominates a course", wanted)
 
-	vote.set("_on_course_sec", 0.0)
-	vote.set("_opened_this_course", false)
+	vote.set("_on_map_sec", 0.0)
+	vote.set("_opened_this_map", false)
 	vote.call("advance", float(vote.get("open_after_sec")) + 0.1)
 	var options: Array[StringName] = director.ballot.option_ids() if director.is_voting() else ([] as Array[StringName])
 	_check(director.is_voting() and options.has(StringName(wanted)),
@@ -583,7 +583,7 @@ func _test_rotation_file() -> void:
 	catalogue.apply_rotation(game.config.course_ids)
 	game.config.course_ids = kept_ids
 	if vote != null:
-		vote.call("refresh_courses")
+		vote.call("refresh_maps")
 	_finished()
 
 

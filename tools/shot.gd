@@ -505,7 +505,7 @@ func _show_ballot(game: WoGame) -> void:
 		})
 	var vote := WoVote.new()
 	vote.config_path = ""
-	vote.courses_fn = func() -> Array:
+	vote.maps_fn = func() -> Array:
 		var out: Array = []
 		for id in game.catalogue.playable_courses(PackedStringArray()):
 			out.append([id, str((game.catalogue.courses.get(id, {}) as Dictionary).get("name", id))])
@@ -516,7 +516,7 @@ func _show_ballot(game: WoGame) -> void:
 	vote.ballot_fn = func(state: Dictionary) -> void: states.append(state)
 	add_child(vote)
 	var _set := vote.setup()
-	vote.note_course(StringName(str(game.course_doc.get("id", ""))))
+	vote.note_map(StringName(str(game.course_doc.get("id", ""))))
 	var _opened := vote.director.open_vote(DotVoteClock.REASON_MANUAL)
 	var options := vote.director.ballot.option_ids()
 	var _a := vote.director.cast_one(&"1", options[0])

@@ -183,7 +183,7 @@ func _game_load() -> DotResult:
 	var _delivered: int = await _add_delivered_courses(world)
 
 	if vote != null:
-		vote.refresh_courses()
+		vote.refresh_maps()
 
 	world.start()
 
@@ -376,7 +376,7 @@ func _on_config_field(key: String, _value: Variant, _source: String) -> void:
 			config.map_rotation_file = config.map_rotation_file.strip_edges()
 			var _read := world.load_rotation()
 			if vote != null:
-				vote.refresh_courses()
+				vote.refresh_maps()
 
 
 ## dot-workbench over the config and the block rules: the F9 panel off a dedicated server, the HTTP page only with `workbench.enabled` in cfg/server.yml. Admission by dot-auth ticket is [DotGameWorkbench]'s own (`admin_uids` / `admin_groups`), beside the server's admins.
@@ -582,7 +582,7 @@ func _build_vote(world: WoGame) -> void:
 	vote.name = "CourseVote"
 	vote.commands_spec_fn = world.rotation_commands
 	vote.in_rotation_fn = func(id: StringName) -> bool: return world.catalogue.in_rotation(id)
-	vote.courses_fn = func() -> Array:
+	vote.maps_fn = func() -> Array:
 		var out: Array = []
 
 		# The game's own courses only: the Workshop's come from the source's own follow, which
@@ -680,7 +680,7 @@ func _vote_follows_world(world: WoGame) -> void:
 	# death's arena (the same round, on the same ballot).
 	world.world_rebuilt.connect(func() -> void:
 		if vote != null and world.stage != null and not world.stage.is_arena():
-			vote.note_course(world.stage.id())
+			vote.note_map(world.stage.id())
 	)
 	world.match_node.round_ended.connect(func(_number: int, _winner: int, _outcome: int) -> void:
 		if vote != null:
