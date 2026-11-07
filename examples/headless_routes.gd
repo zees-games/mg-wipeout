@@ -15,11 +15,12 @@ const COURSES := {
 	&"wo_scary_course": {"dead_tps": 0, "reaches": false, "why": "stalls 41 m out; the next triggers are trigger_multiple scripts the walk cannot fire from the floor"},
 	&"wo_lego_course": {"dead_tps": 0, "reaches": false, "why": "stalls 95 m out; trigger_once chains (low*) are out of reach of the floor walk"},
 	&"wo_dc_course": {"dead_tps": 3, "reaches": false, "why": "stalls 233 m out; three teleports and a bonus teleport unreached"},
-	&"wo_waytobar_course": {"dead_tps": 3, "reaches": false, "why": "verified: the walk ends 0.76 m in front of a glass wall (z 19.29) that is the 1000-damage score slab; the finish box lies 0.3 m behind it (z 15.9 to 18.9), on the far side, so no walk can enter it. Not verified: whether the box belongs on the approach side (the bar is reachable from the start by floor, with the walker's doors latched open)"},
+	&"wo_waytobar_course": {"dead_tps": 3, "reaches": false, "why": "verified: the walk ends 0.76 m in front of a glass wall (z 19.29) that is the 1000-damage score slab; the finish box lies 0.3 m behind it (z 15.9 to 18.9), on the far side, so no walk can enter it. Also verified: of the three unreached teleports one has its trigger at y -60, under the -40 water (dead by design); one (trigger at (100,-0.7,-9)) lies behind a world glass pane at z -1.6, 8 m from the nearest cell; one drops the runner 68 m (the walker now follows that fall, TP_FALL_MAX) but its trigger at (86,0.3,-32) is 22 m from any reached cell. Not verified: whether the box belongs on the approach side (the bar is reachable from the start by floor, with the walker's doors latched open)"},
 	&"wo_labo_course": {"dead_tps": 3, "reaches": false, "why": "stalls 106 m out; three teleports unreached"},
 	&"wo_sweet_course": {"dead_tps": 4, "reaches": false, "why": "stalls 223 m out; four teleports unreached"},
 }
 const CHECKS_PER_COURSE := 6
+const SELFTEST_CHECKS := 4
 const RELAXED_GAP := 10
 ## The pinned profile's jump is WoConfig.jump_height (1.25 m); a 56-unit block is 1.07 m and was out of reach at 1.0.
 const STEP_UP := 1.2
@@ -42,6 +43,7 @@ func _run() -> void:
 	var catalogue := WoCatalogue.new()
 	var _loaded := catalogue.load_from("courses")
 	var summary: Array[String] = []
+	await _landing_selftest()
 	var only := ""
 	var forced_debug := ""
 	# a scratch file `examples/headless_routes.only` ("course,course debug") picks courses when game.sh cannot pass arguments
@@ -75,7 +77,31 @@ func _run() -> void:
 		print("  %s" % line)
 
 	print("")
-	_report_sections(_entered, _finished_count, _expected_sections, -1 if only != "" else _expected_sections * CHECKS_PER_COURSE)
+	_report_sections(_entered, _finished_count, _expected_sections, -1 if only != "" else _expected_sections * CHECKS_PER_COURSE + SELFTEST_CHECKS)
+
+
+## A teleport that sets a runner down in the air (waytobar: 68 m up) is a drop: the walker follows the fall to the floor.
+func _landing_selftest() -> void:
+	var floor_body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(30, 1, 30)
+	shape.shape = box
+	floor_body.add_child(shape)
+	floor_body.position = Vector3(0, -30.5, 0)
+	add_child(floor_body)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var walker := _Walker.new(floor_body.get_world_3d().direct_space_state, -100.0, [])
+	var high := walker._landing(0, Vector3(0, 38, 0))
+	_check(not high.is_empty() and absf(high[0].y + 30.0) < 0.1, "a teleport 68 m above a floor lands on it", str(high.slice(0, 2)))
+	_check(walker._fall(Vector3(0, 38, 0), INF).is_empty(), "a plain hole stops following a fall after %d m" % int(_Walker.FALL_MAX))
+	var low := walker._landing(1, Vector3(0, -29.5, 0))
+	_check(low.size() == 1 and low[0].is_equal_approx(Vector3(0, -29.5, 0)), "a teleport onto a floor stays put", str(low))
+	var nowhere := walker._landing(2, Vector3(80, 38, 80))
+	_check(nowhere.size() == 1, "a teleport over nothing keeps its own point", str(nowhere))
+	floor_body.queue_free()
+	await get_tree().physics_frame
 
 
 func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> String:
@@ -108,6 +134,15 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> String:
 		if not b["tp_hit"][i]:
 			dead += 1
 			names.append("%s->%s" % [tps[i]["node"].volume.targetname, tps[i]["to"]])
+			if _debug != "":
+				var nearest_cell := INF
+				var nearest_at := Vector3.ZERO
+				for qc: Vector3 in b["queue"]:
+					for bx: AABB in tps[i]["boxes"]:
+						if bx.get_center().distance_to(qc) < nearest_cell:
+							nearest_cell = bx.get_center().distance_to(qc)
+							nearest_at = qc
+				print("    DEBUG unreached teleport %s boxes %s nearest reached cell %.1f m at %s" % [names[-1], tps[i]["boxes"], nearest_cell, nearest_at])
 		elif tps[i]["gate"]:
 			gated += 1
 

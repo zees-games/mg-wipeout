@@ -21,6 +21,8 @@ class _Walker:
 	const FALL_DRIFT := 0.4
 	const FALL_STEP := 1.5
 	const FALL_MAX := 30.0
+	## A teleport can drop the runner from far higher than a hole does (waytobar: 68 m up); the fall is that deep.
+	const TP_FALL_MAX := 120.0
 
 	func _init(s: PhysicsDirectSpaceState3D, w: float, l: Array[AABB]) -> void:
 		space = s
@@ -36,7 +38,7 @@ class _Walker:
 
 	## Where a body that steps into the open air at [param at] (feet) can land: free air below it on a coarse grid, drifting
 	## sideways up to [constant FALL_DRIFT] of the depth fallen, so floors under an overhang count.
-	func _fall(at: Vector3, from_y: float) -> Array[Vector3]:
+	func _fall(at: Vector3, from_y: float, max_depth: float = FALL_MAX) -> Array[Vector3]:
 		var lands: Array[Vector3] = []
 		var start := Vector3(at.x, at.y + 0.75, at.z)
 		if not _free(start) or not _free(start + Vector3(0, -0.5, 0)):
@@ -44,7 +46,7 @@ class _Walker:
 		var seen := {Vector3i.ZERO: true}
 		var queue: Array[Vector3] = [start]
 		var head := 0
-		while head < queue.size() and queue.size() < 1500:
+		while head < queue.size() and queue.size() < 1500 + int(max_depth - FALL_MAX) * 40:
 			var c := queue[head]
 			head += 1
 			var depth := start.y - c.y
@@ -53,7 +55,7 @@ class _Walker:
 				if f != null and (f as Vector3).y < from_y - 1.0:
 					lands.append(f)
 					continue
-			if c.y - 0.75 <= water or depth > FALL_MAX:
+			if c.y - 0.75 <= water or depth > max_depth:
 				continue
 			var budget := minf(FALL_DRIFT * depth + 1.5, 8.0)
 			var nexts: Array[Vector3] = [c + Vector3(0, -FALL_STEP, 0)]
@@ -67,6 +69,22 @@ class _Walker:
 				if _free(n):
 					queue.append(n)
 		return lands
+
+	## Where a runner a teleport sets down at [param to] ends up: there when floor is under it, else wherever the fall from
+	## that height lands (a destination in the air is a drop, not a place to stand).
+	func _landing(i: int, to: Vector3) -> Array[Vector3]:
+		var key := Vector3i(-1 - i, 0, 0)
+		if not falls.has(key):
+			var lands: Array[Vector3] = []
+			var f: Variant = _floor(to.x, to.z, to.y + 0.1, 1.0)
+			if f != null:
+				lands.append(to)
+			else:
+				lands = _fall(to - Vector3(0, 0.75, 0), INF, TP_FALL_MAX)
+				if lands.is_empty():
+					lands.append(to)
+			falls[key] = lands
+		return falls[key]
 
 	func _key(p: Vector3) -> Vector3i:
 		return Vector3i(roundi(p.x / CELL), roundi(p.y * 2.0), roundi(p.z / CELL))
@@ -155,7 +173,7 @@ class _Walker:
 				var pad := Vector3(maxf(box.size.x, CELL), maxf(box.size.y, CELL), maxf(box.size.z, CELL))
 				if AABB(box.get_center() - pad * 0.5, pad).grow(0.2).intersects(body):
 					tp_hit[i] = true
-					found.append(t["to"])
+					found.append_array(_landing(i, t["to"]))
 					break
 		return found
 
