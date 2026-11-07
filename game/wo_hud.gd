@@ -341,9 +341,11 @@ func _build_gun(size: int) -> void:
 	weapon_icon.name = "WeaponIcon"
 	weapon_icon.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	weapon_icon.offset_left = -204.0
-	weapon_icon.offset_right = -24.0
-	weapon_icon.offset_top = -244.0
-	weapon_icon.offset_bottom = -180.0
+	# DotAmmoCounter draws its plate 14 px past its right edge and 4 above its top: line the sprite's plate up with it
+	# and leave a gap rather than touching it.
+	weapon_icon.offset_right = -10.0
+	weapon_icon.offset_top = -252.0
+	weapon_icon.offset_bottom = -188.0
 	weapon_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(weapon_icon)
 

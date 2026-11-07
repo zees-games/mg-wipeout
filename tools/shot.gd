@@ -195,6 +195,8 @@ func _run() -> void:
 			await _view_crosshair(game)
 		"hazard":
 			await _view_hazard(game)
+		"armed":
+			await _view_armed(game)
 		_:
 			await _seconds_of(_seconds)
 
@@ -238,6 +240,13 @@ func _view_crosshair(game: WoGame) -> void:
 	_client.get("player").health.alive = false
 	await _seconds_of(0.5)
 	_out = _out.get_basename() + "_dead.png"
+
+
+## The local runner carrying a gun, so the HUD draws the weapon icon plate over the ammunition counter.
+func _view_armed(game: WoGame) -> void:
+	await _seconds_of(game.config.countdown_seconds + 0.6)
+	var _armed := game.arm(_client.get("player"), ZeeWeaponIds.SMG)
+	await _seconds_of(3.0)
 
 
 func _view_hazard(game: WoGame) -> void:
