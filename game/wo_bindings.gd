@@ -10,6 +10,8 @@ const VIEW := &"wo_view"
 ## The spectator's free camera, on and off (`mp_freeroam`). Its flying keys are the movement keys.
 const ROAM := &"wo_roam"
 const SCOREBOARD := &"wo_scoreboard"
+## The flashlight, on and off, for everybody still racing or fighting.
+const FLASHLIGHT := &"wo_flashlight"
 ## dot-ui's chat window's actions, which dot-game's chat client leaves at their defaults.
 const CHAT := &"chat_open"
 const CHAT_TEAM := &"chat_open_team"
@@ -27,6 +29,7 @@ static func make() -> DotMenuBindings:
 	keys.add(RELOAD, &"bind_reload", "Reload", "R", "Hands")
 	for i in range(SLOTS.size()):
 		keys.add(SLOTS[i], StringName("bind_slot_%d" % (i + 1)), "Weapon slot %d" % (i + 1), str(i + 1), "Hands")
+	keys.add(FLASHLIGHT, &"bind_flashlight", "Flashlight", "F", "Hands")
 	keys.add_wheel_weapons()
 	keys.add(CHAT, &"bind_chat", "Chat", "Y", "Communication")
 	keys.add(CHAT_TEAM, &"bind_chat_team", "Chat to your side", "U", "Communication")

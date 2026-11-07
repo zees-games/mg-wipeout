@@ -66,6 +66,8 @@ enum Ask {
 	SPECTATE,
 	## I am out: take me into the free camera, or back onto a player from it.
 	ROAM,
+	## Switch my flashlight.
+	FLASHLIGHT,
 }
 
 ## What a `PROGRESS` event says happened.

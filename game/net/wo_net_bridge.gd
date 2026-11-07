@@ -1032,6 +1032,11 @@ func _on_request(message: DotNetMessage) -> void:
 				_spectate_step(peer_id, int(step["direction"]))
 		WoEvents.Ask.ROAM:
 			_spectate_roam(peer_id)
+		WoEvents.Ask.FLASHLIGHT:
+			var session_id := player_for_peer(peer_id)
+
+			if session_id != 0:
+				var _switched := game.toggle_flashlight(player_key(session_id))
 
 
 ## Somebody who is out asked to look at somebody else. The server's list, the server's rule. A refusal goes back as a
@@ -1229,6 +1234,11 @@ func ask_say(channel_id: StringName, text: String) -> void:
 
 func ask_team(team: int) -> void:
 	_ask(WoEvents.Ask.TEAM, WoEvents.write_ask_team(team))
+
+
+## Switch the flashlight. The server owns on/off and answers in the player's replicated state.
+func ask_flashlight() -> void:
+	_ask(WoEvents.Ask.FLASHLIGHT, PackedByteArray([0]))
 
 
 ## Out, and asking to watch somebody else: +1 next, -1 previous, 0 the other camera.

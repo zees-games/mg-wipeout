@@ -39,6 +39,7 @@ The courses live in their own repository, [mg-wipeout-maps](https://github.com/z
 | **E** (hold) | Pick up or put down a prop |
 | **Mouse 1** | Throw what you are holding, or fire |
 | **Mouse 2** / **R** / **1**-**5** | Alt-fire / reload / weapon slots |
+| **F** | Flashlight, while still racing or fighting (starts lit on the dark courses: the horror house and the night-time ones). A lit beam is seen by everyone who can see you |
 | **F5** | First or third person |
 | **Tab** | Scoreboard |
 | **H** | Help: the rules and every key as you have it bound |
