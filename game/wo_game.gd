@@ -57,6 +57,8 @@ const TEAM_NAMES: Array[String] = [
 ## comparison and a solo side can never be mistaken for red.
 const SOLO_SIDE_BASE := 100
 
+## What everybody carries on an io course, for its shoot-buttons and breakables.
+const IO_SIDEARM := &"pistol"
 const DIED_SHOT := &"shot"
 const DIED_THROWN := &"thrown"
 const DIED_FELL := &"fell"
@@ -1278,8 +1280,12 @@ func _set_phase(to: int) -> void:
 	if phase == to:
 		return
 
+	var was := phase
 	phase = to
 	phase_elapsed = 0.0
+
+	if was == Phase.COURSE and to != Phase.COURSE and stage != null and stage.io != null:
+		_disarm_all()
 
 	if stage != null and stage.is_course():
 		stage.gate_closed = (to == Phase.COUNTDOWN or to == Phase.IDLE) and not stage.instant
@@ -1709,6 +1715,27 @@ func arm(player: WoPlayer, weapon_id: StringName) -> bool:
 	return true
 
 
+## Whether this is the running part of an io course, where everybody carries the sidearm.
+func _io_gun_phase() -> bool:
+	return phase == Phase.COURSE and stage != null and stage.io != null
+
+
+func _arm_for_io_course() -> void:
+	if not authoritative or not _io_gun_phase():
+		return
+
+	for id: StringName in players:
+		var player: WoPlayer = players[id]
+
+		if not player.watching and player.weapons == null:
+			var _armed := arm(player, IO_SIDEARM)
+
+
+func _disarm_all() -> void:
+	for id: StringName in players:
+		_disarm(players[id] as WoPlayer)
+
+
 func _disarm(player: WoPlayer) -> void:
 	if player.grab != null:
 		var _dropped := player.grab.drop()
@@ -1744,8 +1771,10 @@ func _advance_pickups() -> void:
 
 
 func _advance_weapons() -> void:
-	if phase != Phase.FINALE or combat == null:
+	if combat == null or not (phase == Phase.FINALE or _io_gun_phase()):
 		return
+
+	_arm_for_io_course()
 
 	for id: StringName in players:
 		var player: WoPlayer = players[id]
@@ -1762,6 +1791,12 @@ func _advance_weapons() -> void:
 		for shot in outcome.shots:
 			shot.attacker = player.entity_id
 			shot.tick = _tick
+
+			if phase != Phase.FINALE:
+				# On a course a bullet is for the map's buttons and breakables alone: nobody is hurt.
+				_shoot_io(player, shot)
+				continue
+
 			_shoot_toys(shot)
 			var resolved := combat.resolve_shot(shot)
 			_shoot_io(player, resolved)
