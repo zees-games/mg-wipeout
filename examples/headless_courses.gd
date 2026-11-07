@@ -40,6 +40,18 @@ func _run() -> void:
 	var arenas := catalogue.arenas.keys()
 	arenas.sort()
 
+	# --courses=a,b,c runs only those documents (courses and arenas by id), so the hour-long suite can be verified
+	# in pieces; "pad" and "race" name the teleport-pad and the difficulty-field sections. No argument: everything.
+	var only := _only_ids()
+	var filtered := not only.is_empty()
+	var with_pad := not filtered or only.has("pad")
+	var with_race := not filtered or only.has("race")
+
+	if filtered:
+		courses = courses.filter(func(id: StringName) -> bool: return only.has(str(id)))
+		arenas = arenas.filter(func(id: StringName) -> bool: return only.has(str(id)))
+		print("(only %s)" % ", ".join(only))
+
 	if courses.size() <= 1:
 		print("(no course directory: the built-in practice course and arena only)")
 
@@ -69,7 +81,8 @@ func _run() -> void:
 	(padded["pieces"] as Array).append({"kind": "teleport", "at": Vector3(-106.04, -8.06, -56.3),
 		"size": Vector3(3.0, 0.6, 3.0), "role": &"safe", "to": Vector3(-136.04, -13.56, -53.3),
 		"heading": 180.0, "yaw": -180.0})
-	await _teleport_pad(padded)
+	if with_pad:
+		await _teleport_pad(padded)
 
 	# One audit per document, over the stage as a client draws it (sky and water included).
 	for id: StringName in courses:
@@ -79,16 +92,24 @@ func _run() -> void:
 		await _audit_collision(catalogue.arenas[id])
 
 	var field_course: Dictionary = catalogue.courses.get(&"wo_first_splash", catalogue.courses[&"wo_practice"])
-	await _race_by_difficulty(field_course)
+	if with_race:
+		await _race_by_difficulty(field_course)
 
 	if _world != null:
 		remove_child(_world)
 		_world.free()
 
-	var sections := 3 + courses.size() + forked + arenas.size() + courses.size() + arenas.size()
-	var checks := 8 + (courses.size() + forked) * 4 + courses.size() * 2 + arenas.size() * (4 + 2) + courses.size() + arenas.size() + courses.size()
+	var sections := 1 + int(with_pad) + int(with_race) + courses.size() + forked + arenas.size() + courses.size() + arenas.size()
+	var checks := 1 + 5 * int(with_pad) + 2 * int(with_race) + (courses.size() + forked) * 4 + courses.size() * 2 + arenas.size() * (4 + 2) + courses.size() + arenas.size() + courses.size()
 
 	_report_sections(_sections_entered, _sections_finished, sections, checks)
+
+
+func _only_ids() -> PackedStringArray:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--courses="):
+			return a.substr(10).split(",", false)
+	return PackedStringArray()
 
 
 ## A teleport pad sends whoever stands on it to its `to`, facing its `heading`, and nobody beside, above (by a jump's
