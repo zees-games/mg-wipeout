@@ -1,4 +1,4 @@
-extends "wo_game_state.gd"
+extends "wo_game_flashlight.gd"
 ## A stand-in's racer state and how it fights and aims in a final death.
 
 ## The node overrides these two, so this layer reads its exports without declaring them.

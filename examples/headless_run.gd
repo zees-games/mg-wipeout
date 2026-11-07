@@ -1,12 +1,12 @@
-extends "headless_run_client.gd"
+extends "headless_run_flashlight.gd"
 
 ## The simulation, headless: documents, the course, what it does to a player, and the round. Counts sections AND
 ## checks, the second being what matters: a script error aborts a section that has already announced itself, so every
 ## total was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 42
+const SECTIONS := 43
 
-const CHECKS := 236
+const CHECKS := 246
 
 
 func _ready() -> void:
@@ -46,6 +46,7 @@ func _run() -> void:
 	await _test_one_finisher_wins()
 	await _test_the_final_death()
 	await _test_free_roam()
+	await _test_the_flashlight()
 	await _test_the_toys()
 	await _test_nobody_finishes()
 	await _test_knocks_hurt()
