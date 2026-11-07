@@ -11,18 +11,18 @@ const WoEvents := preload("../game/net/wo_events.gd")
 
 ## Per course, what it must run: `sections` and `checks` (the totals the run must reach), `lava` (a hurt a trigger
 ## enables after a delay), `ladders`, `push`, `button`, `floor` (metres a runner may sink in 1.5 s on its start, 0.5
-## where the course passes), `rejects` (volumes a team filter turns a teamless body away from).
+## where the course passes), `rejects` (volumes a team filter turns a teamless body away from), `gun` (what the sidearm must reach: "breakable", "button" or "both"; "" only checks it fires harmlessly).
 const COURSES := {
-	&"wo_oaks_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_office_course": {"sections": 11, "checks": 41, "lava": true, "ladders": true, "rejects": 0},
-	&"wo_dans_course": {"sections": 10, "checks": 38, "lava": false, "ladders": true, "rejects": 0},
-	&"wo_pauls_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "push": false, "floor": 0.7, "rejects": 3},
-	&"wo_scary_course": {"sections": 9, "checks": 35, "lava": false, "ladders": false, "push": false, "rejects": 0},
-	&"wo_lego_course": {"sections": 9, "checks": 32, "lava": false, "ladders": false, "push": false, "button": false, "rejects": 0},
-	&"wo_dc_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_waytobar_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_labo_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
-	&"wo_sweet_course": {"sections": 9, "checks": 36, "lava": false, "ladders": false, "rejects": 0},
+	&"wo_oaks_course": {"sections": 10, "checks": 40, "lava": false, "ladders": false, "rejects": 0, "gun": "breakable"},
+	&"wo_office_course": {"sections": 12, "checks": 45, "lava": true, "ladders": true, "rejects": 0, "gun": "breakable"},
+	&"wo_dans_course": {"sections": 11, "checks": 43, "lava": false, "ladders": true, "rejects": 0, "gun": "both"},
+	&"wo_pauls_course": {"sections": 10, "checks": 39, "lava": false, "ladders": false, "push": false, "floor": 0.7, "rejects": 3, "gun": "breakable"},
+	&"wo_scary_course": {"sections": 10, "checks": 39, "lava": false, "ladders": false, "push": false, "rejects": 0, "gun": "breakable"},
+	&"wo_lego_course": {"sections": 10, "checks": 36, "lava": false, "ladders": false, "push": false, "button": false, "rejects": 0, "gun": "breakable"},
+	&"wo_dc_course": {"sections": 10, "checks": 39, "lava": false, "ladders": false, "rejects": 0, "gun": ""},
+	&"wo_waytobar_course": {"sections": 10, "checks": 40, "lava": false, "ladders": false, "rejects": 0, "gun": "breakable"},
+	&"wo_labo_course": {"sections": 10, "checks": 40, "lava": false, "ladders": false, "rejects": 0, "gun": "breakable"},
+	&"wo_sweet_course": {"sections": 10, "checks": 40, "lava": false, "ladders": false, "rejects": 0, "gun": "breakable"},
 }
 
 var _expect_sections := 1
@@ -43,7 +43,16 @@ func _run() -> void:
 	var catalogue := WoCatalogue.new()
 	var _loaded := catalogue.load_from("courses")
 
+	var only := ""
+
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--only="):
+			only = arg.substr(7)
+
 	for id: StringName in COURSES:
+		if only != "" and String(id) != only:
+			continue
+
 		if not catalogue.courses.has(id):
 			print("(%s is not installed: no mg-wipeout-maps link, nothing to check)" % id)
 			continue
@@ -56,7 +65,7 @@ func _run() -> void:
 		await _play(catalogue, id, plan)
 		print("  (%d checks)" % (_passed + _failed - before))
 
-	_report_sections(_sections_entered, _sections_finished, _expect_sections, _expect_checks if _expect_checks > 0 else -1)
+	_report_sections(_sections_entered, _sections_finished, _expect_sections, _expect_checks if only == "" and _expect_checks > 0 else -1)
 
 
 func _roles_section() -> void:
@@ -89,6 +98,7 @@ func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 	var lava: bool = plan.get("lava", false)
 	var ladders: bool = plan.get("ladders", false)
 	var wants_button: bool = plan.get("button", true)
+	var wants_gun: String = plan.get("gun", "")
 	var doc: Dictionary = catalogue.courses[id]
 
 	_section("the document")
@@ -146,6 +156,8 @@ func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 
 	await _client_section(game, io, doc, id)
 	await _button_section(game, game.stage.io.world, wants_button)
+
+	await _gun_section(game, game.stage.io.world, wants_gun)
 
 
 ## The map loads: its arch, spawns, entity coverage, team filters and a shot.
@@ -675,3 +687,117 @@ func _named_volume(world: DotMapWorld, kind: String, target: String) -> Dictiona
 			var box := _widest(node.volume)
 			return {"centre": box.get_center(), "floor": box.position.y}
 	return {}
+
+
+## The sidearm every runner carries on an io course: its bullets reach the map's own shoot-buttons and breakables
+## through the game's `_shoot_io` (DotMapIO.hurt), and hurt nobody.
+func _gun_section(game: WoGame, world: DotMapWorld, wants: String) -> void:
+	_section("the sidearm: a shot breaks a breakable and fires a shoot-button")
+	# A fall or a hurt volume on the way must not put the shooter out of the round.
+	game.config.instant_death = false
+	game.config.course_deaths_eliminate = false
+	var shooter := game.add_player(&"u8", "Shooter")
+	var bystander := game.add_player(&"u9", "Bystander")
+	await _steps(game, 4)
+	_check(shooter.weapons != null and game.phase == WoGame.Phase.COURSE, "a runner on an io course carries a weapon", str(shooter.weapons))
+	var bystander_health := bystander.health.health if bystander.health != null else 0.0
+
+	var breakable: DotMapBreakable = null
+	var button: DotMapMoverNode = null
+	var before_shots := int(game.io_log.get("shots", 0))
+	var tried_breakables := 0
+	var tried_buttons := 0
+	var shoot_buttons := 0
+
+	for e: DotMapEntity in world.io.entities:
+		if e.node == null or (breakable != null and button != null) or not _entity_centre(e).is_finite():
+			continue
+
+		if e is DotMapBreakable:
+			tried_breakables += 1
+		elif _shoots(e):
+			shoot_buttons += 1
+			tried_buttons += 1
+
+		if tried_breakables > 12 or tried_buttons > 12:
+			continue
+
+		if breakable == null and e is DotMapBreakable and (e as DotMapBreakable).is_breakable() and e.key("model").begins_with("*"):
+			if await _shoot_at(game, shooter, e):
+				breakable = e as DotMapBreakable
+		elif button == null and _shoots(e) and e.key("model").begins_with("*"):
+			if await _shoot_at(game, shooter, e):
+				button = e as DotMapMoverNode
+
+	print("    gun: %d shoot-buttons; breakable %s, shoot-button %s, %d bullets reached the map" % [
+		shoot_buttons,
+		breakable.index if breakable != null else -1, button.index if button != null else -1,
+		int(game.io_log.get("shots", 0)) - before_shots])
+	if wants == "breakable" or wants == "both":
+		_check(breakable != null, "a bullet hurts a breakable of the map (it lost health or broke)")
+	if wants == "button" or wants == "both":
+		_check(button != null, "a bullet fires a damage-activated button (its OnDamaged / press ran)")
+	_check(int(game.io_log.get("shots", 0)) > before_shots or wants == "", "the game counted the bullets that reached the map")
+	_check(bystander.health == null or is_equal_approx(bystander.health.health, bystander_health), "and nobody on the course was hurt")
+	_finished()
+
+
+## Whether bullets fired at [param e]'s middle from four sides reached it: a breakable lost health, a button pressed
+## or reported itself shot.
+func _shoot_at(game: WoGame, shooter: WoPlayer, e: DotMapEntity) -> bool:
+	var centre := _entity_centre(e)
+
+	if not centre.is_finite():
+		return false
+
+	var health_before := (e as DotMapBreakable).health if e is DotMapBreakable else 0.0
+	var sent_before := int(game.stage.io.world.io.delivered_from.get(e.index, 0))
+
+	for side in [Vector2(0, 1), Vector2(1, 0), Vector2(0, -1), Vector2(-1, 0)]:
+		for drop in [1.6, 1.1, 0.6]:
+			var feet := Vector3(centre.x + side.x * 2.5, centre.y - drop, centre.z + side.y * 2.5)
+			var yaw := rad_to_deg(atan2(side.x, side.y))
+			shooter.place_at(feet, yaw)
+			var to := centre - shooter.eye_position()
+			var look := DotFpsCommand.new()
+			look.yaw = yaw
+			look.pitch = rad_to_deg(atan2(to.y, Vector2(to.x, to.z).length()))
+			look.set_button(DotFpsCommand.BUTTON_USER_0, true)
+
+			# The pistol is semi-automatic: a press, then the trigger let go, until it has fired.
+			for _try in 3:
+				shooter.controller.apply_command(look)
+				await _steps(game, 1)
+				var released := DotFpsCommand.new()
+				released.yaw = look.yaw
+				released.pitch = look.pitch
+				shooter.controller.apply_command(released)
+				await _steps(game, 3)
+
+			if e is DotMapBreakable:
+				if (e as DotMapBreakable).broken or (e as DotMapBreakable).health < health_before:
+					return true
+			elif int(game.stage.io.world.io.delivered_from.get(e.index, 0)) > sent_before or (e as DotMapMoverNode)._in:
+				return true
+
+			if game.phase != WoGame.Phase.COURSE:
+				return false
+	return false
+
+
+func _entity_centre(e: DotMapEntity) -> Vector3:
+	var box := AABB()
+	var found := false
+	for shape: CollisionShape3D in e.node.find_children("*", "CollisionShape3D", true, false):
+		if shape.shape != null:
+			var part: AABB = shape.global_transform * shape.shape.get_debug_mesh().get_aabb()
+			box = box.merge(part) if found else part
+			found = true
+	return box.get_center() if found else Vector3(INF, INF, INF)
+
+
+## A button a bullet works: the map flags it damage-activated, or it fires something on being damaged.
+func _shoots(e: DotMapEntity) -> bool:
+	if not e is DotMapMoverNode or (e as DotMapMoverNode).mover == null or not (e as DotMapMoverNode).mover.kind.ends_with("button"):
+		return false
+	return e.has_spawnflag(512) or e.links.any(func(l: Dictionary) -> bool: return str(l["output"]).to_lower() == "ondamaged")
