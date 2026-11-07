@@ -4,8 +4,9 @@ extends "headless_net_flashlight.gd"
 ## codec, seal, snapshots, prediction and reconciliation run in one process. Asserts a course sent once as a document
 ## leaves both ends agreeing about every obstacle at every tick, a knock predicted and decided.
 
-const SECTIONS := 19
-const CHECKS := 113
+const SECTIONS := 20
+const CHECKS := 115
+const WoNetCommand := preload("../game/net/wo_net_command.gd")
 
 
 func _ready() -> void:
@@ -21,6 +22,7 @@ func _run() -> void:
 	print("")
 
 	_test_the_codec()
+	_test_neutralise()
 	_test_the_killcam_names_the_weapon()
 
 	if await _build():
@@ -48,6 +50,21 @@ func _run() -> void:
 		"%d: %s" % [seen.size(), ", ".join(seen.slice(0, 3))])
 
 	_report_sections(_sections_entered, _sections_finished, SECTIONS, CHECKS)
+
+
+func _test_neutralise() -> void:
+	_section("a silent player's command lets go")
+	var command := WoNetCommand.new()
+	command.grab = true
+	command.slot = 2
+	command.move.move = Vector2(0.0, 1.0)
+	command.move.yaw = 40.0
+	command.move.set_button(WoNetCommand.BUTTON_FIRE, true)
+	command._neutralise()
+	_check(not command.grab and command.move.move == Vector2.ZERO and command.move.buttons == 0,
+		"grab, move and buttons are cleared")
+	_check(is_equal_approx(command.move.yaw, 40.0), "and the view is kept")
+	_finished()
 
 
 ## Every encoder against its decoder. Nothing checks that two ends of a serialisation are
