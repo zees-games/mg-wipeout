@@ -271,7 +271,7 @@ func _cover_lifted(module: Object, link: DotClientLink, peer: int, victim: WoPla
 
 func _rotation_ballot_checks(catalogue, vote: Node) -> void:
 	if vote != null:
-		vote.call("refresh_courses")
+		vote.call("refresh_maps")
 		var ballot: Array = []
 		for choice in (vote.get("source") as DotVoteListSource).entries:
 			ballot.append(String(choice.id))

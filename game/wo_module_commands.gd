@@ -124,7 +124,7 @@ func _cmd_rotation(ctx: DotCmdContext) -> void:
 		return
 
 	if vote != null:
-		vote.refresh_courses()
+		vote.refresh_maps()
 
 	ctx.reply("Rotation: %s" % wanted)
 
@@ -139,7 +139,7 @@ func _cmd_maps_reload(ctx: DotCmdContext) -> void:
 	var read := world.load_rotation()
 
 	if vote != null:
-		vote.refresh_courses()
+		vote.refresh_maps()
 
 	ctx.reply("maps.yml read." if read.ok else read.error.message)
 
@@ -156,7 +156,7 @@ func _cmd_reload(ctx: DotCmdContext) -> void:
 	world.catalogue.apply_rotation(world.config.course_ids)
 
 	if vote != null:
-		vote.refresh_courses()
+		vote.refresh_maps()
 
 	ctx.reply("%d documents read; %d refused. The next round draws from them." % [
 		loaded, world.catalogue.refused.size()])
