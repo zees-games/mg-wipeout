@@ -1,11 +1,11 @@
-extends "headless_net_workbench.gd"
+extends "headless_net_flashlight.gd"
 
 ## The real path minus the socket: two worlds, managers, bridges and links with the RPC replaced by a queue, so the
 ## codec, seal, snapshots, prediction and reconciliation run in one process. Asserts a course sent once as a document
 ## leaves both ends agreeing about every obstacle at every tick, a knock predicted and decided.
 
-const SECTIONS := 18
-const CHECKS := 108
+const SECTIONS := 19
+const CHECKS := 113
 
 
 func _ready() -> void:
@@ -30,6 +30,7 @@ func _run() -> void:
 		await _test_obstacles_agree()
 		await _test_a_knock_is_predicted()
 		await _test_the_local_player_is_predicted()
+		await _test_the_flashlight_crosses()
 		await _test_progress_crosses()
 		await _test_free_roam_crosses()
 		await _test_the_final_death_crosses()

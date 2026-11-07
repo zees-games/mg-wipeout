@@ -2021,6 +2021,9 @@ func _step(delta: float) -> void:
 
 	_advance_phase(delta)
 
+	if authoritative:
+		_advance_flashlights()
+
 	if stage != null:
 		stage.pose_at(_tick)
 
