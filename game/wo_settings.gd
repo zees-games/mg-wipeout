@@ -1,10 +1,10 @@
-extends DotMenuSettings
+extends DotMenuGameSettings
 
 const WoBindings := preload("wo_bindings.gd")
 
-## A player's settings and their menu, on dot-menu's `DotMenuSettings` with this game's schema. Scopes are the
-## family's: `sensitivity` ACCOUNT (a person's hand, the same everywhere), `field_of_view` SERVER_CLAMPED (a server
-## may cap it but cannot READ it), volumes this machine's. Use: `setup()`, `bind_look/camera/audio`, `open()`.
+## A player's settings and their menu: dot-menu's `DotMenuGameSettings` with this game's spec. Scopes are the family's:
+## `sensitivity` ACCOUNT, `field_of_view` SERVER_CLAMPED, volumes this machine's. Use: `setup()`, `bind_look/camera/audio`, `open()`.
+## Help and Leave are dot-menu's stock; the keys are [WoBindings], so the help screen lists them.
 
 const SCHEMA_VERSION := 1
 
@@ -25,37 +25,25 @@ const NOT_APPLIED: Array[StringName] = [
 
 
 func _init() -> void:
-	name = "Settings"
-	directory = SETTINGS_DIR
-	app_namespace = APP_NAMESPACE
-	schema = schema_for()
-	config = DotMenuConfig.new()
-	config.brand_name = "Wipeout"
-	# Help and Leave are dot-menu's stock: H opens help, Leave leaves the server or quits a
-	# solo game. Every game in the family has both (the first play test found this one with
-	# neither). The keys are a table now ([WoBindings]), so the help screen lists them.
-	bindings = WoBindings.make()
-	var _layered := config.load_layered()
+	super(spec_for())
 
 
-## The document: this game's field of view first, so it keeps its own default, then the
-## stock settings it applies.
-static func schema_for() -> DotSettingsSchema:
-	var s := DotSettingsSchema.new()
-	s.version = SCHEMA_VERSION
-	s.add(DotSettingsDef.integer(&"field_of_view", DEFAULT_FOV, 70, 120, &"video").with_scope(
-		DotSettingsDef.Scope.SERVER_CLAMPED
-	))
-	s.add(DotSettingsDef.boolean(&"reduce_motion", false, &"accessibility").with_scope(DotSettingsDef.Scope.ACCOUNT)
-		.with_description("The end-of-round announcement appears at once, with nothing sliding, rising or bursting."))
-	s.add(DotSettingsDef.boolean(&"ambient", true, &"audio").with_description("Quiet sounds under the course."))
-	s.add(DotSettingsDef.number(&"ambient_volume", 1.0, 0.0, 1.0, &"audio"))
-	return DotMenuStock.declare(s, DotMenuStock.DEFAULT_GROUPS, null, NOT_APPLIED)
-
-
-## The help screen's goal and rules; the keys come from [WoBindings].
-func _fill_help(help: DotMenuHelp) -> void:
-	help.about = "Get round the course over the water as fast as you can: arms, hammers, rams and rides are all trying to knock you off. A fall sends you back to your last checkpoint, and a knock costs health."
-	help.add_text("Points", "Finishing earns points by place, and the side that wins the round earns more. Tab shows everybody's.")
-	help.add_text("The final", "If two or more sides finish, the round ends in a fight in an arena: pick props up and throw them, and grab the weapons lying on the floor. The last side with anybody standing wins the round.")
-	help.add_section("Mouse", [["Left", "Throw what you hold, or fire; watch the next player while out"], ["Right", "Alternate fire; watch the one before while out"]], &"keys")
+## The game's settings as data: names, field of view, extra settings, keys and the help screen's goal and rules.
+static func spec_for() -> DotMenuGameSpec:
+	var s := DotMenuGameSpec.new()
+	s.schema_version = SCHEMA_VERSION
+	s.brand_name = "Wipeout"
+	s.settings_dir = SETTINGS_DIR
+	s.app_namespace = APP_NAMESPACE
+	s.default_fov = DEFAULT_FOV
+	s.reduce_motion_text = "The end-of-round announcement appears at once, with nothing sliding, rising or bursting."
+	s.ambient_text = "Quiet sounds under the course."
+	s.not_applied = NOT_APPLIED
+	s.bindings_maker = func() -> DotMenuBindings: return WoBindings.make()
+	s.help_about = "Get round the course over the water as fast as you can: arms, hammers, rams and rides are all trying to knock you off. A fall sends you back to your last checkpoint, and a knock costs health."
+	s.help_cards = [
+		["Points", "Finishing earns points by place, and the side that wins the round earns more. Tab shows everybody's."],
+		["The final", "If two or more sides finish, the round ends in a fight in an arena: pick props up and throw them, and grab the weapons lying on the floor. The last side with anybody standing wins the round."],
+	]
+	s.help_sections = [["Mouse", [["Left", "Throw what you hold, or fire; watch the next player while out"], ["Right", "Alternate fire; watch the one before while out"]], &"keys"]]
+	return s
