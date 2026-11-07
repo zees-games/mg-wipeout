@@ -80,3 +80,4 @@ Thumbs.db
 # art stores the worlds name (licence.pbr_store ../pbr-library): symlinks to mg-wipeout-maps, see its CLAUDE.md
 /pbr-library
 /model-library
+/addons/dot_weather
