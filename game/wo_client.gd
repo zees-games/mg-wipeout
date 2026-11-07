@@ -64,8 +64,7 @@ func _ready() -> void:
 	# The sampler lives HERE and not on the player, because on a connected client the local
 	# player does not exist yet: they arrive in a JOIN, several frames after the keyboard
 	# does.
-	_sampler = DotFpsSampler.new(WoPlayer.tunables_for(config))
-	WoPlayer.register_actions(_sampler)
+	_sampler = WoTouch.make_sampler(WoPlayer.tunables_for(config), _touch_ignores)
 
 	_build_hud()
 	_build_chat()
@@ -73,6 +72,7 @@ func _ready() -> void:
 	_build_break_fx()
 	announcer = WoAnnouncer.new(game, audio, hud)
 	_build_settings()
+	_build_touch()
 	_build_killcam()
 
 	if _offline:
@@ -422,6 +422,8 @@ func _adopt(candidate: WoPlayer) -> void:
 	# sample (`command_stamp`); stamping `current_command` below only reaches the drawn gun.
 	if _offline:
 		player.command_stamp = _stamp
+		if DotPlatform.has_touch():
+			player.sampler = WoTouch.make_sampler(player.controller.tunables, _touch_ignores)
 
 	if settings != null:
 		settings.bind_camera(camera)
@@ -1584,8 +1586,81 @@ static func drawn_position(body: WoPlayer, remote: bool) -> Vector3:
 	return body.controller.render_state().position
 
 
+## The phone's buttons over the HUD, on a touch device only: the mouse buttons, grab and reload as the keyboard sets them.
+func _build_touch() -> void:
+	if not DotPlatform.has_touch() or hud == null:
+		return
+	_touch = WoTouch.new()
+	hud.make_room_for_touch()
+	if blurb_label != null:
+		blurb_label.touch = true
+	var _built := _touch.build(hud, _active_sampler, {
+		WoTouch.FIRE: func(down: bool) -> void: _firing = down and not is_spectating(),
+		WoTouch.ALT: func(down: bool) -> void: _alt = down and not is_spectating(),
+		WoTouch.GRAB: func(down: bool) -> void: _grab = down,
+		WoTouch.RELOAD: func(down: bool) -> void: _reloading = down,
+		WoTouch.PREV: func(down: bool) -> void: _touch_step(-1, down),
+		WoTouch.NEXT: func(down: bool) -> void: _touch_step(1, down),
+		WoTouch.BOARD: func(down: bool) -> void:
+			if board != null:
+				if down:
+					board.open()
+				else:
+					board.close(),
+		WoTouch.CHAT: func(down: bool) -> void:
+			var window: Object = chat.get(&"window") if chat != null else null
+			if down and window != null and window.has_method(&"open"):
+				window.call(&"open"),
+	})
+	if platform != null:
+		# On a dense phone the fit would grow the cluster up to 92% of the height, into the course name and announcer.
+		var fit: Object = platform.get(&"screen_fit")
+		if fit != null and &"button_max_height" in fit:
+			fit.set(&"button_max_height", WoTouch.MAX_HEIGHT)
+		WoTouch.touch_layout().apply(_touch.buttons, platform)
+	hud.make_room_for_touch(_touch.buttons)
+	# By name: an older dot-menu has no such property.
+	var menu: Object = platform.menu if platform != null else null
+	var menu_config: Object = menu.get(&"config") if menu != null else null
+	if menu_config != null and &"menu_button_corner" in menu_config:
+		menu_config.set(&"menu_button_corner", &"top_left")
+
+
+func _active_sampler() -> DotFpsSampler:
+	if _offline:
+		return player.sampler if player != null else null
+	return _sampler
+
+
+func _touch_ignores(position: Vector2) -> bool:
+	return _touch != null and _touch.contains_point(position)
+
+
+## A finger on the look or move half goes to the touch sampler.
+func _on_screen_touch(event: InputEvent) -> void:
+	var sampler := _active_sampler()
+	if sampler is DotFpsTouchSampler:
+		(sampler as DotFpsTouchSampler).set_screen_width(get_viewport().get_visible_rect().size.x)
+	if sampler != null:
+		sampler.handle_event(event)
+
+
+## A weapon step through the same wheel the previous/next-weapon actions drive.
+func _touch_step(step: int, down: bool) -> void:
+	if not down or is_spectating():
+		return
+	var ev := InputEventAction.new()
+	ev.action = _wheel.next_action if _wheel != null and step > 0 else (_wheel.previous_action if _wheel != null else &"")
+	ev.pressed = true
+	var _handled := _wheel_pressed(ev)
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if _covered():
+		return
+
+	if event is InputEventScreenTouch or event is InputEventScreenDrag:
+		_on_screen_touch(event)
 		return
 
 	# Tab, M and a click taking the pointer back are the platform's (DotGameClient).

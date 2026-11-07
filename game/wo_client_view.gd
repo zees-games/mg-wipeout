@@ -21,6 +21,7 @@ const WoHud := preload("wo_hud.gd")
 const WoBlurb := preload("wo_blurb.gd")
 const WoPaths := preload("wo_paths.gd")
 const WoPlayer := preload("wo_player.gd")
+const WoTouch := preload("wo_touch.gd")
 
 const CHANNEL := "wo.client"
 
@@ -89,6 +90,9 @@ var winner_reveal: DotWinnerReveal = null
 var _reveal_hid: Dictionary = {}
 
 var _sampler: DotFpsSampler = null
+
+## The phone's on-screen buttons; null off a touch device.
+var _touch: WoTouch = null
 
 ## The spectator's free camera while roaming, and the mouse motion not yet turned into a look.
 var _free_cam: DotSpectatorFreeCam = null
@@ -171,6 +175,9 @@ static func new_chat() -> DotGameChatClient:
 	]
 	box.max_length = WoServices.chat_rules().max_length
 	box.voice_config = WoServices.voice_format()
+	if DotPlatform.has_touch():
+		# Three rows in the corner left of the buttons, clear of the blurb and the bar (WoHud.touch_rects).
+		box.window_settings = {"max_lines": 3, "width": WoHud.TOUCH_CHAT_WIDTH, "margin_left": 12.0, "margin_bottom": 8.0}
 	return box
 
 
