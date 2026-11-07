@@ -6,6 +6,8 @@ extends RefCounted
 const WoPlayer := preload("wo_player.gd")
 
 const CHANNEL := "wipeout.touch"
+## The share of the screen height the button cluster may reach: leaves the top right to the course name and announcer.
+const MAX_HEIGHT := 0.8
 
 const FIRE := DotGameTouchLayout.FIRE
 const ALT := DotGameTouchLayout.ALT

@@ -1613,7 +1613,12 @@ func _build_touch() -> void:
 				window.call(&"open"),
 	})
 	if platform != null:
+		# On a dense phone the fit would grow the cluster up to 92% of the height, into the course name and announcer.
+		var fit: Object = platform.get(&"screen_fit")
+		if fit != null and &"button_max_height" in fit:
+			fit.set(&"button_max_height", WoTouch.MAX_HEIGHT)
 		WoTouch.touch_layout().apply(_touch.buttons, platform)
+	hud.make_room_for_touch(_touch.buttons)
 	# By name: an older dot-menu has no such property.
 	var menu: Object = platform.menu if platform != null else null
 	var menu_config: Object = menu.get(&"config") if menu != null else null

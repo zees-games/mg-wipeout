@@ -32,6 +32,8 @@ var strip: DotScoreStrip = null
 var vitals: DotVitals = null
 var _field: Label = null
 var _touch_room := false
+var _touch_buttons: Control = null
+var _buttons_left := -1.0
 var _touch_vitals := Rect2()
 var _tilt_left := -150.0
 var _tilt_width := 300.0
@@ -103,10 +105,12 @@ var _menu: Object = null
 ## the top left corner, the chat box (see [method WoClient.new_chat]) the bottom left, the course name, announcer and
 ## spectator line the top right, the ammo counter left of the buttons (no weapon icon: it has no room). A pure function
 ## of the view so a suite can check that no two pieces overlap.
-static func touch_rects(view: Vector2) -> Dictionary:
+static func touch_rects(view: Vector2, buttons_left: float = -1.0) -> Dictionary:
 	var w := view.x
 	var h := view.y
-	var cx := w - 300.0
+	# The fitted buttons are scaled up to a thumb's size, so the cluster reaches far past 300 units: the caller passes the
+	# real left edge of the cluster, the unscaled 300 is only the answer when no buttons exist yet.
+	var cx := (buttons_left if buttons_left > 0.0 else w - 300.0) - 8.0
 	return {
 		"vitals": Rect2(16.0, 70.0, 300.0, 56.0),
 		"blurb": Rect2(16.0, 132.0, TOUCH_BLURB_WIDTH, TOUCH_BLURB_LINES * 16.0),
@@ -114,17 +118,19 @@ static func touch_rects(view: Vector2) -> Dictionary:
 		"special": Rect2(w - 216.0, 10.0, 204.0, 26.0),
 		"ticker": Rect2(w - 216.0, 38.0, 204.0, 38.0),
 		"watching": Rect2(w - 216.0, 78.0, 204.0, 24.0),
-		"ammo": Rect2(220.0, h - 168.0, cx - 220.0, 70.0),
-		"field": Rect2(220.0, h - 86.0, cx - 220.0, 28.0),
-		"place": Rect2(w - 440.0, h - 56.0, 140.0, 30.0),
-		"tilt": Rect2(w - 440.0, h - 22.0, 140.0, 16.0),
+		"ammo": Rect2(220.0, h - 168.0, cx - 220.0 - 14.0, 70.0),
+		"field": Rect2(220.0, h - 86.0, cx - 220.0 - 150.0, 28.0),
+		"place": Rect2(cx - 140.0, h - 56.0, 140.0, 30.0),
+		"tilt": Rect2(cx - 140.0, h - 22.0, 140.0, 16.0),
 		"chat": Rect2(12.0, h - TOUCH_CHAT_HEIGHT, TOUCH_CHAT_WIDTH, TOUCH_CHAT_HEIGHT),
 	}
 
 
 ## Moves the pieces clear of the phone's button cluster, the Menu button and the chat box.
-func make_room_for_touch() -> void:
+func make_room_for_touch(buttons: Control = null) -> void:
 	_touch_room = true
+	if buttons != null:
+		_touch_buttons = buttons
 	_apply_touch_layout()
 	if _root != null and not _root.resized.is_connected(_apply_touch_layout):
 		_root.resized.connect(_apply_touch_layout)
@@ -138,10 +144,19 @@ func _place_rect(control: Control, r: Rect2) -> void:
 	control.offset_bottom = r.end.y
 
 
+## The left edge of the fitted button cluster, -1 before there is one.
+func _cluster_left() -> float:
+	if _touch_buttons == null or not is_instance_valid(_touch_buttons) or not _touch_buttons.has_method(&"footprint"):
+		return -1.0
+	var foot: Rect2 = _touch_buttons.call(&"footprint")
+	return foot.position.x if foot.size != Vector2.ZERO else -1.0
+
+
 func _apply_touch_layout() -> void:
 	if not _touch_room or _root == null:
 		return
-	var rects := touch_rects(_root.get_viewport_rect().size)
+	_buttons_left = _cluster_left()
+	var rects := touch_rects(_root.get_viewport_rect().size, _buttons_left)
 	var vitals_rect: Rect2 = rects["vitals"]
 	_touch_vitals = vitals_rect
 	_place_rect(vitals, vitals_rect)
@@ -518,6 +533,9 @@ func _process(delta: float) -> void:
 		_field.text = "%d across of %d" % [game.finished_count(), game.players.size()]
 
 	_draw_ammo()
+	# The screen fit rescales the buttons after the HUD is built (a resize, a UI-size change): follow the cluster.
+	if _touch_room and not is_equal_approx(_cluster_left(), _buttons_left):
+		_apply_touch_layout()
 
 	_draw_progress()
 
