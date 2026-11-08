@@ -1,6 +1,7 @@
 extends "wo_game_bot_run.gd"
 
 const WoBreakFx := preload("wo_break_fx.gd")
+const WoWeaponLayer := preload("wo_weapon_layer.gd")
 const WoAmbience := preload("wo_ambience.gd")
 const WoCatalogue := preload("wo_catalogue.gd")
 const WoContent := preload("wo_content.gd")
@@ -159,6 +160,10 @@ var toy_rules: DotPropBodyRules = DotPropBodyRules.new()
 ## link, because the client draws the bodies. The game's, not the map's.
 var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
 
+## Guns lying about (`wo_weapon_layer.gd`), built on both ends, and the `sv_weapon_drop*` rules it runs under: bound by the module, REPLICATED.
+var weapon_layer: WoWeaponLayer = null
+var drop_rules: DotWeaponDropRules = _walk_over_drops()
+
 ## dot-player-controller's `mp_forceview` and `mp_solidplayers`. Bound by the module (REPLICATED) and followed by a
 ## client through its link, which places its camera under the first and predicts its own player under the second.
 var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
@@ -264,6 +269,8 @@ func _ready() -> void:
 	_build_stage()
 	_build_props()
 	_build_combat()
+	weapon_layer = WoWeaponLayer.new()
+	weapon_layer.setup(self)
 	_build_effects()
 	_build_match()
 	_build_spectate()
@@ -1780,6 +1787,7 @@ func _advance_weapons() -> void:
 		return
 
 	_arm_for_io_course()
+	weapon_layer.tick()
 
 	for id: StringName in players:
 		var player: WoPlayer = players[id]
@@ -2613,12 +2621,22 @@ func decide_death(player: WoPlayer, damage: DotDamage) -> DotPlayerDeath:
 	return death
 
 
+## Fighters take a gun by walking over it: there is no use key to press, and the grab key is for props.
+static func _walk_over_drops() -> DotWeaponDropRules:
+	var rules := DotWeaponDropRules.new()
+	rules.auto_pickup = true
+	return rules
+
+
 func _on_player_died(player: WoPlayer, damage: DotDamage) -> void:
 	var by := entities.key_for_id(damage.attacker)
 	var why: StringName = damage.context.get("why", DIED_SHOT)
 
 	if player.grab != null:
 		var _dropped := player.grab.drop()
+
+	if authoritative and weapon_layer != null:
+		weapon_layer.drop_dead(player.player_id)
 
 	# Spectating and progress BEFORE dot-match: `report_kill` can end the round inside the
 	# call, and a kill counted after that is counted in no round. mg-smash-copter's finding.

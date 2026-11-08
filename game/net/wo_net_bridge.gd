@@ -8,6 +8,7 @@ const WoPlayerNet := preload("wo_player_net.gd")
 const WoPropNet := preload("wo_prop_net.gd")
 const WoRequest := preload("wo_request.gd")
 const WoToyNet := preload("wo_toy_net.gd")
+const WoWeaponNet := preload("wo_weapon_net.gd")
 
 const WoContent := preload("../wo_content.gd")
 const WoGame := preload("../wo_game.gd")
@@ -170,6 +171,10 @@ func _exit_tree() -> void:
 
 
 ## [param p_game] and [param p_net], in the shape [DotGameNetcode] calls it.
+## The guns on the floor, over the link; a client connects to its `lost_received`.
+var weapon_net := WoWeaponNet.new()
+
+
 func attach(p_game: Object, p_net: DotNetManager) -> DotResult:
 	var world := p_game as WoGame
 
@@ -278,6 +283,8 @@ func _wire_server() -> void:
 		game.spectate.view_changed.connect(_on_spectate_changed)
 
 	_wire_lag_compensation()
+	weapon_net.attach(self)
+	weapon_net.watch(game.weapon_layer)
 
 
 ## Hands dot-combat the rewind and restore callables; unset, it resolves every shot against
@@ -1032,6 +1039,11 @@ func _on_request(message: DotNetMessage) -> void:
 				_spectate_step(peer_id, int(step["direction"]))
 		WoEvents.Ask.ROAM:
 			_spectate_roam(peer_id)
+		WoEvents.Ask.DROP_WEAPON:
+			var thrower := player_for_peer(peer_id)
+
+			if thrower != 0:
+				var _thrown := game.weapon_layer.throw_for(player_key(thrower))
 		WoEvents.Ask.FLASHLIGHT:
 			var session_id := player_for_peer(peer_id)
 
@@ -1155,6 +1167,8 @@ func _admit(peer_id: int) -> void:
 		var pickup: Dictionary = game.pickups[pickup_id]
 		_tell(peer_id, WoEvents.Kind.PICKUP, WoEvents.write_pickup(pickup_id, pickup["weapon"], pickup["at"]))
 
+	weapon_net.send_snapshot(peer_id, game.weapon_layer)
+
 	_tell(peer_id, WoEvents.Kind.PHASE, WoEvents.write_phase(game.phase))
 	_tell(peer_id, WoEvents.Kind.CLOCK, _clock_body())
 
@@ -1237,6 +1251,10 @@ func ask_team(team: int) -> void:
 
 
 ## Switch the flashlight. The server owns on/off and answers in the player's replicated state.
+func ask_drop_weapon() -> void:
+	_ask(WoEvents.Ask.DROP_WEAPON, PackedByteArray([0]))
+
+
 func ask_flashlight() -> void:
 	_ask(WoEvents.Ask.FLASHLIGHT, PackedByteArray([0]))
 
@@ -1270,6 +1288,9 @@ func _on_event(message: DotNetMessage) -> void:
 		return
 
 	var reader := event.reader()
+
+	if weapon_net.apply(event.kind, reader, game.weapon_layer):
+		return
 
 	match event.kind:
 		WoEvents.Kind.HELLO:
