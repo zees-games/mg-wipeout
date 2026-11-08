@@ -15,7 +15,7 @@ const COURSES := {
 	&"wo_scary_course": {"dead_tps": 0, "reaches": false, "why": "stalls 41 m out; the next triggers are trigger_multiple scripts the walk cannot fire from the floor"},
 	&"wo_lego_course": {"dead_tps": 0, "reaches": false, "why": "stalls 95 m out; trigger_once chains (low*) are out of reach of the floor walk"},
 	&"wo_dc_course": {"dead_tps": 3, "reaches": false, "why": "stalls 233 m out; three teleports and a bonus teleport unreached"},
-	&"wo_waytobar_course": {"dead_tps": 3, "reaches": false, "why": "verified: the walk ends 0.76 m in front of a glass wall (z 19.29) that is the 1000-damage score slab; the finish box lies 0.3 m behind it (z 15.9 to 18.9), on the far side, so no walk can enter it. Also verified: of the three unreached teleports one has its trigger at y -60, under the -40 water (dead by design); one (trigger at (100,-0.7,-9)) lies behind a world glass pane at z -1.6, 8 m from the nearest cell; one drops the runner 68 m (the walker now follows that fall, TP_FALL_MAX) but its trigger at (86,0.3,-32) is 22 m from any reached cell. Not verified: whether the box belongs on the approach side (the bar is reachable from the start by floor, with the walker's doors latched open)"},
+	&"wo_waytobar_course": {"dead_tps": 3, "finish": "model", "hurt_only": true, "reaches": true, "why": "verified: the score is the 1000-damage trigger_hurt slab (z 19.21 to 19.29, ApplyScore on touch), so the slab is the intended end and is not counted as a hazard; the finish box now runs to z 19.35 (it stopped 0.3 m short) and the machinery walk reaches it. It is blocked by other live hurt volumes on every route (lasers, kill floors; 122 of them), so no hurt-avoiding walk finishes. Of the three unreached teleports one has its trigger at y -60 under the -40 water (dead by design), one lies behind a world glass pane at z -1.6 (8 m from the nearest cell) and one drops 68 m but its trigger at (86,0.3,-32) is 22 m from any reached cell"},
 	&"wo_labo_course": {"dead_tps": 3, "reaches": false, "why": "stalls 106 m out; three teleports unreached"},
 	&"wo_sweet_course": {"dead_tps": 4, "reaches": false, "why": "stalls 223 m out; four teleports unreached"},
 }
@@ -167,6 +167,14 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> String:
 	return line
 
 
+## A hurt volume whose outputs apply a score (waytobar's glass slab) is the course's end, not a hazard on the way to it.
+func _scores(v: DotMapVolume) -> bool:
+	for o: Variant in v.record.get("outputs", []):
+		if o is Dictionary and str((o as Dictionary).get("input", "")) == "ApplyScore":
+			return true
+	return false
+
+
 ## A fresh world for [param doc], its runner's start, the teleports and hurt volumes and a walker over its physics.
 func _setup(doc: Dictionary) -> Dictionary:
 	var game := await _fresh_world(doc)
@@ -205,7 +213,7 @@ func _setup(doc: Dictionary) -> Dictionary:
 			var at: Array = dest["at"]
 			tps.append({"node": node, "boxes": v.brush_boxes(), "to": Vector3(at[0], at[1], at[2]),
 				"gate": not node.active(), "open_fn": func() -> bool: return node.active() and node._filter_passes(world.io, body)})
-		elif v.kind == "hurt" and node.active() and float(v.record.get("damage", 0.0)) > 0.0:
+		elif v.kind == "hurt" and node.active() and float(v.record.get("damage", 0.0)) > 0.0 and not _scores(v):
 			for box: AABB in v.brush_boxes():
 				if box.size.is_finite() and box.size.y > 0.1:
 					hurts.append(box)
