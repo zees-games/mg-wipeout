@@ -236,6 +236,9 @@ func _bind_rule_cvars(world: WoGame) -> void:
 		if str(made.get(&"name")) == DotSpectatorRules.CVAR_FORCE_CAMERA:
 			_force_camera_cvar = made
 
+	# sv_weapon_drop*: dot-weapon's drop rules. REPLICATED, because the drop key and the pickup reach follow them.
+	var _drops := world.drop_rules.bind_cvars(add_cvar, replicated)
+
 	# zee_ads_rules: spread and pace while aimed are part of the prediction, so the numbers cross as one JSON cvar.
 	var _ads := world.ads_rules.bind_cvars(add_cvar, replicated)
 
