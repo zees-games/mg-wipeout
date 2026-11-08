@@ -6,7 +6,7 @@ extends "dedicated_late.gd"
 ## round is played by the stand-ins the module seats.
 
 const SECTIONS := 16
-const CHECKS := 118
+const CHECKS := 119
 
 
 func _ready() -> void:
@@ -664,6 +664,11 @@ func _test_stats_report() -> void:
 	var _p: float = progress.rank.publish(&"wo-rank", {"wo.rounds_won": 2.0, "wo.courses_finished": 1.0})
 	_check(progress.stats.session_values(&"wo-rank").get_value(&"rank_score", 0.0) == 7.0,
 		"the weighted rank files rank_score (2 wins x 3 + 1 finish)")
+	var _held := DotStatsValues.new()
+	_held.values = {"wo.rounds_won": 10.0}
+	progress.rank.seed_baseline(&"wo-rank", _held)
+	var _life: float = progress.rank.publish_lifetime(&"wo-rank", progress.stats.session_values(&"wo-rank"), progress.stats.schema)
+	_check(_life == 30.0, "a stored lifetime baseline (10 wins) is what the published rank is built on")
 	var _elo = server.console.find_cvar("wo_rank").set_value("elo")
 	_check(progress.rank.mode == DotStatsRank.MODE_ELO,
 		"wo_rank elo switches the mode")

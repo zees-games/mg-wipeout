@@ -252,6 +252,7 @@ func setup(directory: String, report: bool) -> DotResult:
 		{"stat": String(FALLS), "weight": -0.05},
 	]
 	rank.record_fn = func(who: Variant, stat: StringName, value: float) -> void: record(StringName(str(who)), stat, value)
+	rank.key_fn = func(who: Variant) -> StringName: return _key(StringName(str(who)))
 
 	link = DotAchievementStatsLink.new()
 	link.name = "StatsLink"
@@ -277,6 +278,7 @@ func record(player_id: StringName, stat: StringName, value: float = 1.0) -> void
 	var key := _key(player_id)
 
 	if not stats.has_player(key):
+		_load_baseline(player_id)
 		stats.begin(key, body.display_name)
 		_begin(key)
 
@@ -314,9 +316,16 @@ func _begun(player_id: StringName) -> bool:
 		return false
 	var key := _key(player_id)
 	if not stats.has_player(key):
+		_load_baseline(player_id)
 		stats.begin(key, body.display_name)
 		_begin(key)
 	return true
+
+
+## Reads the player's stored lifetime totals before this session's figures are flushed into the store (reading later would count them twice). The file store answers without suspending.
+func _load_baseline(player_id: StringName) -> void:
+	if rank != null and stats.store != null:
+		rank.load_baseline(stats.store, player_id)
 
 
 ## The key a player's numbers are filed under. Asked of [member durable_key_fn] once, then
@@ -374,6 +383,8 @@ func leave(player_id: StringName) -> void:
 		return
 
 	var _values := stats.end(key)
+	if rank != null:
+		rank.forget(player_id)
 	link.forget(String(key))
 	_end(key)
 
@@ -461,7 +472,7 @@ func on_round_over(winner: int) -> void:
 func _publish_rank(player_id: StringName) -> void:
 	if rank == null or rank.mode != DotStatsRank.MODE_WEIGHTED or not _begun(player_id):
 		return
-	var _s := rank.publish(player_id, session_values(player_id).to_dictionary())
+	var _s := rank.publish_lifetime(player_id, session_values(player_id), stats.schema)
 
 
 ## Somebody is out. [param by] is who did it, or empty for the world.
