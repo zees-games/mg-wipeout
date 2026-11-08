@@ -138,7 +138,7 @@ static func validate(source: Dictionary) -> DotResult:
 	if doc.has("toys"):
 		var toys: Array = []
 		for raw: Variant in (doc["toys"] if doc["toys"] is Array else []):
-			var toy := DotPropToyBox.normal_placement(raw)
+			var toy := DotPropBodyBox.normal_placement(raw)
 			if toy.is_empty():
 				return _refuse("toy %d is not {toy, at}" % toys.size(), doc)
 			toys.append(toy)

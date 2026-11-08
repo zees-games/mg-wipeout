@@ -1012,9 +1012,9 @@ func _test_the_toys() -> void:
 	var game := await _world()
 	var toys := game.stage.toys
 	var start: Vector3 = game.course_doc["start"]["at"]
-	var in_pen := toys.toys.filter(func(t: DotPropToy) -> bool:
+	var in_pen := toys.toys.filter(func(t: DotPropBody) -> bool:
 		return absf(t.global_position.x - start.x) < 5.0 and absf(t.global_position.z - start.z) < 4.0)
-	_check(toys.count() == 2 and in_pen.size() == 2 and in_pen.all(func(t: DotPropToy) -> bool: return t.kind == &"ball"),
+	_check(toys.count() == 2 and in_pen.size() == 2 and in_pen.all(func(t: DotPropBody) -> bool: return t.kind == &"ball"),
 		"the practice course's two beach balls are in the start pen", "%d toys, %d in the pen" % [toys.count(), in_pen.size()])
 
 	# Run into the right-hand ball across the pen, side on: it goes, the runner does not slow.
@@ -1066,9 +1066,9 @@ func _test_the_toys() -> void:
 	_check(beach.body.global_position.distance_to(beach_was) > 0.5, "a barrel's blast throws a ball",
 		"%.2f m" % beach.body.global_position.distance_to(beach_was))
 
-	var _off := game.toy_rules.set_cvar(DotPropToyRules.CVAR_ENABLED, "0")
+	var _off := game.toy_rules.set_cvar(DotPropBodyRules.CVAR_ENABLED, "0")
 	_check(not toys.toy(0).visible and toys.toy(0).process_mode == Node.PROCESS_MODE_DISABLED, "sv_toys 0 takes them away")
-	var _on := game.toy_rules.set_cvar(DotPropToyRules.CVAR_ENABLED, "1")
+	var _on := game.toy_rules.set_cvar(DotPropBodyRules.CVAR_ENABLED, "1")
 	_finished()
 
 

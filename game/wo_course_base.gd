@@ -58,12 +58,12 @@ var strikes: Array[Dictionary] = []
 var _gate: StaticBody3D = null
 var _gate_rest: Transform3D = Transform3D.IDENTITY
 
-## The stage's toys (dot-props' [DotPropToyBox]): loose ones only (beach balls, a finale's balls), simulated where
+## The stage's toys (dot-props' [DotPropBodyBox]): loose ones only (beach balls, a finale's balls), simulated where
 ## [member authoritative] and posed from snapshots elsewhere, under the game's `sv_toys*` [member toy_rules]. A runner
 ## pushes one through (`WoGame._advance_toys`); a fixed toy would be a way past an obstacle. Set before building.
-var toys: DotPropToyBox = null
+var toys: DotPropBodyBox = null
 var authoritative: bool = true
-var toy_rules: DotPropToyRules = null
+var toy_rules: DotPropBodyRules = null
 var gravity: float = 20.0
 
 ## The kinds a stage here may place: the rigid ones a person pushes and walks through.
@@ -253,7 +253,7 @@ func _piece_node(kind: String, spec: Dictionary, role: WoTextures.Role) -> Node3
 ## other toys stop and a person never does. A placement of a kind other than [constant TOY_KINDS]
 ## is left out with a line, never refused: the course still plays.
 func _build_toys() -> void:
-	toys = DotPropToyBox.new()
+	toys = DotPropBodyBox.new()
 	toys.name = "Toys"
 	toys.authoritative = authoritative
 	toys.draw = draw_world
@@ -270,7 +270,7 @@ func _build_toys() -> void:
 		toys.footprint_layer = physics.layer_mask(&"footprint")
 		toys.aim_mask = physics.layer_mask(&"world") | physics.layer_mask(&"toy")
 	add_child(toys)
-	var catalogue := DotPropToyCatalogue.stock()
+	var catalogue := DotPropBodyCatalogue.stock()
 	toys.catalogue = catalogue
 	var placements: Array = []
 	var refused: PackedStringArray = PackedStringArray()

@@ -152,7 +152,7 @@ var physics: DotPhysicsLayout = null
 
 ## dot-props' `sv_toys*` (whether a stage's toys are there, how many simulate at once, how hard a
 ## walk pushes one). Bound by the module (REPLICATED) and followed by a client, which draws them.
-var toy_rules: DotPropToyRules = DotPropToyRules.new()
+var toy_rules: DotPropBodyRules = DotPropBodyRules.new()
 
 ## What a dead body does, and which death reactions the server allows: dot-player-char's
 ## `sv_ragdoll*` cvars, bound by the module (REPLICATED) and followed by a client through its
