@@ -53,6 +53,14 @@ enum Kind {
 	WORLD_IO,
 	## A prop broke: where and what it was made of, for the splinters. Appended last: kinds are wire numbers.
 	SHATTER,
+	## A gun hit the floor: its id, weapon, ammunition, pose, velocity, life left and whether it already rests.
+	WEAPON_DROP,
+	## A dropped gun came to rest where it lies.
+	WEAPON_SETTLED,
+	## A dropped gun is gone: taken, timed out or cleared.
+	WEAPON_GONE,
+	## A fighter's gun left their hands (thrown or dropped dead): who and which. Encoded as ARMED is.
+	WEAPON_LOST,
 }
 
 enum Ask {
@@ -68,6 +76,8 @@ enum Ask {
 	ROAM,
 	## Switch my flashlight.
 	FLASHLIGHT,
+	## Throw the gun in my hand.
+	DROP_WEAPON,
 }
 
 ## What a `PROGRESS` event says happened.
