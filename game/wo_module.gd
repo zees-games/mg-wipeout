@@ -225,6 +225,11 @@ func _bind_rule_cvars(world: WoGame) -> void:
 				var _set: Variant = field.set_value(new_value))
 		world.set_killcam_seconds(_killcam_cvar.get_float())
 
+	# REPLICATED: where the clients' killcam camera sits (0 the killer's eye, 1 behind the killer).
+	var _killview := add_cvar("mp_killview_camera", "0",
+		"Killcam camera: 0 the killer's eye, 1 behind the killer (dot-replay DotKillcamFraming)",
+		replicated)
+
 	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: each client flies its own spectator
 	# camera under them (WoClient.toggle_roam).
 	for made: Object in world.spectate_rules.bind_cvars(add_cvar, replicated):

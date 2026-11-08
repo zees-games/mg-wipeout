@@ -680,11 +680,17 @@ func _add_motion_row(menu: DotMenu) -> void:
 	general.section("Comfort").add(DotMenuRow.toggle(&"reduce_motion", "Reduce motion", calm.description if calm != null else ""))
 
 
+## The server's `mp_killview_camera` ([enum DotKillViewRules.Camera]); the eye until it has said.
+var _killcam_camera: int = DotKillViewRules.Camera.EYE
+
+
 func _build_killcam() -> void:
 	killcam = WoKillcam.new()
 	killcam.name = "FinalKillcam"
 	killcam.players_fn = func() -> Dictionary: return game.players if game != null else {}
 	killcam.seconds_fn = func() -> float: return game.config.killcam_seconds if game != null else 0.0
+	killcam.camera_mode_fn = func() -> int: return _killcam_camera
+	killcam.world_mask = _level_mask()
 	killcam.over.connect(func(_skipped: bool) -> void: _reveal_winner())
 	add_child(killcam)
 	winner_reveal = DotWinnerReveal.new()
@@ -701,9 +707,16 @@ func _follow_killcam_cvar() -> void:
 	var held := String(link.call(&"replicated_cvar", "mp_killcam_time", ""))
 	if held.is_valid_float():
 		game.config.killcam_seconds = clampf(held.to_float(), 0.0, 30.0)
+	_on_killview_cvar("mp_killview_camera", String(link.call(&"replicated_cvar", "mp_killview_camera", "")))
 	link.connect(&"replicated_cvar_changed", func(cvar_name: String, value: Variant) -> void:
+		_on_killview_cvar(cvar_name, str(value))
 		if cvar_name == "mp_killcam_time" and str(value).is_valid_float():
 			game.config.killcam_seconds = clampf(str(value).to_float(), 0.0, 30.0))
+
+
+func _on_killview_cvar(cvar_name: String, value: String) -> void:
+	if cvar_name == "mp_killview_camera" and value.strip_edges().is_valid_float():
+		_killcam_camera = DotKillViewRules.Camera.BEHIND if value.to_float() >= 0.5 else DotKillViewRules.Camera.EYE
 
 
 ## A round ended: the killcam if it ended on a kill, then the reveal.
