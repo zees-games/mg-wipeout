@@ -1,10 +1,10 @@
 extends DotNetBehaviour
 
-## One of the stage's toys on the wire (dot-props' [DotPropToy]): its moving part, whether it is on, and a use count.
+## One of the stage's toys on the wire (dot-props' [DotPropBody]): its moving part, whether it is on, and a use count.
 ## The server's physics, never predicted; the client's toy is frozen and posed from these. Paired by index, and
 ## registered before the stage is built, as a snapshot is read no further than its first unknown entity.
 
-var toy: DotPropToy = null
+var toy: DotPropBody = null
 
 var net_position: Vector3 = Vector3.ZERO
 var net_rotation: Quaternion = Quaternion.IDENTITY
