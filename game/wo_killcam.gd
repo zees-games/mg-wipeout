@@ -30,7 +30,15 @@ var buffer := DotKillcamBuffer.new()
 var killcam: DotKillcam = null
 var camera: Camera3D = null
 
+## Where the camera sits ([enum DotKillViewRules.Camera]): the server's `mp_killview_camera`.
+var camera_mode_fn: Callable = func() -> int: return DotKillViewRules.Camera.EYE
+
+## Layers the camera boom stops against.
+var world_mask: int = 1
+
 var _previous_camera: Camera3D = null
+var _framing: DotKillcamFraming = null
+var _base_fov: float = 75.0
 var _hidden: Dictionary = {}
 
 
@@ -133,6 +141,9 @@ func _on_started(_kill: Dictionary) -> void:
 	if _previous_camera != null and _previous_camera != camera:
 		camera.fov = _previous_camera.fov
 		camera.cull_mask = _previous_camera.cull_mask
+	_base_fov = camera.fov
+	if _framing != null:
+		_framing.reset()
 	camera.make_current()
 	for n: Variant in hide_while_playing:
 		if n is Object and is_instance_valid(n) and (n as Object).get(&"visible") != null:
@@ -146,6 +157,11 @@ func _apply(s: Dictionary) -> void:
 	var b: Dictionary = s["b"]
 	var alpha: float = s["alpha"]
 	var killer_key := String(killcam.kill()["data"].get("killer", ""))
+	var victim_key := String(killcam.kill()["data"].get("victim", ""))
+	var behind := int(camera_mode_fn.call()) == DotKillViewRules.Camera.BEHIND
+	var eye := Transform3D.IDENTITY
+	var target: Variant = null
+	var seen := false
 	if not camera.current:
 		camera.make_current()
 	for key: Variant in b:
@@ -160,9 +176,19 @@ func _apply(s: Dictionary) -> void:
 		var alive: bool = rb[3] if alpha >= 0.5 else ra[3]
 		var speed := (ra[0] as Vector3).distance_to(rb[0]) * 60.0
 		if String(key) == killer_key:
-			camera.global_position = feet + Vector3(0.0, WoPlayer.EYE_HEIGHT, 0.0)
-			camera.global_rotation = Vector3(deg_to_rad(pitch), deg_to_rad(yaw), 0.0)
-		_place(p, feet, yaw, pitch, speed, alive and String(key) != killer_key)
+			eye = Transform3D(Basis.from_euler(Vector3(deg_to_rad(pitch), deg_to_rad(yaw), 0.0)), feet + Vector3(0.0, WoPlayer.EYE_HEIGHT, 0.0))
+			seen = true
+		elif victim_key != "" and String(key) == victim_key:
+			target = feet + Vector3(0.0, 1.2, 0.0)
+		# Behind the killer its own body is in shot, so it is drawn.
+		_place(p, feet, yaw, pitch, speed, alive and (String(key) != killer_key or behind))
+	if seen:
+		if _framing == null:
+			_framing = DotKillcamFraming.new(camera.get_world_3d() if is_inside_tree() else null, world_mask)
+		_framing.probe.collision_mask = world_mask
+		var v := _framing.place(int(camera_mode_fn.call()), eye, _base_fov, target, get_process_delta_time())
+		camera.global_transform = v["transform"]
+		camera.fov = v["fov"]
 
 
 func _place(p: WoPlayer, feet: Vector3, yaw: float, pitch: float, speed: float, shown: bool) -> void:

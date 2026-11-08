@@ -5,7 +5,7 @@ extends "headless_net_flashlight.gd"
 ## leaves both ends agreeing about every obstacle at every tick, a knock predicted and decided.
 
 const SECTIONS := 20
-const CHECKS := 115
+const CHECKS := 117
 const WoNetCommand := preload("../game/net/wo_net_command.gd")
 
 
@@ -757,6 +757,12 @@ func _test_the_killcam_names_the_weapon() -> void:
 		_check(has_icon == (weapon != ""), "the killcam banner icon is %s for weapon '%s'" % [
 			"shown" if weapon != "" else "absent", weapon])
 		kc.killcam.skip()
+	_check(kc.camera_mode_fn.call() == DotKillViewRules.Camera.EYE, "the killcam camera is the eye until the server says")
+	kc.camera_mode_fn = func() -> int: return DotKillViewRules.Camera.BEHIND
+	var framing := DotKillcamFraming.new(null, 1)
+	var eye := Transform3D(Basis.IDENTITY, Vector3(0, 1.6, 0))
+	var placed: Dictionary = framing.place(DotKillViewRules.Camera.BEHIND, eye, 75.0, Vector3(0, 1.2, -20))
+	_check((placed["transform"] as Transform3D).origin.z > 1.0, "the behind camera sits behind the killer's eye")
 	kc.queue_free()
 	killer.free()
 	_finished()
