@@ -1,0 +1,15 @@
+{
+  "format": "tmc-game-listing",
+  "version": 1,
+  "listing": {
+    "name": "Wipeout",
+    "description": "Players race across obstacle courses built over water: sweeping arms, big balls, rolling logs, swinging hammers and floors that drop away. Fall in and you go back to your last checkpoint.",
+    "tags": ["3D", "Multiplayer", "Minigame"],
+    "platforms": ["PLATFORM_WEB"],
+    "graphicsType": "THREE_D",
+    "tmcKind": "MINIGAME"
+  },
+  "pack": {
+    "id": "gamemann/mg-wipeout"
+  }
+}
