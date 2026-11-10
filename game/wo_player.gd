@@ -164,6 +164,18 @@ var mirror_fire_kind: int = 0
 ## The rig's own counter as the figure last saw it, for a simulated player.
 var _seen_fire_seq: int = -1
 
+static var _weapon_catalogue: DotWeaponCatalogue = null
+
+
+## The weapon table, built once; every rig shares it so its behaviour scripts load once.
+static func weapon_catalogue() -> DotWeaponCatalogue:
+	if _weapon_catalogue == null:
+		_weapon_catalogue = ZeeWeaponPack.catalogue()
+		# Built under the loading cover; the first spawn then loads no script.
+		_weapon_catalogue.warm_scripts()
+	return _weapon_catalogue
+
+
 ## Every pack weapon's slot, by id. Built once per process; a slot does not depend on the
 ## damage table a game passes the pack.
 static var _slots: Dictionary = {}
