@@ -259,6 +259,7 @@ func _arm_locally(weapon_id: StringName = &"") -> void:
 	camera.add_child(view_model)
 
 	weapons = ZeeWeaponRig.new()
+	weapons.catalogue = WoPlayer.weapon_catalogue()
 	weapons.name = "Weapons"
 	weapons.role = ZeeWeaponRig.Role.LOCAL
 	weapons.authority = false

@@ -1690,6 +1690,7 @@ func _clear_props() -> void:
 func arm(player: WoPlayer, weapon_id: StringName) -> bool:
 	if player.weapons == null:
 		var rig := ZeeWeaponRig.new()
+		rig.catalogue = WoPlayer.weapon_catalogue()
 		rig.name = "Weapons"
 		# SERVER on a server: the role only decides what is DRAWN, and a headless process has
 		# no art to draw a view model from.
