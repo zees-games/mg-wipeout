@@ -4,9 +4,9 @@ extends "headless_run_flashlight.gd"
 ## checks, the second being what matters: a script error aborts a section that has already announced itself, so every
 ## total was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 44
+const SECTIONS := 45
 
-const CHECKS := 252
+const CHECKS := 257
 
 
 func _ready() -> void:
@@ -31,6 +31,7 @@ func _run() -> void:
 	await _test_the_start_box()
 	await _test_a_one_life_course_has_no_start()
 	await _test_a_missing_mesh_holds_the_local_stage()
+	await _test_a_server_skips_a_course_without_its_mesh()
 	await _test_a_ladder_climbs()
 	await _test_the_carry()
 	await _test_the_turntable()
@@ -430,6 +431,38 @@ func _test_a_one_life_course_has_no_start() -> void:
 	_check(not _in_pen(game, runner.controller.state.position, 0.1), "and nothing holds them where the box was")
 	DirAccess.remove_absolute(base + "/courses/wo_instant_fixture.json")
 	DirAccess.remove_absolute(base + "/cfg/wo_instant_fixture.cfg")
+	_finished()
+
+
+## A server round start never replays the old course for want of a mesh: it skips the unbuildable course and takes the
+## next one in the rotation, and with none buildable it keeps the standing course (and says so).
+func _test_a_server_skips_a_course_without_its_mesh() -> void:
+	_section("a server skips a course whose world mesh is missing and plays the next")
+	var game := await _world(func(c: WoConfig) -> void:
+		c.shuffle_courses = false
+		c.course_ids = PackedStringArray(["wo_practice", "wo_a_missing_fixture"]))
+	var doc := WoCatalogue.practice().duplicate(true)
+	doc["id"] = "wo_a_missing_fixture"
+	(doc["pieces"] as Array).append({"kind": "world", "mesh": "wo_no_such_mesh_anywhere", "io": true})
+	game.catalogue.courses[&"wo_a_missing_fixture"] = doc
+	game.catalogue.call("_rebuild_order")
+	_check(game.authoritative, "the world is the server's")
+	var cleared := [0]
+	var _a := game.world_clearing.connect(func() -> void: cleared[0] += 1)
+	game.next_course_id = &"wo_a_missing_fixture"
+	game._lay_out_course()
+	_check(game.stage.id() == &"wo_practice" and game.course_doc.get("id", "") == "wo_practice",
+		"the voted course lacks its mesh, so the rotation's next course is built", str(game.stage.id()))
+	_check(cleared[0] == 1, "exactly one stage was built, not the missing one and then another", str(cleared[0]))
+	game.catalogue.courses.erase(&"wo_practice")
+	game.catalogue.call("_rebuild_order")
+	cleared[0] = 0
+	game.config.course_ids = PackedStringArray(["wo_a_missing_fixture"])
+	game.next_course_id = &""
+	var before := game.stage.id()
+	game._lay_out_course()
+	_check(cleared[0] == 0 and game.stage.id() == before, "with no buildable course the standing one stays untouched")
+	_check(game.catalogue.courses.has(&"wo_a_missing_fixture"), "and the fixture is still catalogued")
 	_finished()
 
 

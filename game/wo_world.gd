@@ -168,6 +168,18 @@ static func fetch(mesh: String) -> DotResult:
 	return DotResult.success(false)
 
 
+## Fetches every mesh of [param doc] no mounted pack holds, once each, and returns what is STILL missing afterwards.
+## The one fetch both the client (a stage the server sent) and the server (a course it is about to run) use.
+static func fetch_missing(doc: Dictionary) -> PackedStringArray:
+	for mesh in missing(doc):
+		var got: DotResult = await fetch(mesh)
+
+		if not got.ok:
+			DotLog.warn("wo_world", "a course mesh would not download", {"mesh": mesh, "why": got.error.message})
+
+	return missing(doc)
+
+
 static func _mounted_dirs() -> PackedStringArray:
 	var out := PackedStringArray()
 	var root := "res://dot_cloud"

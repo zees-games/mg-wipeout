@@ -1034,10 +1034,57 @@ func _lay_out_course() -> void:
 		doc = doc.duplicate(true)
 		doc["weather"] = draw_weather(doc, random.stream(&"weather"), _tick)
 
+	# A course whose world mesh is not mounted would be refused by build_stage and the previous course replayed for ever
+	# on a server that never fetches. Fetch in the background (a later round finds it) and take the next course instead.
+	if authoritative and not WoWorld.missing(doc).is_empty():
+		doc = _next_buildable_course(doc)
+
+		if doc.is_empty():
+			return
+
 	catalogue.note_played(StringName(str(doc.get("id", ""))))
 	build_stage(doc)
 	_place_on_start()
 	_course_unplayed = true
+
+
+## [param skipped] is a course this server cannot build for want of a world mesh: the first course after it in the
+## rotation order that it can, `{}` when there is none (the standing course then stays, and says so). The meshes are
+## fetched in the background, so a server with the cloud service has them for the round after.
+func _next_buildable_course(skipped: Dictionary) -> Dictionary:
+	var ids := catalogue.rotating(config.course_ids)
+	var from := ids.find(StringName(str(skipped.get("id", ""))))
+	var tried: Array[String] = []
+	var doc := skipped
+
+	for step in range(ids.size() + 1):
+		var gone := WoWorld.missing(doc)
+
+		if gone.is_empty() and step > 0:
+			DotLog.warn(CHANNEL, "a course was skipped: its world mesh is not here", {
+				"skipped": ", ".join(tried), "playing": str(doc.get("id", "?")),
+			})
+			return doc
+
+		tried.append(str(doc.get("id", "?")))
+		_fetch_in_background(doc)
+
+		if step >= ids.size():
+			break
+
+		doc = catalogue.courses[ids[(from + 1 + step) % ids.size()]]
+
+	DotLog.error(CHANNEL, "no course can be built: every course in the rotation is missing a world mesh; the standing one stays", {
+		"skipped": ", ".join(tried),
+	})
+	return {}
+
+
+func _fetch_in_background(doc: Dictionary) -> void:
+	var still: PackedStringArray = await WoWorld.fetch_missing(doc)
+
+	if still.is_empty():
+		DotLog.info(CHANNEL, "a skipped course's meshes arrived; it plays again", {"id": str(doc.get("id", "?"))})
 
 
 ## Every course this server plays, as the map menu (M) lists them: `{id, name, detail,
