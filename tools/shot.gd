@@ -244,6 +244,12 @@ func _view_crosshair(game: WoGame) -> void:
 
 ## The local runner carrying a gun, so the HUD draws the weapon icon plate over the ammunition counter.
 func _view_armed(game: WoGame) -> void:
+	# Past the load cover (slow on a cold GPU box), then the countdown; capped so a stuck cover cannot hang the shot.
+	var platform: DotGameClient = _client.get("platform")
+	var waited := 0.0
+	while platform != null and platform.is_shown() and waited < 15.0:
+		await _seconds_of(0.25)
+		waited += 0.25
 	await _seconds_of(game.config.countdown_seconds + 0.6)
 	var _armed := game.arm(_client.get("player"), ZeeWeaponIds.SMG)
 	await _seconds_of(3.0)
