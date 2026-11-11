@@ -24,5 +24,6 @@ jobs:
             efficiency: true
             hygiene: true
             suite-timeout: 900
+            perf: true
         secrets:
             DEPS_TOKEN: ${{ secrets.DOT_DEPS_TOKEN }}
