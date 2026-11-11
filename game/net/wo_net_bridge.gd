@@ -1534,16 +1534,10 @@ func _apply_stage(reader: DotNetReader) -> void:
 		return
 
 	# Awaits only when a mesh is not mounted and a pack groups it; otherwise this runs straight through.
-	for mesh in WoWorld.missing(decoded.value):
-		var got: DotResult = await WoWorld.fetch(mesh)
-
-		if not got.ok:
-			DotLog.warn(CHANNEL, "a course mesh would not download", {"mesh": mesh, "why": got.error.message})
+	var still: PackedStringArray = await WoWorld.fetch_missing(decoded.value)
 
 	# A world without its mesh would be predicted on the start pad alone while the server walks the map, so the stage
 	# is held back (the client keeps what it had) rather than built without it.
-	var still := WoWorld.missing(decoded.value)
-
 	if not still.is_empty():
 		DotLog.warn(CHANNEL, "a stage was refused: its world mesh is not here", {"meshes": ", ".join(still)})
 		stage_refused.emit(still)
