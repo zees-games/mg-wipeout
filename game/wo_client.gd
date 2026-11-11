@@ -357,6 +357,7 @@ func _build_netcode() -> DotResult:
 	bridge.weapon_net.lost_received.connect(_on_weapon_lost)
 	bridge.hit_received.connect(_on_hit)
 	bridge.stage_received.connect(_on_stage)
+	bridge.stage_refused.connect(_on_stage_refused)
 	bridge.progress_received.connect(_on_progress)
 	bridge.pickup_received.connect(_on_pickup)
 	bridge.pickup_gone_received.connect(_on_pickup_gone)
@@ -489,6 +490,19 @@ func _cull_world() -> void:
 	var world: DotMapWorld = io.world if io != null else null
 	if world != null and world.visual != null and world.visual.is_inside_tree():
 		var _culled := platform.attach_visibility(world.mesh, world.visual)
+
+
+## The server's stage needs world files this client does not have, even after a fetch. The bridge kept what was
+## standing; this says so: a client with no course yet stays under the cover (the held reason, now naming the files)
+## rather than looking hung, and the player gets a line in chat. The next stage that builds releases the cover.
+func _on_stage_refused(meshes: PackedStringArray) -> void:
+	var text := "This course's map files are missing: %s" % ", ".join(meshes)
+
+	if chat != null:
+		chat.notice(text)
+
+	if game.stage.doc.is_empty() and gate != null:
+		gate.hold(&"map", text)
 
 
 func _on_stage(stage_id: StringName, is_arena: bool) -> void:
