@@ -9,6 +9,7 @@ const WoCourseDoc := preload("wo_course_doc.gd")
 const WoCourseCfg := preload("wo_course_cfg.gd")
 const WoRules := preload("wo_rules.gd")
 const WoSpectate := preload("wo_spectate.gd")
+const WoWorld := preload("wo_world.gd")
 
 ## The simulation. Headless, authoritative, and the only thing that decides anything.
 ## A round is a course and sometimes a fight: a fall costs time, never the round; two or more finishers go on to a
@@ -81,6 +82,10 @@ signal player_removed(player_id: StringName)
 
 ## A round began, on [param course_id].
 signal round_began(number: int, course_id: StringName)
+
+## A stage was not built because a world mesh it names is not mounted here: the stage that was standing stays. The local
+## twin of the net bridge's `stage_refused`, emitted before anything is cleared.
+signal stage_refused(meshes: PackedStringArray)
 
 ## The stage is about to be taken down and rebuilt. Before, for the bridge's sake.
 signal world_clearing()
@@ -1225,6 +1230,18 @@ func countdown_length() -> float:
 ## Builds [param doc] as the stage. What the server does at a round start and a handover,
 ## and what a client does when it is sent one.
 func build_stage(doc: Dictionary) -> DotResult:
+	# A world piece whose mesh is not mounted would build as a course with no map, which a solo or practice player would
+	# walk on the start pad alone. Refused before anything is cleared, so the stage that stands stays (what the net
+	# bridge does for a stage the server sends); the networked path has already fetched, so it never lands here.
+	var absent := WoWorld.missing(doc)
+
+	if not absent.is_empty():
+		DotLog.warn(CHANNEL, "a stage was refused: its world mesh is not here", {
+			"id": str(doc.get("id", "?")), "meshes": ", ".join(absent),
+		})
+		stage_refused.emit(absent)
+		return DotResult.fail(DotError.CODE_IO, WoWorld.missing_text(absent))
+
 	world_clearing.emit()
 	_clear_props()
 
