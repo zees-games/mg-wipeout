@@ -186,7 +186,7 @@ func attachment(point: StringName) -> Node3D:
 
 ## How far a watched gun kicks per kind of use, in the recoil's own degrees. The real
 ## recoil is on an outcome that does not travel, so a watcher's is approximate on purpose;
-## game-arena's numbers.
+## game-fatal-contact's numbers.
 const WATCHED_RECOIL := {
 	ZeeWeaponNet.KIND_SWING: Vector2(1.2, 0.0),
 	ZeeWeaponNet.KIND_SPAWN: Vector2(2.0, 0.0),

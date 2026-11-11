@@ -77,7 +77,7 @@ dot-props' toy catalogue (its [docs/toys.md](../../dot-props/docs/toys.md)), loo
 
 ## Colour and light
 
-The family's sunny look (game-arena's built-in maps) with this game's water and obstacles kept as they were: the obstacles are the only saturated things on screen.
+The family's sunny look (game-fatal-contact's built-in maps) with this game's water and obstacles kept as they were: the obstacles are the only saturated things on screen.
 
 - **Surfaces** are roles (`WoTextures`): the deck, supports, safe ground and the arena floor all draw Kenney's light grid tinted a pastel (`INSTALLED_TINTS`: a hair-under-white deck, mid-lavender supports, mint safe ground, lavender arena); only what moves (Kenney's orange) and what throws you (Kenney's red) keep a colour tile of their own. A pure-white deck clipped under the sun and lost the grid, which is how far a jump is; charcoal supports were black posts in a sunny frame.
 - **Light is a dot-lighting document made from the course's theme** (`WoCourse.light_document`): the theme's sun colour, its sky at the zenith, its horizon as the fog from 120 m, its water darkened under the horizon; a warm high sun **behind the start**, so the faces a runner runs toward are lit (from the other side the orange start gate came out brown); a pale cool fill whatever the theme; filmic and glow. The theme is the course's identity (a lagoon, an overcast sea, a sunset) and stays in the course document; a repaint never touches geometry or the document's digest.
