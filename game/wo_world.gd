@@ -60,6 +60,12 @@ static func missing(doc: Dictionary) -> PackedStringArray:
 	return out
 
 
+## What a player is told when [param meshes] (from [method missing]) are not here: the one line the local build and the
+## networked client both show.
+static func missing_text(meshes: PackedStringArray) -> String:
+	return "This course's map files are missing: %s" % ", ".join(meshes)
+
+
 ## The start and finish a map's `roles` name (`wo_start` on spawns or entities, `wo_finish` on entities), as `{start, finish}`;
 ## a key is left out when no role names it. A zone is centred on the mean of its entities' places and faces the first one.
 static func zones_from_roles(manifest: Dictionary) -> Dictionary:

@@ -1,5 +1,7 @@
 extends "wo_client_flashlight.gd"
 
+const WoWorld := preload("wo_world.gd")
+
 ## One local player, a camera and a HUD over an [WoGame], offline or against a server.
 ## One client for both: offline is the same world with `authoritative` true; the difference is [WoNetBridge]. A
 ## `dot_client_link` in the registry means connected; none means a playable course, not an error. `--offline` forces it.
@@ -118,6 +120,8 @@ func _build_game(config: WoConfig, binder: DotGameConfigBinder) -> void:
 func _wire_gate_to_stages() -> void:
 	game.world_clearing.connect(func() -> void: gate.hold(&"map", "Loading the course"))
 	game.world_rebuilt.connect(func() -> void: gate.release(&"map"))
+	# A solo or practice course whose map files are missing (the online path says it through the bridge).
+	game.stage_refused.connect(_on_stage_refused)
 
 
 ## True while the load gate covers the screen: no key, no mouse turn, no clock.
@@ -496,7 +500,7 @@ func _cull_world() -> void:
 ## standing; this says so: a client with no course yet stays under the cover (the held reason, now naming the files)
 ## rather than looking hung, and the player gets a line in chat. The next stage that builds releases the cover.
 func _on_stage_refused(meshes: PackedStringArray) -> void:
-	var text := "This course's map files are missing: %s" % ", ".join(meshes)
+	var text: String = WoWorld.missing_text(meshes)
 
 	if chat != null:
 		chat.notice(text)

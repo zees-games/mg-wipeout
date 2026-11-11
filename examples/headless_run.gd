@@ -4,9 +4,9 @@ extends "headless_run_flashlight.gd"
 ## checks, the second being what matters: a script error aborts a section that has already announced itself, so every
 ## total was armed by raising it by one and watching the run fail.
 
-const SECTIONS := 43
+const SECTIONS := 44
 
-const CHECKS := 246
+const CHECKS := 252
 
 
 func _ready() -> void:
@@ -30,6 +30,7 @@ func _run() -> void:
 	await _test_the_gate()
 	await _test_the_start_box()
 	await _test_a_one_life_course_has_no_start()
+	await _test_a_missing_mesh_holds_the_local_stage()
 	await _test_a_ladder_climbs()
 	await _test_the_carry()
 	await _test_the_turntable()
@@ -429,6 +430,30 @@ func _test_a_one_life_course_has_no_start() -> void:
 	_check(not _in_pen(game, runner.controller.state.position, 0.1), "and nothing holds them where the box was")
 	DirAccess.remove_absolute(base + "/courses/wo_instant_fixture.json")
 	DirAccess.remove_absolute(base + "/cfg/wo_instant_fixture.cfg")
+	_finished()
+
+
+## The local build (solo, practice, a server's own round) refuses a course whose world mesh is not here and keeps the stage
+## it had, as the networked client does, instead of building a course with no map.
+func _test_a_missing_mesh_holds_the_local_stage() -> void:
+	_section("a course whose world mesh is missing is refused locally and the standing stage stays")
+	var game := await _world()
+	var before := game.stage.id()
+	var doc := WoCatalogue.practice().duplicate(true)
+	doc["id"] = "wo_missing_mesh_fixture"
+	(doc["pieces"] as Array).append({"kind": "world", "mesh": "wo_no_such_mesh_anywhere", "io": true})
+	_check(WoWorld.missing(doc) == PackedStringArray(["wo_no_such_mesh_anywhere"]), "the fixture names one unmounted mesh")
+	var refused: Array = []
+	var cleared := [0]
+	var _a := game.stage_refused.connect(func(meshes: PackedStringArray) -> void: refused.append(meshes))
+	var _b := game.world_clearing.connect(func() -> void: cleared[0] += 1)
+	var result := game.build_stage(doc)
+	_check(not result.ok and result.error.message.contains("wo_no_such_mesh_anywhere"),
+		"build_stage fails and names the file", str(result.error) if not result.ok else "built")
+	_check(refused.size() == 1 and (refused[0] as PackedStringArray).has("wo_no_such_mesh_anywhere"), "stage_refused says which")
+	_check(cleared[0] == 0 and game.stage.id() == before, "nothing was cleared and the old stage stands", str(game.stage.id()))
+	_check(game.course_doc.get("id", "") != "wo_missing_mesh_fixture", "the document did not become the course")
+	_check(WoWorld.missing_text(PackedStringArray(["a", "b"])).ends_with("a, b"), "one shared line for the player")
 	_finished()
 
 
