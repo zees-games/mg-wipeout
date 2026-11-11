@@ -112,7 +112,7 @@ func _register_net_vars() -> void:
 	replicate(&"net_checkpoint", DotNetVar.Type.UINT).bits(6)
 	replicate(&"net_finished", DotNetVar.Type.BOOL)
 	replicate(&"net_points", DotNetVar.Type.UINT).bits(16)
-	replicate(&"net_ping", DotNetVar.Type.UINT).bits(10)
+	replicate(&"net_ping", DotNetVar.Type.UINT).bits(10).server_driven()
 	replicate(&"net_watching", DotNetVar.Type.BOOL)
 	replicate(&"net_carrying", DotNetVar.Type.BOOL)
 
