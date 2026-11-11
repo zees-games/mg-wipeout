@@ -1,4 +1,5 @@
 extends DotGameCheckSuite
+const WOTestPorts := preload("test_ports.gd")
 
 const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
