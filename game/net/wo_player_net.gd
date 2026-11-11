@@ -183,13 +183,15 @@ func pull() -> void:
 	net_checkpoint = clampi(player.checkpoint + 1, 0, 63)
 	net_finished = player.finished
 	net_points = clampi(player.points, 0, 65535)
-	net_ping = clampi(player.ping_ms, 0, 1023)
 	net_watching = player.watching
 	net_carrying = player.grab != null and player.grab.is_carrying()
 	net_blind = player.blinded
 	net_beacon = player.beacon
 	net_flashlight = player.flashlight
-	net_warp = player.warps & 0xF
+	# Only the server's counts: the client's own warps and ping_ms differ from the snapshot (a predicted pad, replays), so copying them made the prediction disagree with every snapshot (a replay storm).
+	if identity == null or identity.is_authoritative:
+		net_ping = clampi(player.ping_ms, 0, 1023)
+		net_warp = player.warps & 0xF
 
 	# After the arsenal has simulated, which on this end it has: the whole world ticks before anything is pulled. A
 	# rig that does not exist yet leaves these at zero, which is a carrier holding nothing, and true.
