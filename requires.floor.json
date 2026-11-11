@@ -1,9 +1,7 @@
 {
   "format": 1,
   "addons": {
-    "dot_bot": 11,
     "dot_core": 32,
-    "dot_replay": 4,
     "dot_ui": 13
   }
 }
