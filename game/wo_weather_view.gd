@@ -53,7 +53,8 @@ func _process(delta: float) -> void:
 	if stormy != _stormy:
 		_stormy = stormy
 		if stormy:
-			_weather.apply(doc_for(stage))
+			var make := doc_for  # once per storm start, not per frame
+			_weather.apply(make.call(stage))
 		else:
 			_weather.clear()
 	_dim(stormy)
