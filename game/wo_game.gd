@@ -1053,8 +1053,8 @@ func _lay_out_course() -> void:
 ## fetched in the background, so a server with the cloud service has them for the round after.
 func _next_buildable_course(skipped: Dictionary) -> Dictionary:
 	var ids := catalogue.rotating(config.course_ids)
-	var from := ids.find(StringName(str(skipped.get("id", ""))))
-	var tried: Array[String] = []
+	var from := ids.find(StringName(String(skipped.get("id", ""))))
+	var tried := PackedStringArray()
 	var doc := skipped
 
 	for step in range(ids.size() + 1):
@@ -1062,11 +1062,11 @@ func _next_buildable_course(skipped: Dictionary) -> Dictionary:
 
 		if gone.is_empty() and step > 0:
 			DotLog.warn(CHANNEL, "a course was skipped: its world mesh is not here", {
-				"skipped": ", ".join(tried), "playing": str(doc.get("id", "?")),
+				"skipped": ", ".join(tried), "playing": String(doc.get("id", "?")),
 			})
 			return doc
 
-		tried.append(str(doc.get("id", "?")))
+		tried.append(String(doc.get("id", "?")))
 		_fetch_in_background(doc)
 
 		if step >= ids.size():
@@ -1084,7 +1084,7 @@ func _fetch_in_background(doc: Dictionary) -> void:
 	var still: PackedStringArray = await WoWorld.fetch_missing(doc)
 
 	if still.is_empty():
-		DotLog.info(CHANNEL, "a skipped course's meshes arrived; it plays again", {"id": str(doc.get("id", "?"))})
+		DotLog.info(CHANNEL, "a skipped course's meshes arrived; it plays again", {"id": String(doc.get("id", "?"))})
 
 
 ## Every course this server plays, as the map menu (M) lists them: `{id, name, detail,
@@ -1284,7 +1284,7 @@ func build_stage(doc: Dictionary) -> DotResult:
 
 	if not absent.is_empty():
 		DotLog.warn(CHANNEL, "a stage was refused: its world mesh is not here", {
-			"id": str(doc.get("id", "?")), "meshes": ", ".join(absent),
+			"id": String(doc.get("id", "?")), "meshes": ", ".join(absent),
 		})
 		stage_refused.emit(absent)
 		return DotResult.fail(DotError.CODE_IO, WoWorld.missing_text(absent))
@@ -1296,7 +1296,7 @@ func build_stage(doc: Dictionary) -> DotResult:
 
 	if not built.ok:
 		DotLog.error(CHANNEL, "a stage would not build", {
-			"id": str(doc.get("id", "?")), "why": built.error.message,
+			"id": String(doc.get("id", "?")), "why": built.error.message,
 		})
 		return built
 
