@@ -55,8 +55,23 @@ const TEAM_NAMES: Array[String] = [
 	"Red", "Blue", "Green", "Yellow", "Violet", "Orange",
 ]
 
-## Where the first solo side starts. A side id above any team id, so "is this a team" is a
-## comparison and a solo side can never be mistaken for red.
+
+## Team [param index]'s colour (0 is team id 1): the table's six, then as many more as the server
+## plays with, spread round the hue circle by the golden ratio so neighbours differ.
+static func team_colour(index: int) -> Color:
+	if index >= 0 and index < TEAM_COLOURS.size():
+		return TEAM_COLOURS[index]
+	return Color.from_hsv(fposmod(0.11 + float(index) * 0.618034, 1.0), 0.62, 0.86)
+
+
+## Team [param index]'s name (0 is team id 1): the table's, then "Team 7", "Team 8" and on.
+static func team_name(index: int) -> String:
+	if index >= 0 and index < TEAM_NAMES.size():
+		return TEAM_NAMES[index]
+	return "Team %d" % (index + 1)
+
+## Where the first solo side starts. Solo sides exist only with no teams (every team test also
+## asks [method WoConfig.teams]), so a server with a hundred teams or more cannot mistake one.
 const SOLO_SIDE_BASE := 100
 
 ## What everybody carries on an io course, for its shoot-buttons and breakables.
@@ -437,8 +452,9 @@ func _build_props() -> void:
 	# shape, and the world cap has to be above what an arena asks for or the last few silently
 	# never appear.
 	props.limits.spawn_interval = 0.0
-	props.limits.per_player_budget = config.prop_budget + 10
-	props.limits.world_budget = config.prop_budget + 10
+	# prop_budget 0 is no limit, and so is 0 here.
+	props.limits.per_player_budget = config.prop_budget + 10 if config.prop_budget > 0 else 0
+	props.limits.world_budget = config.prop_budget + 10 if config.prop_budget > 0 else 0
 	props.limits.clean_up_on_leave = false
 	props.authoritative = authoritative
 	add_child(props)
@@ -572,7 +588,7 @@ func _build_match() -> void:
 	var teams: Array[DotTeam] = []
 
 	for index in range(config.team_count if config.teams() else 0):
-		teams.append(DotTeam.make(index + 1, TEAM_NAMES[index], TEAM_COLOURS[index]))
+		teams.append(DotTeam.make(index + 1, team_name(index), team_colour(index)))
 
 	match_node.teams.teams = teams
 	match_node.teams.force_balance = config.autobalance
@@ -861,8 +877,8 @@ func team_of(player_id: StringName) -> int:
 
 ## A side's name: a team's colour, or the one player on a solo side.
 func side_name(side: int) -> String:
-	if side >= 1 and side <= TEAM_NAMES.size() and config.teams():
-		return TEAM_NAMES[side - 1]
+	if side >= 1 and side <= config.team_count and config.teams():
+		return team_name(side - 1)
 
 	for id: StringName in sides:
 		if int(sides[id]) == side and players.has(id):
@@ -872,8 +888,8 @@ func side_name(side: int) -> String:
 
 
 func side_colour(side: int) -> Color:
-	if side >= 1 and side <= TEAM_COLOURS.size() and config.teams():
-		return TEAM_COLOURS[side - 1]
+	if side >= 1 and side <= config.team_count and config.teams():
+		return team_colour(side - 1)
 
 	# A solo side's colour, from its number, so every client paints the same person the same.
 	return Color.from_hsv(fposmod(float(side) * 0.137, 1.0), 0.55, 0.85)
@@ -1665,7 +1681,9 @@ func _drop_props(sides_in: int, stream: DotRandomStream) -> void:
 
 	var ids := [WoContent.CRATE, WoContent.CRATE, WoContent.TYRE, WoContent.CONE,
 		WoContent.BARREL, WoContent.BOULDER, WoContent.CRATE, WoContent.TYRE]
-	var count := mini(config.finale_props_per_side * maxi(sides_in, 2), config.prop_budget)
+	var count := config.finale_props_per_side * maxi(sides_in, 2)
+	if config.prop_budget > 0:
+		count = mini(count, config.prop_budget)
 
 	for i in range(count):
 		var area: Dictionary = areas[stream.next_range_i(0, areas.size() - 1)]

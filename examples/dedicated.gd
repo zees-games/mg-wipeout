@@ -6,7 +6,7 @@ extends "dedicated_late.gd"
 ## round is played by the stand-ins the module seats.
 
 const SECTIONS := 16
-const CHECKS := 119
+const CHECKS := 121
 
 
 func _ready() -> void:
@@ -174,6 +174,21 @@ func _test_the_commands() -> void:
 		"%.1f" % game.config.course_seconds)
 	var _back := _run_command("wo_teams 1")
 	_check(game.config.team_count == 0, "one team is not a mode, and is taken as solo")
+	var _many := _run_command("wo_teams 12")
+	_check(game.config.team_count == 12 and game.side_name(12) == "Team 12"
+		and game.side_colour(12) != game.side_colour(11), "any number of teams, named and coloured past six",
+		"%d %s" % [game.config.team_count, game.side_name(12)])
+	var _solo := _run_command("wo_teams 0")
+	var _props := _run_command("wo_props_per_side 80")
+	var _weapons := _run_command("wo_weapons_per_side 30")
+	var _budget := _run_command("wo_prop_budget 0")
+	_check(game.config.finale_props_per_side == 80 and game.config.finale_weapons_per_side == 30
+		and game.config.prop_budget == 0 and game.config.validate().ok,
+		"props and weapons per side take any count, and the prop budget 0 is no limit",
+		"%d %d %d" % [game.config.finale_props_per_side, game.config.finale_weapons_per_side, game.config.prop_budget])
+	var _props_back := _run_command("wo_props_per_side 6")
+	var _weapons_back := _run_command("wo_weapons_per_side 2")
+	var _budget_back := _run_command("wo_prop_budget 60")
 	# And it is REPLICATED: dot-server sends it to every client before its scene loads and on
 	# every change, so a client's own combat manager (following its link) predicts tracers
 	# under the server's level rather than its default.

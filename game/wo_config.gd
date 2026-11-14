@@ -45,9 +45,9 @@ extends DotConfig
 @export_group("Sides")
 
 ## How many teams the server plays with. 0 is every player for themselves, because a course is run by one person;
-## teams change what finishing means (a side is through if anybody is). Up to six, as mg-smash-copter, beyond which
-## the final death is a free-for-all with bookkeeping.
-@export_range(0, 6, 1) var team_count: int = 0
+## teams change what finishing means (a side is through if anybody is). Any count of two or more (default 0); past
+## six the colours and names are generated ([method WoGame.team_colour]).
+@export_range(0, 6, 1, "or_greater") var team_count: int = 0
 
 ## Whether players may pick their own side.
 @export var allow_team_choice: bool = true
@@ -182,14 +182,14 @@ extends DotConfig
 ## Which arenas this server may draw, by id. Empty means every one it has.
 @export var arena_ids: PackedStringArray = PackedStringArray()
 
-## How many props are dropped into an arena, per side that made it.
-@export_range(0, 40, 1) var finale_props_per_side: int = 6
+## How many props are dropped into an arena, per side that made it (default 6, any value).
+@export_range(0, 40, 1, "or_greater") var finale_props_per_side: int = 6
 
-## How many weapons are laid out in an arena, per side that made it.
-@export_range(0, 20, 1) var finale_weapons_per_side: int = 2
+## How many weapons are laid out in an arena, per side that made it (default 2, any value).
+@export_range(0, 20, 1, "or_greater") var finale_weapons_per_side: int = 2
 
-## The most props an arena holds at once, whatever the count above asks for.
-@export_range(4, 200, 1) var prop_budget: int = 60
+## The most props an arena holds at once, whatever the count above asks for. 0 is no limit.
+@export_range(0, 200, 1, "or_greater") var prop_budget: int = 60
 
 ## Which weapons may be laid out, by id from the pack. Empty means a sensible default set.
 @export var weapon_pool: PackedStringArray = PackedStringArray()
@@ -214,7 +214,7 @@ extends DotConfig
 ## How many players the server keeps in the round by adding stand-ins (`bot_quota`, fill).
 ##
 ## Nine, so one person races eight even solo: the final death needs two finishers.
-@export_range(0, 24, 1) var minimum_players: int = 9
+@export_range(0, 24, 1, "or_greater") var minimum_players: int = 9
 
 ## Scales every mistake a stand-in makes (`wo_bot_mistakes`): 1 is the difficulty preset's (dot-bot's
 ## `bot_difficulty`, through [WoRacer]), 0 a stand-in never wrong. Not zero: a bot that never falls finishes in the
@@ -287,10 +287,17 @@ func validate() -> DotResult:
 
 	# One team is not a mode: it is everybody on the same side with nobody to beat, and the
 	# final death would end on its first tick.
-	if team_count == 1 or team_count > 6:
+	if team_count == 1 or team_count < 0:
 		return DotResult.fail(
 			DotError.CODE_INVALID,
-			"team_count is %d; this game plays solo (0) or with two to six sides." % team_count,
+			"team_count is %d; this game plays solo (0) or with two sides or more." % team_count,
+		)
+
+	if finale_props_per_side < 0 or finale_weapons_per_side < 0 or prop_budget < 0:
+		return DotResult.fail(
+			DotError.CODE_INVALID,
+			"finale_props_per_side %d, finale_weapons_per_side %d and prop_budget %d are counts: 0 or more."
+				% [finale_props_per_side, finale_weapons_per_side, prop_budget],
 		)
 
 	if knock_max_speed < knock_min_speed:

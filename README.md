@@ -19,7 +19,7 @@ The course closes when everybody is across or the clock runs out. Then:
 
 There are beach balls to bat about in the start pen while the gate is up, and balls on most arenas' floors to shoot about and knock into the water. You walk through them and push them, so they never slow you down or hide anybody.
 
-Every player is their own side by default. `wo_teams 2` (the setting accepts 0, or 2 to 6) plays in teams, and a team is through if anybody on it finishes.
+Every player is their own side by default. `wo_teams 2` (the setting accepts 0, or any count of 2 or more; past six the teams get generated colours and names) plays in teams, and a team is through if anybody on it finishes.
 
 The courses live in their own repository, [mg-wipeout-maps](https://github.com/zees-games/mg-wipeout-maps): at the time of writing 21 courses and five arenas, each a JSON file. Without it the game still runs, on one practice course built in.
 
@@ -78,9 +78,10 @@ Settings are cvars. Set them in the server's config, on the command line, or liv
 | --- | --- | --- |
 | `wo_course_seconds` | 360 | The longest a course stays open (a course may ask for less) |
 | `wo_finale_seconds` | 100 | How long a final death lasts before it is called a draw |
-| `wo_teams` | 0 | 0 = everybody for themselves, 2 to 6 = teams |
-| `wo_props_per_side` | 6 | Props to throw in a final death (0 to 40) |
-| `wo_weapons_per_side` | 2 | Weapons on the arena floor (0 to 20) |
+| `wo_teams` | 0 | 0 = everybody for themselves, 2 or more = teams (default 0, any value but 1) |
+| `wo_props_per_side` | 6 | Props to throw in a final death (default 6, any value) |
+| `wo_weapons_per_side` | 2 | Weapons on the arena floor (default 2, any value) |
+| `wo_prop_budget` | 60 | Most props an arena holds at once (default 60, any value; 0 = no limit) |
 | `wo_knock_min` | 8 | How hard the obstacles throw you |
 | `wo_progress_decides` | 1 | 0 = a round nobody finishes is a draw |
 | `bot_difficulty` | medium | `easy`, `medium`, `hard` or `nightmare`: how the bots race and aim |
@@ -90,7 +91,7 @@ Settings are cvars. Set them in the server's config, on the command line, or liv
 | `bot_quota_mode` | fill | `fill` (as above), `fixed` (that many bots), `per_player` (that many per person) or `off` |
 | `wo_bots` | 1 | 0 = no bots |
 
-A server holds 24 players by default (`max_players` in `game.yml`). The setting ranges above are the real limits the game checks: `wo_teams` 0 or 2 to 6, `bot_quota` 0 to 24.
+A server holds 24 players by default (`max_players` in `game.yml`). The setting ranges above are the real limits the game checks: `wo_teams` 0 or 2 and up, `bot_quota` 0 to 24.
 
 The bot cvars are the family's shared ones (dot-server's `DotBotQuota` and dot-bot's `bot_difficulty` with its `bot_*` settings). Each racing mistake is a cvar of its own (`wo_bot_fumble`, `wo_bot_timing`, `wo_bot_rash`, `wo_bot_hop_miss`, `wo_bot_landing`, `wo_bot_recover`, `wo_bot_variety`) that the difficulty sets and you can override; `bot_settings` lists dot-bot's. `wo_min_players` still works and sets `bot_quota`; it is deprecated.
 

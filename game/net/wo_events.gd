@@ -111,9 +111,8 @@ const POS_BITS := 24
 const CLOCK_MAX := 1800.0
 const CLOCK_BITS := 15
 
-## A team COUNT is 0..6, so three bits. A side itself is a varint wherever it is sent: with
-## no teams a side is a player's own, numbered from 100.
-const TEAM_BITS := 3
+## A team count, like a side, is a varint wherever it is sent: one byte up to 127, and any
+## count past that still goes. With no teams a side is a player's own, numbered from 100.
 
 ## Phases, three bits: five of them and room for three more.
 const PHASE_BITS := 3
@@ -147,7 +146,7 @@ static func write_hello(
 	w.write_varint(player_id)
 	w.write_uint(tick_rate, 9)
 	w.write_varint(server_tick)
-	w.write_uint(clampi(team_count, 0, 7), TEAM_BITS)
+	w.write_varint(maxi(team_count, 0))
 	# Fourteen bits over two minutes is seven milliseconds: the countdown is shown to the tenth
 	# and a client's must end on the server's tick, not a tenth of a second either side.
 	w.write_float_range(countdown_seconds, 0.0, 120.0, 14)
@@ -161,7 +160,7 @@ static func read_hello(r: DotNetReader) -> Dictionary:
 	var player_id := r.read_varint()
 	var tick_rate := r.read_uint(9)
 	var server_tick := r.read_varint()
-	var team_count := r.read_uint(TEAM_BITS)
+	var team_count := r.read_varint()
 	var countdown := r.read_float_range(0.0, 120.0, 14)
 	var course := r.read_float_range(0.0, CLOCK_MAX, CLOCK_BITS)
 	var handover := r.read_float_range(0.0, 120.0, 14)
@@ -487,12 +486,12 @@ static func write_ask_roam() -> PackedByteArray:
 
 static func write_ask_team(team: int) -> PackedByteArray:
 	var w := _w()
-	w.write_uint(clampi(team, 0, 7), TEAM_BITS)
+	w.write_varint(maxi(team, 0))
 	return w.to_bytes()
 
 
 static func read_ask_team(r: DotNetReader) -> Dictionary:
-	var team := r.read_uint(TEAM_BITS)
+	var team := r.read_varint()
 	return {"team": team, "ok": r.ok()}
 
 

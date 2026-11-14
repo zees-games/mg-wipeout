@@ -6,7 +6,7 @@ extends "headless_run_flashlight.gd"
 
 const SECTIONS := 45
 
-const CHECKS := 257
+const CHECKS := 261
 
 
 func _ready() -> void:
@@ -83,6 +83,21 @@ func _test_config() -> void:
 
 	config.team_count = 3
 	_check(config.validate().ok and config.teams(), "three teams is teams")
+	config.team_count = 9
+	config.finale_props_per_side = 60
+	config.finale_weapons_per_side = 25
+	config.prop_budget = 0
+	_check(config.validate().ok, "nine teams, 60 props, 25 weapons and no prop budget validate")
+	_check(WoGame.team_name(8) == "Team 9" and WoGame.team_colour(8) != WoGame.team_colour(7)
+		and WoGame.team_colour(0) == WoGame.TEAM_COLOURS[0], "teams past six get a name and their own colour")
+	config.team_count = -1
+	_check(not config.validate().ok, "a negative team count is refused")
+	config.team_count = 3
+	config.prop_budget = -1
+	_check(not config.validate().ok, "a negative prop budget is refused")
+	config.prop_budget = 60
+	config.finale_props_per_side = 6
+	config.finale_weapons_per_side = 2
 
 	config.knock_max_speed = 2.0
 	_check(not config.validate().ok, "a knock ceiling under its floor is refused")
