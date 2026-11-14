@@ -1,0 +1,195 @@
+{
+	"format": "dot-achievement-defs",
+	"version": 1,
+	"achievements": [
+		{
+			"key": "wo.across_the_line",
+			"name": "Across the Line",
+			"description": "Finish a course before it closes.",
+			"points": 10,
+			"category": "",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "wo.finisher",
+			"tier": 1,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "wo.courses_finished",
+					"op": "at_least",
+					"value": 1.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "wo.course_regular",
+			"name": "Course Regular",
+			"description": "Finish twenty-five courses.",
+			"points": 30,
+			"category": "",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "wo.finisher",
+			"tier": 2,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "wo.courses_finished",
+					"op": "at_least",
+					"value": 25.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "wo.first_across",
+			"name": "First Across",
+			"description": "Be the first across the finish.",
+			"points": 20,
+			"category": "",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "wo.courses_first",
+					"op": "at_least",
+					"value": 1.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "wo.not_a_drop",
+			"name": "Not a Drop",
+			"description": "Finish a course without falling in once.",
+			"points": 25,
+			"category": "",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "wo.clean_runs",
+					"op": "at_least",
+					"value": 1.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "wo.last_one_dry",
+			"name": "Last One Dry",
+			"description": "Win a final death, still standing in it.",
+			"points": 20,
+			"category": "",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "wo.finale_wins",
+					"op": "at_least",
+					"value": 1.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "wo.heavy_hitter",
+			"name": "Heavy Hitter",
+			"description": "Put ten people out of final deaths.",
+			"points": 25,
+			"category": "",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "wo.finale_kills",
+					"op": "at_least",
+					"value": 10.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "wo.clean_sweep",
+			"name": "Clean Sweep",
+			"description": "Put three people out in one final death.",
+			"points": 30,
+			"category": "",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "wo.best_round_kills",
+					"op": "at_least",
+					"value": 3.0,
+					"merge": "highest"
+				}
+			]
+		},
+		{
+			"key": "wo.strong_swimmer",
+			"name": "Strong Swimmer",
+			"description": "Fall in fifty times.",
+			"points": 10,
+			"category": "",
+			"icon": "",
+			"hidden": false,
+			"secret": true,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "wo.falls",
+					"op": "at_least",
+					"value": 50.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "wo.wiped_out",
+			"name": "Wiped Out",
+			"description": "Be thrown by an obstacle twenty-five times.",
+			"points": 10,
+			"category": "",
+			"icon": "",
+			"hidden": false,
+			"secret": true,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "wo.knocks",
+					"op": "at_least",
+					"value": 25.0,
+					"merge": "sum"
+				}
+			]
+		}
+	]
+}
