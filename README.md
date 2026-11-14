@@ -2,14 +2,14 @@ This is a game to demonstrate the capabilities of the [**Dot collection**](https
 
 **This project and the assets under it are COMPLETELY OPEN SOURCE**. You are free to use, modify, and distribute them under the terms of the MIT license. The only thing not open source is the back-end web infrastructure. So if you opt into using your own authentication backend instead of integrating with TMC, you will need to build and integrate your own back-end infrastructure.
 
-**Please treat this as partially tested.** The game was built with Claude Code. Its headless test suite passes, but little of it has been in front of real players. Please report anything you run into.
+This game was built with Claude Code and has had little testing with real players, so please report anything odd you run into.
 
 ## How it plays
 Everybody starts on the same pad behind a gate. When the gate drops, run, jump, time the arms, wait out the waterfalls and ride the moving platforms. Falling in sends you back to your last checkpoint, and an arm that catches you throws you, usually into the water. Red tiles are about to drop, dripping water is about to pour, and a high arm is one to duck under rather than jump. A course is a minute to two for a good run.
 
 Some courses are a big night out: grandstands full of people down both sides, light towers, flags and big screens with the leaders on them. An announcer counts you down and calls the race (who takes the lead, who goes in, who wins), and the crowd gasps, cheers and jumps to its feet.
 
-Solo you race eight bots. They make the mistakes people make: a jump taken a moment late off an edge, a window gone through as it closes, an arm not jumped, a slide off a ball. `bot_difficulty easy`, `medium` (the default), `hard` or `nightmare` at the console, or `-- --bot_difficulty hard` at launch; `-- --bots 4` races four.
+Solo you race eight bots by default. They make the mistakes people make: a jump taken a moment late off an edge, a window gone through as it closes, an arm not jumped, a slide off a ball. `bot_difficulty easy`, `medium` (the default), `hard` or `nightmare` at the console, or `-- --bot_difficulty hard` at launch; `-- --bots 4` races four.
 
 The course closes when everybody is across or the clock runs out. Then:
 
@@ -19,9 +19,9 @@ The course closes when everybody is across or the clock runs out. Then:
 
 There are beach balls to bat about in the start pen while the gate is up, and balls on most arenas' floors to shoot about and knock into the water. You walk through them and push them, so they never slow you down or hide anybody.
 
-Every player is their own side by default. `wo_teams 2` (up to 6) plays in teams, and a team is through if anybody on it finishes.
+Every player is their own side by default. `wo_teams 2` (the setting accepts 0, or 2 to 6) plays in teams, and a team is through if anybody on it finishes.
 
-The courses live in their own repository, [mg-wipeout-maps](https://github.com/zees-games/mg-wipeout-maps): eleven courses and five arenas, each a JSON file. Without it the game still runs, on one practice course built in.
+The courses live in their own repository, [mg-wipeout-maps](https://github.com/zees-games/mg-wipeout-maps): at the time of writing 21 courses and five arenas, each a JSON file. Without it the game still runs, on one practice course built in.
 
 ## Controls
 
@@ -30,10 +30,12 @@ The courses live in their own repository, [mg-wipeout-maps](https://github.com/z
 | **WASD** / mouse | Run and look |
 | **Space** | Jump |
 | **Shift** | Walk (for beams and the tops of balls) |
-| **Ctrl** | Crouch, under a high arm |
+| **Ctrl** / **C** | Crouch, under a high arm |
 | **E** (hold) | Pick up or put down a prop |
 | **Mouse 1** | Throw what you are holding, or fire |
 | **Mouse 2** / **R** / **1**-**5** | Alt-fire / reload / weapon slots |
+| **Q** | Throw the gun in your hand |
+| **Y** / **U** | Chat / chat to your side |
 | **F** | Flashlight, while still racing or fighting (starts lit on the dark courses: the horror house and the night-time ones). A lit beam is seen by everyone who can see you |
 | **F5** | First or third person |
 | **Tab** | Scoreboard |
@@ -72,21 +74,23 @@ The courses come from the mg-wipeout-maps checkout, which bootstrap links into `
 ## Running a server
 Settings are cvars. Set them in the server's config, on the command line, or live from the console. Most of them take effect straight away.
 
-```
-wo_course_seconds 360       // the longest a course stays open (a course may ask for less)
-wo_finale_seconds 100       // how long a final death lasts
-wo_teams 0                  // 0 = everybody for themselves, 2-6 = teams
-wo_props_per_side 6         // props to throw in a final death
-wo_weapons_per_side 2       // weapons on the arena floor
-wo_knock_min 8              // how hard the obstacles throw you
-wo_progress_decides 1       // 0 = a round nobody finishes is a draw
-bot_difficulty medium       // easy, medium, hard or nightmare: how the bots race and aim
-wo_bot_mistakes 1           // scales every racing mistake the bots make (0 = never wrong)
-mp_teammate_passthrough 1   // shots and team-mates: 0 a team-mate is hit and blocks, 1 through one at the muzzle, 2 through every team-mate
-bot_quota 9                 // players a round is kept at with bots; each person who joins replaces one
-bot_quota_mode fill         // fill (as above), fixed (that many bots), per_player (that many per person) or off
-wo_bots 1                   // 0 = no bots
-```
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `wo_course_seconds` | 360 | The longest a course stays open (a course may ask for less) |
+| `wo_finale_seconds` | 100 | How long a final death lasts before it is called a draw |
+| `wo_teams` | 0 | 0 = everybody for themselves, 2 to 6 = teams |
+| `wo_props_per_side` | 6 | Props to throw in a final death (0 to 40) |
+| `wo_weapons_per_side` | 2 | Weapons on the arena floor (0 to 20) |
+| `wo_knock_min` | 8 | How hard the obstacles throw you |
+| `wo_progress_decides` | 1 | 0 = a round nobody finishes is a draw |
+| `bot_difficulty` | medium | `easy`, `medium`, `hard` or `nightmare`: how the bots race and aim |
+| `wo_bot_mistakes` | 1 | Scales every racing mistake the bots make (0 = never wrong) |
+| `mp_teammate_passthrough` | 1 | Shots and team-mates: 0 a team-mate is hit and blocks, 1 through one at the muzzle, 2 through every team-mate |
+| `bot_quota` | 9 | Players a round is kept at with bots; each person who joins replaces one |
+| `bot_quota_mode` | fill | `fill` (as above), `fixed` (that many bots), `per_player` (that many per person) or `off` |
+| `wo_bots` | 1 | 0 = no bots |
+
+A server holds 24 players by default (`max_players` in `game.yml`). The setting ranges above are the real limits the game checks: `wo_teams` 0 or 2 to 6, `bot_quota` 0 to 24.
 
 The bot cvars are the family's shared ones (dot-server's `DotBotQuota` and dot-bot's `bot_difficulty` with its `bot_*` settings). Each racing mistake is a cvar of its own (`wo_bot_fumble`, `wo_bot_timing`, `wo_bot_rash`, `wo_bot_hop_miss`, `wo_bot_landing`, `wo_bot_recover`, `wo_bot_variety`) that the difficulty sets and you can override; `bot_settings` lists dot-bot's. `wo_min_players` still works and sets `bot_quota`; it is deprecated.
 
@@ -129,10 +133,7 @@ A course is a JSON file: a start pad, a list of pieces, checkpoints and a finish
 
 `tools/race_times.tscn` races a field of bots round every course at every difficulty and prints the finish times. [`docs/design.md`](docs/design.md) has the design decisions and the reasoning behind them, and [`docs/stand-ins.md`](docs/stand-ins.md) the bots.
 
-## Known gaps
-- Bots finish every course, but on turning pads the hard ones are no faster than medium ones, and they are weak in the final death.
-- The crowd and the announcer have not been tried in a browser yet.
-- There is no settings menu.
+What the game does not do yet is listed in [`docs/not-yet.md`](docs/not-yet.md).
 
 ## Credits
 
