@@ -1,4 +1,4 @@
-extends DotGameNetIo
+extends "wo_net_toys.gd"
 
 const WoEvent := preload("wo_event.gd")
 const WoEvents := preload("wo_events.gd")
@@ -7,7 +7,6 @@ const WoNetLink := preload("wo_net_link.gd")
 const WoPlayerNet := preload("wo_player_net.gd")
 const WoPropNet := preload("wo_prop_net.gd")
 const WoRequest := preload("wo_request.gd")
-const WoToyNet := preload("wo_toy_net.gd")
 const WoWeaponNet := preload("wo_weapon_net.gd")
 
 const WoContent := preload("../wo_content.gd")
@@ -19,8 +18,6 @@ const WoPlayer := preload("../wo_player.gd")
 ## Joins an [WoGame] to a [DotNetManager]: the netcode seam, and the only file here that names both.
 ## The course is not replicated: it arrives once in `STAGE` and every obstacle is a function of the tick. The world
 ## ticks as a whole: [method ensure_game_ticked] runs it on the first behaviour through.
-
-const CHANNEL := "wo.net"
 
 ## Bytes of acknowledgement in front of every input packet. [method DotNetManager.encode_ack].
 const ACK_BYTES := 4
@@ -140,27 +137,17 @@ var _ready_unseated: Dictionary = {}
 var _tick: int = 0
 var _game_ticked_for: int = -1
 
-## Server only: whether `server_tick` is on the stack, and the net ids released during it.
-## A round re-laid mid-tick would otherwise let `record` recreate a history track per body.
-var _in_server_tick := false
-var _unregistered_in_tick: Array[int] = []
 var _client_ticked_for: int = -1
 
 ## The stage the clients were last sent, so a late joiner is sent the same bytes.
 var _stage_body: PackedByteArray = PackedByteArray()
 
-## The stage's toys on the wire, one behaviour per toy in toy order, and the TOYS event that names
-## their net ids (kept for a joiner, as [member _stage_body] is).
-var _toy_nets: Array = []
+## The TOYS event that names the toys' net ids, kept for a joiner as [member _stage_body] is.
 var _toys_body: PackedByteArray = PackedByteArray()
 
 ## Client: the stage the last TOYS was for. Its mirrors are registered the moment it arrives and
 ## handed this end's toys when this end has built that stage ([method _pair_pending_toys]).
 var _toys_stage: StringName = &""
-
-## Client: where the mirrors live, which is not under the toys: they are registered before this
-## end's stage may exist, and stay registered through a stage change.
-var _toy_holder: Node3D = null
 
 
 func _exit_tree() -> void:
@@ -501,14 +488,6 @@ func _build_entity(player: WoPlayer, peer_id: int) -> DotNetIdentity:
 	return identity
 
 
-## Server side. See [member _in_server_tick] for why an id let go of mid-tick is remembered.
-func _unregister(net_id: int) -> void:
-	net.registry.unregister(net_id)
-
-	if _in_server_tick:
-		_unregistered_in_tick.append(net_id)
-
-
 func _release_entity(session_id: int) -> void:
 	var behaviour: WoPlayerNet = _behaviours.get(session_id)
 	_behaviours.erase(session_id)
@@ -553,63 +532,6 @@ func _register_toys() -> void:
 			ids.append(behaviour.identity.net_id)
 	_toys_body = WoEvents.write_toys(game.stage.id() if game.stage != null else &"", ids)
 	_broadcast(WoEvents.Kind.TOYS, _toys_body)
-
-
-## A toy's behaviour and identity under [param parent], registered under [param net_id] (0 allocates one: the server).
-## Null when the registry refused it. The behaviour goes before the identity, which collects behaviours in its
-## `_ready`.
-func _toy_entity(toy: DotPropBody, parent: Node, net_id: int) -> WoToyNet:
-	var behaviour := WoToyNet.new()
-	behaviour.name = "Net"
-	behaviour.toy = toy
-	var holder := Node3D.new() if parent != toy else null
-	if holder != null:
-		holder.name = "Toy%d" % _toy_nets.size()
-		parent.add_child(holder)
-	var at: Node = holder if holder != null else toy
-	at.add_child(behaviour)
-	if net.is_server:
-		behaviour.pull()
-	var identity := DotNetIdentity.new()
-	identity.name = "Identity"
-	identity.owner_peer_id = 0
-	identity.authority = DotNetIdentity.Authority.SERVER
-	at.add_child(identity)
-	var registered := net.registry.register(identity, net_id, net.clock.tick, net.config)
-	if not registered.ok:
-		DotLog.warn(CHANNEL, "could not replicate a toy", {"toy": _toy_nets.size(), "error": str(registered.error)})
-		for node: Node in [behaviour, identity]:
-			at.remove_child(node)
-			node.queue_free()
-		if holder != null:
-			parent.remove_child(holder)
-			holder.queue_free()
-		return null
-	_toy_nets.append(behaviour)
-	return behaviour
-
-
-## Every toy entity out of the registry [b]and out of the tree at once[/b]: a new identity on the
-## same toy collects every behaviour under it in its `_ready`, and a freed one still found there
-## broke the next snapshot (game-playlot found it). A stage change, or a new TOYS.
-func _release_toys() -> void:
-	for behaviour: WoToyNet in _toy_nets:
-		if not is_instance_valid(behaviour):
-			continue
-		if behaviour.identity != null and net != null and net.registry.has(behaviour.identity.net_id):
-			if net.is_server:
-				_unregister(behaviour.identity.net_id)
-			else:
-				net.registry.unregister(behaviour.identity.net_id)
-		var at := behaviour.get_parent()
-		for node: Node in [behaviour.identity, behaviour]:
-			if node != null and is_instance_valid(node) and node.get_parent() != null:
-				node.get_parent().remove_child(node)
-				node.queue_free()
-		if at != null and _toy_holder != null and at.get_parent() == _toy_holder:
-			_toy_holder.remove_child(at)
-			at.queue_free()
-	_toy_nets.clear()
 
 
 ## Client, on TOYS: a mirror for every id at once. A client must know every entity a snapshot
@@ -1281,6 +1203,32 @@ func _ask(kind: int, body: PackedByteArray) -> void:
 	net.send(WoRequest.new(kind, body), 1)
 
 
+## Somebody left: their entity and player go, and the roster says so.
+func _apply_leave(reader: DotNetReader) -> void:
+	var session_id := WoEvents.read_player(reader)
+	_release_entity(session_id)
+	game.remove_player(player_key(session_id))
+	roster_changed.emit(session_id)
+
+
+## A weapon lying in the arena, by pickup id.
+func _apply_pickup(reader: DotNetReader) -> void:
+	var lying := WoEvents.read_pickup(reader)
+
+	if bool(lying["ok"]):
+		game.pickups[int(lying["pickup_id"])] = {"weapon": lying["weapon_id"], "at": lying["position"]}
+		pickup_received.emit(int(lying["pickup_id"]), lying["weapon_id"], lying["position"])
+
+
+## A lying weapon was taken, or went.
+func _apply_pickup_gone(reader: DotNetReader) -> void:
+	var gone := WoEvents.read_pickup_gone(reader)
+
+	if bool(gone["ok"]):
+		game.pickups.erase(int(gone["pickup_id"]))
+		pickup_gone_received.emit(int(gone["pickup_id"]), int(gone["by"]))
+
+
 func _on_event(message: DotNetMessage) -> void:
 	var event := message as WoEvent
 
@@ -1308,10 +1256,7 @@ func _on_event(message: DotNetMessage) -> void:
 		WoEvents.Kind.JOIN:
 			_apply_join(reader)
 		WoEvents.Kind.LEAVE:
-			var session_id := WoEvents.read_player(reader)
-			_release_entity(session_id)
-			game.remove_player(player_key(session_id))
-			roster_changed.emit(session_id)
+			_apply_leave(reader)
 		WoEvents.Kind.TEAM:
 			_apply_team(reader)
 		WoEvents.Kind.PROP:
@@ -1362,17 +1307,9 @@ func _on_event(message: DotNetMessage) -> void:
 				progress_received.emit(int(moved["player_id"]), int(moved["kind"]),
 					int(moved["value"]), float(moved["seconds"]))
 		WoEvents.Kind.PICKUP:
-			var lying := WoEvents.read_pickup(reader)
-
-			if bool(lying["ok"]):
-				game.pickups[int(lying["pickup_id"])] = {"weapon": lying["weapon_id"], "at": lying["position"]}
-				pickup_received.emit(int(lying["pickup_id"]), lying["weapon_id"], lying["position"])
+			_apply_pickup(reader)
 		WoEvents.Kind.PICKUP_GONE:
-			var gone := WoEvents.read_pickup_gone(reader)
-
-			if bool(gone["ok"]):
-				game.pickups.erase(int(gone["pickup_id"]))
-				pickup_gone_received.emit(int(gone["pickup_id"]), int(gone["by"]))
+			_apply_pickup_gone(reader)
 
 
 func _apply_team(reader: DotNetReader) -> void:

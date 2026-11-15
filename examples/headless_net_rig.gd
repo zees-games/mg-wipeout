@@ -178,3 +178,19 @@ func _section(name: String) -> void:
 
 func _finished() -> void:
 	_sections_finished += 1
+
+
+func _shape_of(piece: Dictionary) -> Transform3D:
+	var node: Node3D = piece["node"]
+
+	match str(piece["kind"]):
+		"spinner":
+			return (node.get_node(^"Arms") as Node3D).transform
+		"pendulum":
+			return (node.get_node(^"Arm") as Node3D).transform
+		"pusher":
+			return (node.get_node(^"Ram") as Node3D).transform
+		"tiles":
+			return (node.get_child(0) as Node3D).transform
+		_:
+			return node.transform

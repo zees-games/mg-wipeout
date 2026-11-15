@@ -785,17 +785,6 @@ func _shoot_at(game: WoGame, shooter: WoPlayer, e: DotMapEntity) -> bool:
 	return false
 
 
-func _entity_centre(e: DotMapEntity) -> Vector3:
-	var box := AABB()
-	var found := false
-	for shape: CollisionShape3D in e.node.find_children("*", "CollisionShape3D", true, false):
-		if shape.shape != null:
-			var part: AABB = shape.global_transform * shape.shape.get_debug_mesh().get_aabb()
-			box = box.merge(part) if found else part
-			found = true
-	return box.get_center() if found else Vector3(INF, INF, INF)
-
-
 ## A button a bullet works: the map flags it damage-activated, or it fires something on being damaged.
 func _shoots(e: DotMapEntity) -> bool:
 	if not e is DotMapMoverNode or (e as DotMapMoverNode).mover == null or not (e as DotMapMoverNode).mover.kind.ends_with("button"):

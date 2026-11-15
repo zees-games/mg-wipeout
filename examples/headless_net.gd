@@ -427,22 +427,6 @@ func _test_obstacles_agree() -> void:
 	_finished()
 
 
-func _shape_of(piece: Dictionary) -> Transform3D:
-	var node: Node3D = piece["node"]
-
-	match str(piece["kind"]):
-		"spinner":
-			return (node.get_node(^"Arms") as Node3D).transform
-		"pendulum":
-			return (node.get_node(^"Arm") as Node3D).transform
-		"pusher":
-			return (node.get_node(^"Ram") as Node3D).transform
-		"tiles":
-			return (node.get_child(0) as Node3D).transform
-		_:
-			return node.transform
-
-
 ## A knock the client predicts is the knock the server decides, so the client is not
 ## corrected through the arm: both ends count one, and they end up in the same place.
 func _test_a_knock_is_predicted() -> void:

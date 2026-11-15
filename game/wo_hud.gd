@@ -102,10 +102,9 @@ static func piece_theme() -> Theme:
 var _menu: Object = null
 
 
-## Where each HUD piece sits on a phone of [param view] pixels: the touch buttons own the right 290 px, the Menu button
-## the top left corner, the chat box (see [method WoClient.new_chat]) the bottom left, the course name, announcer and
-## spectator line the top right, the ammo counter left of the buttons (no weapon icon: it has no room). A pure function
-## of the view so a suite can check that no two pieces overlap.
+## Where each HUD piece sits on a phone of [param view] pixels: touch buttons the right 290 px, Menu button the top left,
+## chat box ([method WoClient.new_chat]) the bottom left, course name, announcer and spectator line the top right, ammo
+## left of the buttons (no weapon icon: no room). A pure function of the view, so a suite can check nothing overlaps.
 static func touch_rects(view: Vector2, buttons_left: float = -1.0) -> Dictionary:
 	var w := view.x
 	var h := view.y

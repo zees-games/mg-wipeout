@@ -148,22 +148,7 @@ func _run() -> void:
 		"finale":
 			await _view_finale(game)
 		"carry":
-			# The final death with a crate in the local player's hands, for the carrying line.
-			await _seconds_of(game.config.countdown_seconds + 1.5)
-			game._begin_finale()
-			await _seconds_of(1.0)
-			print("phase: %s" % game.phase)
-			var me = _client.get("player")
-			if me != null:
-				var ahead: Vector3 = me.eye_position() + me.aim_direction() * 1.6
-				var _crate = game.props.spawn(WoContent.CRATE, WoContent.WORLD_OWNER, ahead)
-				await _frames(3)
-				# Put it in the hands directly: the grab key's ray misses a prop spawned this close.
-				if me.grab != null:
-					me.grab.carried = _crate
-				await _frames(8)
-				print("carrying: %s" % (me.grab != null and me.grab.is_carrying()))
-				await _seconds_of(0.5)
+			await _view_carry(game)
 		"killcam":
 			await _view_killcam(game)
 		"break":
@@ -171,10 +156,7 @@ func _run() -> void:
 			get_tree().quit(0)
 			return
 		"course":
-			await _seconds_of(7.0)
-			# Further out than the straight courses needed: a course that turns is as wide as it
-			# is long, and at 1.0 the overview of a switchback or a spiral was half of it.
-			_overview(game, 1.3)
+			await _view_course(game)
 		"tour":
 			await _view_tour(game)
 		"look":
@@ -218,6 +200,33 @@ func _run() -> void:
 	print("saved %s (%s): %s" % [_out, _view, error_string(saved)])
 	await DotShotSeq.new().record(get_tree(), ProjectSettings.globalize_path(_out))
 	get_tree().quit(0 if saved == OK else 1)
+
+
+## The final death with a crate in the local player's hands, for the carrying line.
+func _view_carry(game: WoGame) -> void:
+	await _seconds_of(game.config.countdown_seconds + 1.5)
+	game._begin_finale()
+	await _seconds_of(1.0)
+	print("phase: %s" % game.phase)
+	var me = _client.get("player")
+	if me != null:
+		var ahead: Vector3 = me.eye_position() + me.aim_direction() * 1.6
+		var _crate = game.props.spawn(WoContent.CRATE, WoContent.WORLD_OWNER, ahead)
+		await _frames(3)
+		# Put it in the hands directly: the grab key's ray misses a prop spawned this close.
+		if me.grab != null:
+			me.grab.carried = _crate
+		await _frames(8)
+		print("carrying: %s" % (me.grab != null and me.grab.is_carrying()))
+		await _seconds_of(0.5)
+
+
+## The whole course from above, once it has had time to build.
+func _view_course(game: WoGame) -> void:
+	await _seconds_of(7.0)
+	# Further out than the straight courses needed: a course that turns is as wide as it
+	# is long, and at 1.0 the overview of a switchback or a spiral was half of it.
+	_overview(game, 1.3)
 
 
 func _view_look(game: WoGame) -> void:

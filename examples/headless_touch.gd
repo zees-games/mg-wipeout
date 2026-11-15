@@ -1,10 +1,7 @@
 extends DotGameCheckSuite
 
 ## The on-screen buttons: the layout fits a phone, each button reaches its handler, jump and duck reach the sampler.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_touch.tscn
-## [/codeblock]
+## Run: `godot --headless --path . res://examples/headless_touch.tscn`.
 
 const WoTouch := preload("../game/wo_touch.gd")
 const WoHud := preload("../game/wo_hud.gd")

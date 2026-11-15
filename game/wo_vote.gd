@@ -1,9 +1,8 @@
 extends DotVoteRoundGame
 
-## The players choose the next course: dot-vote's [DotVoteRoundGame] with Wipeout's names. A course lasts one round, so a ballot opens
-## [member open_after_sec] into every course and applies at its end; the rest is dot-vote's settings (`user://cfg/wipeout_vote.json`,
-## `game.yml` metadata `course_vote:`). The host calls [method note_map] per built course (never for a final death's arena: the same
-## round, and the ballot already open stays open) and [member maps_fn] lists the game's own courses.
+## The players choose the next course: dot-vote's [DotVoteRoundGame] with Wipeout's names. A ballot opens [member open_after_sec]
+## into every course (one round each) and applies at its end; the rest is dot-vote's settings (`user://cfg/wipeout_vote.json`, `game.yml`
+## `course_vote:`). The host calls [method note_map] per built course (not a final death's arena), [member maps_fn] lists the courses.
 
 const WoCatalogue := preload("wo_catalogue.gd")
 

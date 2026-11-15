@@ -16,6 +16,19 @@ const FLING := &"wipeout_fling"
 ## How far a prop may be from somebody's eyes to be picked up, in metres.
 const GRAB_REACH := 3.5
 
+const TEAM_COLOURS: Array[Color] = [
+	Color(0.85, 0.27, 0.26),
+	Color(0.29, 0.53, 0.86),
+	Color(0.35, 0.72, 0.38),
+	Color(0.92, 0.78, 0.22),
+	Color(0.66, 0.42, 0.82),
+	Color(0.91, 0.55, 0.20),
+]
+
+const TEAM_NAMES: Array[String] = [
+	"Red", "Blue", "Green", "Yellow", "Violet", "Orange",
+]
+
 ## Which part of the round it is.
 enum Phase {
 	## Between rounds, or waiting for enough people to start one.
@@ -55,3 +68,31 @@ var phase: int = Phase.IDLE
 var pickups: Dictionary = {}
 
 var _tick: int = 0
+
+@export var config: WoConfig = null
+
+## Whether this instance decides anything. A client sets this false.
+@export var authoritative: bool = true
+
+var combat: DotCombatManager = null
+
+## `func(player_id: StringName) -> bool`: whether a player may be hurt now, assigned by the
+## module from dot-game's `can_peer_be_harmed`. Unset offline, and a bot is never loading.
+var harm_gate: Callable = Callable()
+
+var physics: DotPhysicsLayout = null
+
+
+## Team [param index]'s colour (0 is team id 1): the table's six, then as many more as the server
+## plays with, spread round the hue circle by the golden ratio so neighbours differ.
+static func team_colour(index: int) -> Color:
+	if index >= 0 and index < TEAM_COLOURS.size():
+		return TEAM_COLOURS[index]
+	return Color.from_hsv(fposmod(0.11 + float(index) * 0.618034, 1.0), 0.62, 0.86)
+
+
+## Team [param index]'s name (0 is team id 1): the table's, then "Team 7", "Team 8" and on.
+static func team_name(index: int) -> String:
+	if index >= 0 and index < TEAM_NAMES.size():
+		return TEAM_NAMES[index]
+	return "Team %d" % (index + 1)
