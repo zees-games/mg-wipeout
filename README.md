@@ -43,10 +43,10 @@ The courses live in their own repository, [mg-wipeout-maps](https://github.com/z
 | **Esc** | Menu: settings (every key above can be rebound), help, and leave |
 
 ## Getting started
-You need [Godot 4.7](https://godotengine.org/download). The game is built from many Dot addons, each in its own repository, so the easiest way to get everything is [dot-bootstrap](https://github.com/modcommunity/dot-bootstrap). It clones every project and links the addons into each one:
+You need [Godot 4.7](https://godotengine.org/download). The game is built from many Dot addons, each in its own repository, so the easiest way to get everything is [dot-bootstrap](https://github.com/gamespice-platform/bootstrap). It clones every project and links the addons into each one:
 
 ```bash
-git clone https://github.com/modcommunity/dot-bootstrap.git
+git clone https://github.com/gamespice-platform/bootstrap.git
 cd dot-bootstrap
 ./bootstrap.sh
 cd projects/mg-wipeout
@@ -69,7 +69,7 @@ The courses come from the mg-wipeout-maps checkout, which bootstrap links into `
 | `./game.sh shot` | Save a screenshot to `screenshots/`. `./game.sh shot --help` lists the views |
 | `./game.sh help` | All of the options |
 
-`online` and `server` use [dot-server-deploy](https://github.com/modcommunity/dot-server-deploy), which bootstrap clones next to this one. Run its `./setup.sh` once first.
+`online` and `server` use [dot-server-deploy](https://github.com/gamespice-platform/server-deploy), which bootstrap clones next to this one. Run its `./setup.sh` once first.
 
 ## Running a server
 Settings are cvars. Set them in the server's config, on the command line, or live from the console. Most of them take effect straight away.
@@ -95,7 +95,7 @@ A server holds 24 players by default (`max_players` in `game.yml`). The only lim
 
 The bot cvars are the family's shared ones (dot-server's `DotBotQuota` and dot-bot's `bot_difficulty` with its `bot_*` settings). Each racing mistake is a cvar of its own (`wo_bot_fumble`, `wo_bot_timing`, `wo_bot_rash`, `wo_bot_hop_miss`, `wo_bot_landing`, `wo_bot_recover`, `wo_bot_variety`) that the difficulty sets and you can override; `bot_settings` lists dot-bot's. `wo_min_players` still works and sets `bot_quota`; it is deprecated.
 
-Dead players fall as ragdolls ([dot-player-char](https://github.com/modcommunity/dot-player-char)); the server picks how each one goes down and everybody sees the same fall. `sv_ragdoll 0` makes it a quick fall with no physics, `sv_ragdoll_style` picks ragdoll, stiff, topple or hide, `sv_ragdoll_time` and `sv_ragdoll_max` say how long and how many, and `sv_ragdoll_reactions` weights the falls (`limp`, `face_plant`, `crumple`, `headshot_launch`, `power_launch`; 0 turns one off).
+Dead players fall as ragdolls ([dot-player-char](https://github.com/gamespice-platform/player-char)); the server picks how each one goes down and everybody sees the same fall. `sv_ragdoll 0` makes it a quick fall with no physics, `sv_ragdoll_style` picks ragdoll, stiff, topple or hide, `sv_ragdoll_time` and `sv_ragdoll_max` say how long and how many, and `sv_ragdoll_reactions` weights the falls (`limp`, `face_plant`, `crumple`, `headshot_launch`, `power_launch`; 0 turns one off).
 
 `mp_teammate_passthrough` is the family's shared one from dot-combat, live from the next shot. At 2 a team-mate in the line never stops a shot; splash still reaches them.
 
@@ -113,7 +113,7 @@ Console commands:
 The `wo_rank` cvar picks the skill rank published as `rank_score`: `weighted` (courses finished, first across, rounds won, final deaths won, a small penalty per fall), `elo` (final-death knockouts), or `weighted:<stat>=<weight>,...`.
 
 ### Admin commands
-These come from [dot-moderation](https://github.com/modcommunity/dot-moderation): `noclip`, `freeze`, `speed`, `gravity`, `god`, `buddha`, `hp`, `slay`, `slap`, `rename`, the teleports, `blind` and `beacon`. `respawn` puts a runner back at their last checkpoint. `give` and `strip` are turned off, because the weapons in a final death are the ones on its floor.
+These come from [dot-moderation](https://github.com/gamespice-platform/moderation): `noclip`, `freeze`, `speed`, `gravity`, `god`, `buddha`, `hp`, `slay`, `slap`, `rename`, the teleports, `blind` and `beacon`. `respawn` puts a runner back at their last checkpoint. `give` and `strip` are turned off, because the weapons in a final death are the ones on its floor.
 
 ## Writing a course
 A course is a JSON file: a start pad, a list of pieces, checkpoints and a finish. The [mg-wipeout-maps](https://github.com/zees-games/mg-wipeout-maps) README describes the format and every kind of piece. The server sends the course to each player when the round starts, so players don't need the course files.

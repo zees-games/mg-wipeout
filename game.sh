@@ -79,7 +79,7 @@ check_addons() {
         [ -e "addons/$name/plugin.cfg" ] || [ -d "addons/$name" ] || missing="$missing $name"
     done < <(sed -n 's|^/addons/\([^/]*\)/\{0,1\}$|\1|p' .gitignore 2>/dev/null)
     [ -z "$missing" ] || die "Missing addons:$missing
-Run dot-bootstrap first: https://github.com/modcommunity/dot-bootstrap" 2
+Run dot-bootstrap first: https://github.com/gamespice-platform/bootstrap" 2
     # Content links (maps, world): without them the suites run on an empty level set. A git
     # worktree gets them from tools/link_worktree.sh.
     local path src gone=""
