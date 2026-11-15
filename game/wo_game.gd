@@ -106,8 +106,6 @@ signal blast(at: Vector3, radius: float)
 signal prop_shattered(at: Vector3, material: int)
 
 
-@export_range(1, 240, 1) var tick_rate: int = 64
-
 ## Whether something else drives the tick: the bridge, on both ends. See mg-smash-copter.
 @export var external_tick: bool = false
 

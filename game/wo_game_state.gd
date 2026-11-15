@@ -82,6 +82,8 @@ var harm_gate: Callable = Callable()
 
 var physics: DotPhysicsLayout = null
 
+@export_range(1, 240, 1) var tick_rate: int = 64
+
 
 ## Team [param index]'s colour (0 is team id 1): the table's six, then as many more as the server
 ## plays with, spread round the hue circle by the golden ratio so neighbours differ.
