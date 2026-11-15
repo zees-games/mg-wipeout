@@ -88,8 +88,8 @@ func _test_config() -> void:
 	config.finale_weapons_per_side = 25
 	config.prop_budget = 0
 	_check(config.validate().ok, "nine teams, 60 props, 25 weapons and no prop budget validate")
-	_check(WoGame.team_name(8) == "Team 9" and WoGame.team_colour(8) != WoGame.team_colour(7)
-		and WoGame.team_colour(0) == WoGame.TEAM_COLOURS[0], "teams past six get a name and their own colour")
+	_check(DotTeamSet.palette_name(8) == "Team 9" and DotTeamSet.palette_colour(8) != DotTeamSet.palette_colour(7)
+		and DotTeamSet.palette_colour(0) == DotTeamSet.PALETTE_COLOURS[0], "teams past six get a name and their own colour")
 	config.team_count = -1
 	_check(not config.validate().ok, "a negative team count is refused")
 	config.team_count = 3

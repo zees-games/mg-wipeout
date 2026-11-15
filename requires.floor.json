@@ -1,6 +1,7 @@
 {
   "format": 1,
   "addons": {
+    "dot_team": 6,
     "dot_ui": 19
   }
 }

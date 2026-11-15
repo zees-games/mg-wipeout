@@ -91,7 +91,7 @@ Settings are cvars. Set them in the server's config, on the command line, or liv
 | `bot_quota_mode` | fill | `fill` (as above), `fixed` (that many bots), `per_player` (that many per person) or `off` |
 | `wo_bots` | 1 | 0 = no bots |
 
-A server holds 24 players by default (`max_players` in `game.yml`). The setting ranges above are the real limits the game checks: `wo_teams` 0 or 2 and up, `bot_quota` 0 to 24.
+A server holds 24 players by default (`max_players` in `game.yml`). The only limits the game checks: `wo_teams` 0 or 2 and up, `bot_quota` 0 or more (default 9, any value; bots only fill free slots, so a full server of `max_players` takes no more).
 
 The bot cvars are the family's shared ones (dot-server's `DotBotQuota` and dot-bot's `bot_difficulty` with its `bot_*` settings). Each racing mistake is a cvar of its own (`wo_bot_fumble`, `wo_bot_timing`, `wo_bot_rash`, `wo_bot_hop_miss`, `wo_bot_landing`, `wo_bot_recover`, `wo_bot_variety`) that the difficulty sets and you can override; `bot_settings` lists dot-bot's. `wo_min_players` still works and sets `bot_quota`; it is deprecated.
 

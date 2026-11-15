@@ -541,7 +541,7 @@ func _build_match() -> void:
 	var teams: Array[DotTeam] = []
 
 	for index in range(config.team_count if config.teams() else 0):
-		teams.append(DotTeam.make(index + 1, team_name(index), team_colour(index)))
+		teams.append(DotTeam.make(index + 1, DotTeamSet.palette_name(index), DotTeamSet.palette_colour(index)))
 
 	match_node.teams.teams = teams
 	match_node.teams.force_balance = config.autobalance
@@ -831,7 +831,7 @@ func team_of(player_id: StringName) -> int:
 ## A side's name: a team's colour, or the one player on a solo side.
 func side_name(side: int) -> String:
 	if side >= 1 and side <= config.team_count and config.teams():
-		return team_name(side - 1)
+		return DotTeamSet.palette_name(side - 1)
 
 	for id: StringName in sides:
 		if int(sides[id]) == side and players.has(id):
@@ -842,7 +842,7 @@ func side_name(side: int) -> String:
 
 func side_colour(side: int) -> Color:
 	if side >= 1 and side <= config.team_count and config.teams():
-		return team_colour(side - 1)
+		return DotTeamSet.palette_colour(side - 1)
 
 	# A solo side's colour, from its number, so every client paints the same person the same.
 	return Color.from_hsv(fposmod(float(side) * 0.137, 1.0), 0.55, 0.85)

@@ -46,7 +46,7 @@ extends DotConfig
 
 ## How many teams the server plays with. 0 is every player for themselves, because a course is run by one person;
 ## teams change what finishing means (a side is through if anybody is). Any count of two or more (default 0); past
-## six the colours and names are generated ([method WoGame.team_colour]).
+## six the colours and names are generated ([method DotTeamSet.palette_colour]).
 @export_range(0, 6, 1, "or_greater") var team_count: int = 0
 
 ## Whether players may pick their own side.
