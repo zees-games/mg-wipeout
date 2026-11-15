@@ -1,4 +1,4 @@
-This is a game to demonstrate the capabilities of the [**Dot collection**](https://moddingcommunity.com/co/4-dot-assets) built on-top of [Godot 4](https://godotengine.org/) and [TMC's gaming platform](https://moddingcommunity.com/play). In this 3D game, players race across obstacle courses built over water: sweeping arms, big balls, rolling logs, swinging hammers and floors that drop away. Fall in and you go back to your last checkpoint. If more than one player (or team) makes it to the finish, they fight it out in a random arena with props and weapons until one is left standing. This is inspired by the obstacle-course game shows on TV!
+This is a game to demonstrate the capabilities of the [**Gamespice collection**](https://gamespice.net) built on-top of [Godot 4](https://godotengine.org/) and [Gamespice](https://gamespice.net). In this 3D game, players race across obstacle courses built over water: sweeping arms, big balls, rolling logs, swinging hammers and floors that drop away. Fall in and you go back to your last checkpoint. If more than one player (or team) makes it to the finish, they fight it out in a random arena with props and weapons until one is left standing. This is inspired by the obstacle-course game shows on TV!
 
 **This project and the assets under it are COMPLETELY OPEN SOURCE**. You are free to use, modify, and distribute them under the terms of the MIT license. The only thing not open source is the back-end web infrastructure. So if you opt into using your own authentication backend instead of integrating with TMC, you will need to build and integrate your own back-end infrastructure.
 
@@ -43,7 +43,7 @@ The courses live in their own repository, [mg-wipeout-maps](https://github.com/z
 | **Esc** | Menu: settings (every key above can be rebound), help, and leave |
 
 ## Getting started
-You need [Godot 4.7](https://godotengine.org/download). The game is built from many Dot addons, each in its own repository, so the easiest way to get everything is [dot-bootstrap](https://github.com/gamespice-platform/bootstrap). It clones every project and links the addons into each one:
+You need [Godot 4.7](https://godotengine.org/download). The game is built from many Gamespice addons, each in its own repository, so the easiest way to get everything is [dot-bootstrap](https://github.com/gamespice-platform/bootstrap). It clones every project and links the addons into each one:
 
 ```bash
 git clone https://github.com/gamespice-platform/bootstrap.git
