@@ -6,16 +6,16 @@ extends RefCounted
 
 const CHANNEL := "wo.racer"
 
-## [code][field, min, max, easy, medium, hard, nightmare, help][/code]. The cvar is
+## [code][field, min, max, easy, medium, hard, nightmare, help][/code]. A max of INF is no ceiling (seconds have none); the 0..100 chances and 0..1 shares keep theirs, which are what they measure. The cvar is
 ## `wo_bot_` + field. Medium is tuned so a medium field finishes most courses with a fall or
 ## two each; the measured spread per preset is in docs/stand-ins.md.
 const SPEC := [
 	["fumble", 0.0, 100.0, 7.0, 3.5, 1.5, 0.5, "Chance in a hundred a stand-in does not take a jump at all."],
-	["timing", 0.0, 0.5, 0.06, 0.04, 0.025, 0.012, "Seconds a stand-in's take-off can be early or late."],
+	["timing", 0.0, INF, 0.06, 0.04, 0.025, 0.012, "Seconds a stand-in's take-off can be early or late."],
 	["rash", 0.0, 100.0, 14.0, 7.0, 3.0, 1.0, "Chance in a hundred a stand-in goes without waiting for its window."],
 	["hop_miss", 0.0, 100.0, 18.0, 9.0, 4.0, 1.0, "Chance in a hundred a stand-in fails to jump or duck an arm."],
 	["landing", 0.0, 1.0, 0.55, 0.75, 0.9, 1.0, "How well a stand-in steers a jump onto a small top (1 is perfectly)."],
-	["recover", 0.0, 5.0, 1.4, 0.9, 0.5, 0.25, "Seconds a stand-in stands still after a fall, shaking it off."],
+	["recover", 0.0, INF, 1.4, 0.9, 0.5, 0.25, "Seconds a stand-in stands still after a fall, shaking it off."],
 	["variety", 0.0, 1.0, 0.45, 0.45, 0.4, 0.3, "How much one stand-in differs from the next, as a share of every mistake."],
 	["risk", 0.0, 100.0, 15.0, 40.0, 70.0, 90.0, "Chance in a hundred a stand-in takes the faster, riskier branch at a fork."],
 ]
@@ -103,8 +103,8 @@ func set_value(field: String, text: String) -> DotResult:
 			return DotResult.fail(DotError.CODE_INVALID, "wo_bot_%s is a number." % field)
 		var number := text.strip_edges().to_float()
 		if number < float(row[COL_MIN]) or number > float(row[COL_MAX]):
-			return DotResult.fail(DotError.CODE_INVALID,
-				"wo_bot_%s is %s to %s." % [field, row[COL_MIN], row[COL_MAX]])
+			var upper := "at least %s" % row[COL_MIN] if is_inf(float(row[COL_MAX])) else "%s to %s" % [row[COL_MIN], row[COL_MAX]]
+			return DotResult.fail(DotError.CODE_INVALID, "wo_bot_%s is %s (got %s)." % [field, upper, text.strip_edges()])
 		overrides[field] = number
 		return DotResult.success(number)
 
