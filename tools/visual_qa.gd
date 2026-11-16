@@ -3,11 +3,14 @@ extends DotGameVisualQaCapture
 ## Wipeout's visual QA capture (the loop is dot-game's docs/visual-qa.md). Two kinds of item, each recorded frame by frame
 ## at --fps in three views (f first person, t behind-right, o an opponent in front):
 ##   person_<letter>  one of the six people (WoFigure) idling, walking, running, crouching, jumping and carrying a prop on the gravity gun; f is a rival's eye a few metres in front.
+##   object_*         the course objects with a runner in the built course (visual_qa_course.gd).
 ##   weapon_<id>      a weapon of the game's default pool: f is the real view model (ZeeViewModel with its arms) at the eye,
 ##                    t and o draw the person holding it (WoFigure.hold) through draw, fire and reload.
 ## The outside views and frame saving are dot-game's DotGameVisualQaViews, through DotGameVisualQaCapture.
 
 const WoFigure := preload("../game/wo_figure.gd")
+const WoCatalogue := preload("../game/wo_catalogue.gd")
+const CourseItems := preload("visual_qa_course.gd")
 
 ## Your own body draws only in the outside views; the view model (ZeeViewModel's view_layer 20) only in the first-person one.
 const BODY_LAYER := 1 << 18
@@ -33,6 +36,10 @@ var _shown_id := ""
 var _shots_done := 0
 var _weapon_defs := {}
 var _struck := false
+var _course_items := CourseItems.new()
+var _runner_speed := 0.0
+## The stage's floor, sun and sky, hidden while a built course (with its own) is filmed.
+var _stage_dressing: Array[Node] = []
 
 
 func _items() -> PackedStringArray:
@@ -43,14 +50,21 @@ func _items() -> PackedStringArray:
 		_weapon_defs[String(def.id)] = def
 		if DEFAULT_POOL.has(def.id):
 			items.append("weapon_" + String(def.id))
+	var catalogue := WoCatalogue.new()
+	var _loaded := catalogue.load_from("courses")
+	items.append_array(_course_items.items(catalogue))
 	return items
 
 
 func _clips(item: String) -> PackedStringArray:
+	if _course_items.has(item):
+		return _course_items.clips(item)
 	return PERSON_CLIPS if item.begins_with("person_") else WEAPON_CLIPS
 
 
-func _seconds(_item: String, clip: String) -> float:
+func _seconds(item: String, clip: String) -> float:
+	if _course_items.has(item):
+		return _course_items.seconds(item)
 	return float(SECONDS.get(clip, 2.0))
 
 
@@ -66,6 +80,9 @@ func _build() -> void:
 	views.behind_offset = Vector3(1.6, 1.6, 3.2)
 	views.behind_look_height = 1.0
 	root.add_child(_holder)
+	for child in stage.get_children():
+		if child is MeshInstance3D or child is DirectionalLight3D or child is WorldEnvironment:
+			_stage_dressing.append(child)
 
 
 func _stage(item: String, clip: String) -> DotResult:
@@ -74,6 +91,20 @@ func _stage(item: String, clip: String) -> DotResult:
 	views.behind_look_height = 1.0
 	views.opponent_offset = Vector3(0.4, 1.6, -4.0)
 	views.opponent_look_height = 1.3
+	_set_stage_dressing(not _course_items.has(item))
+	if _course_items.has(item):
+		# From behind and to the right, and from the runner's left front, so the object is in both views.
+		views.behind_offset = Vector3(2.2, 2.1, 4.5)
+		views.behind_look_height = 1.3
+		views.opponent_offset = Vector3(-3.4, 1.7, -1.0)
+		views.opponent_look_height = 1.3
+		_shown_kind = "course"
+		_shown_id = item
+		var staged := _course_items.stage(_holder, item, clip)
+		if not staged.ok:
+			return staged
+		_stand_person("a")
+		return DotResult.success(clip)
 	if item.begins_with("weapon_"):
 		# Straight ahead, a held gun points down the lens and draws as a thin stick; from the gun-hand side it reads in profile.
 		views.behind_offset = Vector3(2.4, 1.5, 2.2)
@@ -105,6 +136,17 @@ func _stage(item: String, clip: String) -> DotResult:
 		_figure.carrying = clip == "carry"
 	_shown_id = item
 	return DotResult.success(clip)
+
+
+func _set_stage_dressing(shown: bool) -> void:
+	for node in _stage_dressing:
+		if node is WorldEnvironment:
+			if shown and node.get_parent() == null:
+				stage.add_child(node)
+			elif not shown and node.get_parent() != null:
+				stage.remove_child(node)
+		else:
+			node.visible = shown
 
 
 func _stand_person(letter: String) -> void:
@@ -140,6 +182,9 @@ func _subject(_item: String) -> Node3D:
 
 ## A person stands at the origin facing -Z; the person clips move it along -Z from behind so the stage is walked, not skated on.
 func _drive(_item: String, clip: String, t: float, _frame: int) -> void:
+	if _shown_kind == "course":
+		_drive_course(t)
+		return
 	var step := 1.0 / float(fps)
 	var speed := float(PERSON_SPEED.get(clip, 0.0))
 	var airborne := false
@@ -158,6 +203,18 @@ func _drive(_item: String, clip: String, t: float, _frame: int) -> void:
 	_figure.person.animate(speed, step)
 	if _shown_kind == "weapon":
 		_drive_weapon(clip, t, step)
+
+
+## A runner in the built course: the course posed at [param t], the figure where the capture puts it, facing -Z.
+func _drive_course(t: float) -> void:
+	var step := 1.0 / float(fps)
+	var runner := _course_items.drive(t)
+	var speed := float(runner["speed"])
+	_figure.global_position = runner["at"]
+	_figure.rotation = Vector3(0.0, deg_to_rad(float(runner.get("yaw", 0.0))), 0.0)
+	_figure.set_motion({"on_floor": true, "vertical": 0.0, "crouched": false, "sprinting": speed > 4.0,
+		"aim": 0.0, "velocity": Vector3(0.0, 0.0, -speed)})
+	_figure.person.animate(speed, step)
 
 
 func _drive_weapon(clip: String, t: float, step: float) -> void:
@@ -215,7 +272,7 @@ func _before_draw(_item: String, _clip: String, _frame: int) -> void:
 
 ## Weapons: the real view model's camera at the person's eye. People: a rival's eye 2.5 m in front, looking at the subject.
 func _place_first_person(_item: String) -> void:
-	if _shown_kind == "weapon":
+	if _shown_kind == "weapon" or _shown_kind == "course":
 		first_person.global_position = _figure.global_position + Vector3(0.0, 1.6, 0.0)
 		first_person.rotation = Vector3.ZERO
 		return
