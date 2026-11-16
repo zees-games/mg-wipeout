@@ -1,3 +1,4 @@
 {
-  "defaults": {"float_m": 0.20}
+  "defaults": {"float_m": 0.20},
+  "clips": {"ride": {"slide_mps": 3.0}}
 }

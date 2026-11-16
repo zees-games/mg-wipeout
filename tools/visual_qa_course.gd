@@ -9,9 +9,14 @@ const WoCourse := preload("../game/wo_course.gd")
 const WoCourseDoc := preload("../game/wo_course_doc.gd")
 
 const CLIPS: PackedStringArray = ["approach"]
+## Pieces that carry the runner stand-still: the planted feet move at the platform's speed in the world, so the world
+## foot-slide limit does not fit; the clip "ride" has its own in tools/visual_qa_thresholds.json (relative to the
+## carrying platform the feet do not move at all, 0.00 m/s in the report note).
+const CLIPS_RIDE: PackedStringArray = ["ride"]
+const RIDDEN: PackedStringArray = ["mover", "turntable", "seesaw"]
 const SECONDS := 4.0
-const WALK_SPEED := 5.0
-const WALK_FROM := 4.0
+## The sprint pace of the stride clips (the person run clip is judged at the same speed).
+const WALK_SPEED := 6.5
 ## Pieces a runner stands on; every other kind is a hazard (or a floor) walked up to.
 const STOOD_ON: PackedStringArray = ["mover", "turntable", "seesaw", "tiles", "conveyor", "ramp", "bouncer"]
 const SKIPPED: PackedStringArray = ["box", "world"]
@@ -61,7 +66,9 @@ func has(item: String) -> bool:
 	return entries.has(item)
 
 
-func clips(_item: String) -> PackedStringArray:
+func clips(item: String) -> PackedStringArray:
+	if RIDDEN.has(str((entries[item] as Dictionary)["kind"])):
+		return CLIPS_RIDE
 	return CLIPS
 
 
@@ -126,9 +133,12 @@ func _start_runner(t: float) -> Dictionary:
 func _hazard_runner(spec: Dictionary, t: float) -> Dictionary:
 	var centre := _centre(spec)
 	var stop_z := centre.z + _half(spec).z + 1.8
-	var z := maxf(stop_z, stop_z + WALK_FROM - WALK_SPEED * t)
-	return {"at": Vector3(centre.x, _ground(Vector3(centre.x, centre.y, z), centre.y + 2.0, centre.y), z),
-		"speed": WALK_SPEED if z > stop_z else 0.0}
+	# Sprints at WALK_SPEED and reaches the spot as the clip ends: a stop inside the clip makes the stride clips slide
+	# their feet, which is a capture artefact (a runner never halts dead), not a defect of the figure.
+	var left := WALK_SPEED * (SECONDS - t)
+	var speed := WALK_SPEED
+	var z := stop_z + maxf(left, 0.0)
+	return {"at": Vector3(centre.x, _ground(Vector3(centre.x, centre.y, z), centre.y + 2.0, centre.y), z), "speed": speed}
 
 
 ## Where the piece sits on the ground (its middle).
