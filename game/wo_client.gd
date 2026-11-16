@@ -153,7 +153,7 @@ func _start_offline() -> void:
 	var args := OS.get_cmdline_user_args()
 	var at := args.find("--bots")
 	if at >= 0 and at + 1 < args.size() and args[at + 1].is_valid_int():
-		count = clampi(args[at + 1].to_int(), 0, 16)
+		count = maxi(args[at + 1].to_int(), 0)
 	for i in range(count):
 		var side := 0
 
@@ -574,12 +574,12 @@ func _follow_killcam_cvar() -> void:
 		return
 	var held := String(link.call(&"replicated_cvar", "mp_killcam_time", ""))
 	if held.is_valid_float():
-		game.config.killcam_seconds = clampf(held.to_float(), 0.0, 30.0)
+		game.config.killcam_seconds = maxf(held.to_float(), 0.0)
 	_on_killview_cvar("mp_killview_camera", String(link.call(&"replicated_cvar", "mp_killview_camera", "")))
 	link.connect(&"replicated_cvar_changed", func(cvar_name: String, value: Variant) -> void:
 		_on_killview_cvar(cvar_name, str(value))
 		if cvar_name == "mp_killcam_time" and str(value).is_valid_float():
-			game.config.killcam_seconds = clampf(str(value).to_float(), 0.0, 30.0))
+			game.config.killcam_seconds = maxf(str(value).to_float(), 0.0))
 
 
 func _on_killview_cvar(cvar_name: String, value: String) -> void:

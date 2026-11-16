@@ -218,6 +218,7 @@ func _bind_rule_cvars(world: WoGame) -> void:
 		"Seconds the final killcam plays at a round's end, added to the intermission (0 for none)",
 		replicated)
 	if _killcam_cvar != null:
+		var _floor := _killcam_cvar.with_min(0.0)  # no ceiling; below 0 is refused
 		_killcam_cvar.changed.connect(func(_old: String, new_value: String) -> void:
 			world.set_killcam_seconds(new_value.to_float())
 			var field := world.config_binder.cvar_for("killcam_seconds") if world.config_binder != null else null

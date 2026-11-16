@@ -955,7 +955,7 @@ func intermission_with_killcam() -> float:
 
 ## Sets `mp_killcam_time` and lengthens the intermission to match.
 func set_killcam_seconds(seconds: float) -> void:
-	config.killcam_seconds = clampf(seconds, 0.0, 30.0)
+	config.killcam_seconds = maxf(seconds, 0.0)
 	if match_node != null and match_node.rules != null:
 		match_node.rules.intermission_sec = intermission_with_killcam()
 
