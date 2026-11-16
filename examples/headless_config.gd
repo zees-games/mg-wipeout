@@ -5,9 +5,12 @@ extends DotGameCheckSuite
 const WoConfig := preload("../game/wo_config.gd")
 const WoBlurb := preload("../game/wo_blurb.gd")
 const WoWorld := preload("../game/wo_world.gd")
-const ROOT := "user://wo_cfgtest"
+## One directory per suite process (the probe child is handed its parent's): user:// is shared by
+## every copy of this project on a box, and two suites at once wrote and deleted each other's cfg files.
+const ROOT_ARG := "--cfgroot="
+var ROOT := _root()
 const GAME := "mg-wipeout"
-const CHECKS := 36
+const CHECKS := 37
 const SECTIONS := 5
 
 var _entered := 0
@@ -17,6 +20,13 @@ var _finished := 0
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.FATAL)
 	_run.call_deferred()
+
+
+func _root() -> String:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with(ROOT_ARG):
+			return a.substr(ROOT_ARG.length())
+	return "user://wo_cfgtest_%d" % OS.get_process_id()
 
 
 func _run() -> void:
@@ -42,17 +52,17 @@ func _run() -> void:
 	console.set_cvar("wo_courses_per_round", "7")
 	_check(config.courses_per_round == 7 and binder.source_of("courses_per_round") == "cvar", "a cvar writes the field")
 	_check(binder.diff_yaml().contains("courses_per_round: 7"), "the diff names the edit")
-	var schema_path := "user://wo_config_schema.json"
+	var schema_path := ROOT + "_config_schema.json"
 	_check(binder.write_schema(schema_path).ok and FileAccess.file_exists(schema_path), "write_schema writes the schema")
 	DirAccess.remove_absolute(schema_path)
 
-	var bad := FileAccess.open("user://wo_config_bad.json", FileAccess.WRITE)
+	var bad := FileAccess.open(ROOT + "_config_bad.json", FileAccess.WRITE)
 	bad.store_string('{"no_such_field": 1}')
 	bad.close()
-	var strict := WoConfig.make_binder(WoConfig.new(), "user://wo_config_bad.json")
+	var strict := WoConfig.make_binder(WoConfig.new(), ROOT + "_config_bad.json")
 	strict.strict = true
 	_check(not strict.load_layers().ok, "strict: an unknown key is refused")
-	DirAccess.remove_absolute("user://wo_config_bad.json")
+	DirAccess.remove_absolute(ROOT + "_config_bad.json")
 
 	_finished += 1
 	_entered += 1
@@ -136,7 +146,7 @@ func _write(rel: String, text: String) -> void:
 func _child() -> String:
 	var out: Array = []
 	OS.execute(OS.get_executable_path(), ["--headless", "--path", ProjectSettings.globalize_path("res://"),
-		"res://examples/headless_config.tscn", "--", "--probe", "--wo-run-speed=7.5", "--wo-gravity=15.0"], out, true)
+		"res://examples/headless_config.tscn", "--", "--probe", ROOT_ARG + ROOT, "--wo-run-speed=7.5", "--wo-gravity=15.0"], out, true)
 	return "".join(PackedStringArray(out))
 
 
@@ -154,8 +164,8 @@ func _layers() -> void:
 	OS.unset_environment("WO_WIND_STRENGTH")
 	_write("game/%s/config_round/game.yml" % GAME, "wind_strength: 9.0\n")
 	_check(_child().contains("PROBE ok=false"), "strict: a key in the wrong file is refused")
-	for f in ["config_round", "config_courses"]:
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(ROOT.path_join("game/%s/%s/game.yml" % [GAME, f])))
+	var removed := DotPaths.remove_tree(ProjectSettings.globalize_path(ROOT))
+	_check(removed.ok and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(ROOT)), "the per-process cfg fixture directory is removed", ROOT if removed.ok else str(removed.error))
 
 
 ## The shipped cfg files hold every key, in step with WoConfig, and change nothing as they are.
