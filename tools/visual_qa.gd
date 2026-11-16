@@ -59,6 +59,8 @@ func _warmup_frames(_item: String, _clip: String) -> int:
 
 
 func _build() -> void:
+	if limits_path == "":
+		limits_path = "res://tools/visual_qa_thresholds.json"
 	build_stage()
 	first_person.cull_mask = ALL_LAYERS & ~BODY_LAYER
 	views.behind_offset = Vector3(1.6, 1.6, 3.2)
