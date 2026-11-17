@@ -1388,11 +1388,6 @@ func _build_touch() -> void:
 			fit.set(&"button_max_height", WoTouch.MAX_HEIGHT)
 		WoTouch.touch_layout().apply(_touch.buttons, platform)
 	hud.make_room_for_touch(_touch.buttons)
-	# By name: an older dot-menu has no such property.
-	var menu: Object = platform.menu if platform != null else null
-	var menu_config: Object = menu.get(&"config") if menu != null else null
-	if menu_config != null and &"menu_button_corner" in menu_config:
-		menu_config.set(&"menu_button_corner", &"top_left")
 
 
 func _active_sampler() -> DotFpsSampler:

@@ -39,6 +39,8 @@ static func spec_for() -> DotMenuGameSpec:
 	s.reduce_motion_text = "The end-of-round announcement appears at once, with nothing sliding, rising or bursting."
 	s.ambient_text = "Quiet sounds under the course."
 	s.not_applied = NOT_APPLIED
+	# The touch Menu button sits top left: the course name, announcer and spectator line own the top right.
+	s.menu_button_corner = &"top_left"
 	s.bindings_maker = func() -> DotMenuBindings: return WoBindings.make()
 	s.help_about = "Get round the course over the water as fast as you can: arms, hammers, rams and rides are all trying to knock you off. A fall sends you back to your last checkpoint, and a knock costs health."
 	s.help_cards = [

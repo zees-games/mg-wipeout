@@ -6,6 +6,7 @@ extends DotGameCheckSuite
 
 const WoTouch := preload("../game/wo_touch.gd")
 const WoHud := preload("../game/wo_hud.gd")
+const WoSettings := preload("../game/wo_settings.gd")
 
 const CHECKS := 39
 var _entered := 0
@@ -63,13 +64,24 @@ func _run() -> void:
 
 ## Every HUD piece's rectangle clear of every other's, of every touch button (scaled by [param k], as the screen fit
 ## leaves them, 28 units in from the corner) and of the Menu button, in one canvas.
+## Where dot-menu puts the touch Menu button: the corner this game's spec asks for (the one the real menu is built with, so
+## a spec that drifts back to the default top right fails here), a 96 x 52 button 14 units in from it.
+func _menu_rect(view: Vector2) -> Rect2:
+	var corner := WoSettings.spec_for().menu_button_corner
+	var size := Vector2(96.0, 52.0)
+	var inset := 14.0
+	var right := corner == &"top_right" or corner == &"bottom_right"
+	var bottom := corner == &"bottom_right" or corner == &"bottom_left"
+	return Rect2(Vector2(view.x - inset - size.x if right else inset, view.y - inset - size.y if bottom else inset), size)
+
+
 func _check_no_overlap(view: Vector2, k: float) -> void:
 	var left := view.x
 	var buttons := WoTouch.layout()
 	for b: Dictionary in buttons:
 		left = minf(left, view.x - 28.0 - (b["offset"] as Vector2).x * k - float(b["radius"]) * k)
 	var rects: Dictionary = WoHud.touch_rects(view, left)
-	rects["menu"] = Rect2(0.0, 0.0, 110.0, 64.0)
+	rects["menu"] = _menu_rect(view)
 	var clear := true
 	var culprit := ""
 	var names := rects.keys()
