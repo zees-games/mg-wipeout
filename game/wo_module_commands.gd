@@ -1,6 +1,7 @@
 extends DotGameModule
 
 const WoServices := preload("wo_services.gd")
+const WoWorld := preload("wo_world.gd")
 const WoGame := preload("wo_game.gd")
 const WoVote := preload("wo_vote.gd")
 
@@ -16,6 +17,10 @@ func _add_delivered_courses(world: WoGame) -> int:
 		return 0
 
 	var read := 0
+
+	# Every course's world mesh up front: a server that read the catalogue with only the ungrouped files mounted would
+	# skip each course whose mesh is in a download group and play the one that has none.
+	var _failed: PackedStringArray = await WoWorld.fetch_all_groups()
 
 	for root in await DotGameContent.map_dirs(server, "courses"):
 		read += world.catalogue.add_directory(root)

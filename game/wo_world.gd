@@ -168,6 +168,45 @@ static func fetch(mesh: String) -> DotResult:
 	return DotResult.success(false)
 
 
+## Fetches EVERY group of every mounted pack that has groups: a dedicated server plays all its courses, so it must not
+## start on the one ungrouped course and skip the rest while their meshes trickle in. Returns the content ids that
+## would not download (empty when all arrived); each failure is also logged. A client never calls this (it fetches
+## per course through [method fetch]).
+static func fetch_all_groups() -> PackedStringArray:
+	var failed := PackedStringArray()
+	var cloud := DotRegistry.get_service(CLOUD_SERVICE)
+
+	if cloud == null:
+		return failed
+
+	for key: String in cloud.call("acquired_keys"):
+		var manifest: Object = cloud.call("manifest_for", key)
+
+		if manifest == null:
+			continue
+
+		var grouped := false
+
+		for file: Object in manifest.get("files"):
+			if not (file.get("groups") as PackedStringArray).is_empty():
+				grouped = true
+				break
+
+		if not grouped:
+			continue
+
+		var got: DotResult = await cloud.call(
+			"ensure", StringName(manifest.get("content_id")), str(manifest.get("version")),
+			PackedStringArray(["*"]))
+
+		if not got.ok:
+			failed.append(str(manifest.get("content_id")))
+			DotLog.error("wo_world", "a maps pack's groups would not download", {
+				"pack": str(manifest.get("content_id")), "why": got.error.message})
+
+	return failed
+
+
 ## Fetches every mesh of [param doc] no mounted pack holds, once each, and returns what is STILL missing afterwards.
 ## The one fetch both the client (a stage the server sent) and the server (a course it is about to run) use.
 static func fetch_missing(doc: Dictionary) -> PackedStringArray:
