@@ -169,9 +169,8 @@ static func fetch(mesh: String) -> DotResult:
 
 
 ## Fetches EVERY group of every mounted pack that has groups: a dedicated server plays all its courses, so it must not
-## start on the one ungrouped course and skip the rest while their meshes trickle in. Returns the content ids that
-## would not download (empty when all arrived); each failure is also logged. A client never calls this (it fetches
-## per course through [method fetch]).
+## start on the ungrouped one while the rest trickle in. Returns the content ids that would not download (empty when
+## all arrived), each also logged. A client never calls this; it fetches per course through [method fetch].
 static func fetch_all_groups() -> PackedStringArray:
 	var failed := PackedStringArray()
 	var cloud := DotRegistry.get_service(CLOUD_SERVICE)
