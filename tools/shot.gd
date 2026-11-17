@@ -130,8 +130,8 @@ func _run() -> void:
 	if _console_line != "" and console != null:
 		var _ran := console.submit(_console_line)
 
-	# Every view waits past the load cover (slow on a cold GPU box) before its own timing starts; capped, so a stuck cover cannot hang the shot.
-	if not await DotShotGate.wait_lifted(get_tree(), _client.get("platform")):
+	# Every view waits past the load cover (slow on a cold GPU box) before its own timing starts; capped at five minutes (the big imported io courses hold the cover past the default 15 s), so a stuck cover cannot hang the shot.
+	if not await DotShotGate.wait_lifted(get_tree(), _client.get("platform"), 300.0):
 		printerr("shot: load cover still up after the wait; shooting anyway")
 
 	match _view:
