@@ -475,7 +475,10 @@ func _test_a_server_skips_a_course_without_its_mesh() -> void:
 	game.config.course_ids = PackedStringArray(["wo_a_missing_fixture"])
 	game.next_course_id = &""
 	var before := game.stage.id()
+	# The game logs "no course can be built" at ERROR here, which is the behaviour under test.
+	DotLog.set_level(DotLog.Level.OFF)
 	game._lay_out_course()
+	DotLog.set_level(DotLog.Level.ERROR)
 	_check(cleared[0] == 0 and game.stage.id() == before, "with no buildable course the standing one stays untouched")
 	_check(game.catalogue.courses.has(&"wo_a_missing_fixture"), "and the fixture is still catalogued")
 	_finished()

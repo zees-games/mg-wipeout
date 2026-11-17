@@ -38,8 +38,8 @@ func _run() -> void:
 	var got := cfg.apply("wo_mapcfg_fixture_a")
 	_check(console.find_cvar("wo_instant_death").get_int() == 1, "wo_instant_death is 1 on the course (%s)" % [got])
 	_check(console.find_cvar("wo_knock_damage").get_float() == 7.0, "wo_knock_damage is 7 on the course")
-	_check(console.find_cvar("wo_other").get_int() == 5 and console.find_cvar("wo_gravity").get_float() == 1.0,
-		"a cvar outside the whitelist is refused and a value under its minimum is clamped")
+	_check(console.find_cvar("wo_other").get_int() == 5 and console.find_cvar("wo_gravity").get_float() == 20.0,
+		"a cvar outside the whitelist is refused and a value under its minimum is refused, never clamped")
 
 	cfg.apply("wo_first_splash")
 	_check(console.find_cvar("wo_instant_death").get_int() == 0, "the next course has wo_instant_death back")
