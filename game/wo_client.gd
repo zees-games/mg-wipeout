@@ -272,6 +272,8 @@ func _follow_server_cvars() -> void:
 		# predicts its own player.
 		var _view := game.view_rules.follow_cvars(link)
 		var _solid := game.body_rules.follow_cvars(link)
+		# The server's sv_mobile_*, sv_autofire* and sv_aim_assist*: this end draws the phone's controls.
+		var _mobile := game.mobile_rules.follow_cvars(link)
 		var _ambient := game.ambient_rules.follow_cvars(link)
 		# And sv_toys*: this end hides the toys the server took away.
 		var _toys := game.toy_rules.follow_cvars(link)
@@ -426,6 +428,8 @@ func _adopt(candidate: WoPlayer) -> void:
 		player.command_stamp = _stamp
 		if DotPlatform.has_touch():
 			player.sampler = WoTouch.make_sampler(player.controller.tunables, _touch_ignores)
+			if _touch != null:
+				_touch.controls.setup(player.sampler, WoTouch.layout())
 
 	if settings != null:
 		settings.bind_camera(camera)
@@ -850,7 +854,7 @@ func _stamp(command: DotFpsCommand) -> void:
 	if command == null:
 		return
 
-	command.set_button(WoNetCommand.BUTTON_FIRE, _firing)
+	command.set_button(WoNetCommand.BUTTON_FIRE, _fire_held())
 	command.set_button(WoNetCommand.BUTTON_ALT, _alt)
 	command.set_button(WoNetCommand.BUTTON_RELOAD, _reloading)
 
@@ -963,6 +967,7 @@ func _on_hit(point: Vector3, killed: bool, headshot: bool) -> void:
 
 func _process(delta: float) -> void:
 	_pose_stage()
+	_sync_touch()
 
 	var _shown := present_frame(
 		net, game, player, not third_person, delta, -1.0, _watched_through_eyes()
@@ -1359,8 +1364,7 @@ func _build_touch() -> void:
 	hud.make_room_for_touch()
 	if blurb_label != null:
 		blurb_label.touch = true
-	var _built := _touch.build(hud, _active_sampler, {
-		WoTouch.FIRE: func(down: bool) -> void: _firing = down and not is_spectating(),
+	var _built := _touch.build(self, hud, _sampler, game.mobile_rules, {
 		WoTouch.ALT: func(down: bool) -> void: _alt = down and not is_spectating(),
 		WoTouch.GRAB: func(down: bool) -> void: _grab = down,
 		WoTouch.RELOAD: func(down: bool) -> void: _reloading = down,
@@ -1397,17 +1401,29 @@ func _active_sampler() -> DotFpsSampler:
 	return _sampler
 
 
+## A finger on the Menu button is the menu's, not the stick's or the look's.
 func _touch_ignores(position: Vector2) -> bool:
-	return _touch != null and _touch.contains_point(position)
+	var menu: Object = platform.menu if platform != null else null
+	var button: Control = menu.get(&"menu_button") if menu != null else null
+	return button != null and button.is_visible_in_tree() and button.get_global_rect().has_point(position)
 
 
-## A finger on the look or move half goes to the touch sampler.
-func _on_screen_touch(event: InputEvent) -> void:
-	var sampler := _active_sampler()
-	if sampler is DotFpsTouchSampler:
-		(sampler as DotFpsTouchSampler).set_screen_width(get_viewport().get_visible_rect().size.x)
-	if sampler != null:
-		sampler.handle_event(event)
+## True while the touch controls may act: alive, playing, not under the cover.
+func touch_live() -> bool:
+	return player != null and player.is_alive() and not is_spectating() and not _covered()
+
+
+## The overlay rests while a menu, the chat box or the cover is up; the gun in hand sets auto-fire.
+func _sync_touch() -> void:
+	if _touch == null:
+		return
+	var busy := _covered() or (platform != null and platform.is_input_blocked())
+	_touch.sync(busy, weapons.current_def() if weapons != null and weapons.arsenal != null else null)
+
+
+## Fire: the mouse, or a thumb (or auto-fire) on the overlay's fire button.
+func _fire_held() -> bool:
+	return _firing or (_touch != null and not is_spectating() and _touch.is_held(WoTouch.FIRE))
 
 
 ## A weapon step through the same wheel the previous/next-weapon actions drive.
@@ -1424,8 +1440,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _covered():
 		return
 
-	if event is InputEventScreenTouch or event is InputEventScreenDrag:
-		_on_screen_touch(event)
+	# The overlay forwards its own touches to the sampler; Godot's emulated mouse would turn and click twice.
+	if _touch != null and _touch.takes(event):
 		return
 
 	# Tab, M and a click taking the pointer back are the platform's (DotGameClient).

@@ -1,12 +1,13 @@
 extends DotGameCheckSuite
 
-## The on-screen buttons: the layout fits a phone, each button reaches its handler, jump and duck reach the sampler.
+## The on-screen buttons: the layout fits a phone, the dot-mobile overlay drives the sampler and reaches the handlers, and the
+## crosshair test holds fire on team-mates and the dead.
 ## Run: `godot --headless --path . res://examples/headless_touch.tscn`.
 
 const WoTouch := preload("../game/wo_touch.gd")
 const WoHud := preload("../game/wo_hud.gd")
 
-const CHECKS := 28
+const CHECKS := 39
 var _entered := 0
 var _finished := 0
 
@@ -42,29 +43,10 @@ func _run() -> void:
 		and homes.row(WoTouch.GRAB)["offset"] == Vector2(190, 150), "fire, jump and grab sit where the player's thumb learnt them")
 
 	var tunables := DotFpsTunables.new()
-	var sampler := DotFpsTouchSampler.new(tunables)
-	var seen := {}
-	var handlers := {}
-	for id: StringName in [WoTouch.FIRE, WoTouch.ALT, WoTouch.GRAB, WoTouch.RELOAD]:
-		handlers[id] = func(down: bool) -> void: seen[id] = down
-	var holder := Control.new()
-	add_child(holder)
-	var touch := WoTouch.new()
-	var buttons := touch.build(holder, func() -> Variant: return sampler, handlers)
-	buttons.button_down.emit(WoTouch.FIRE)
-	_check(seen.get(WoTouch.FIRE, false) == true, "fire down reaches its handler")
-	buttons.button_up.emit(WoTouch.FIRE)
-	_check(seen.get(WoTouch.FIRE, true) == false, "fire up reaches its handler")
-	buttons.button_down.emit(WoTouch.GRAB)
-	_check(seen.get(WoTouch.GRAB, false) == true, "grab is held")
-	buttons.button_down.emit(WoTouch.JUMP)
-	_check(sampler.sample(0.016).is_pressed(DotFpsCommand.BUTTON_JUMP), "jump down reaches the sampler")
-	buttons.button_up.emit(WoTouch.JUMP)
-	_check(not sampler.sample(0.016).is_pressed(DotFpsCommand.BUTTON_JUMP), "jump up clears it")
-	_check(not touch.contains_point(Vector2(-50, -50)), "a point off every button is not a button's")
 	var kb := WoTouch.make_sampler(tunables, Callable())
 	_check(kb != null and not DotPlatform.has_touch() and not kb is DotFpsTouchSampler, "no touch device gets the keyboard sampler")
-	holder.queue_free()
+	_overlay()
+	_crosshair()
 
 	for view: Vector2 in [Vector2(844, 390), Vector2(667, 375), Vector2(932, 430)]:
 		# DotGameScreenFit stretches a phone to a canvas with a 720 unit short side, and scales the buttons up to a thumb
@@ -108,3 +90,101 @@ func _check_no_overlap(view: Vector2, k: float) -> void:
 				clear = false
 				culprit = "%s and the %s button" % [names[i], b["id"]]
 	_check(clear, "no HUD piece overlaps another or a button at %dx%d, buttons x%.2f" % [int(view.x), int(view.y), k], culprit)
+
+
+## A stand-in for a player: the members the crosshair test reads.
+class Body extends Node3D:
+	var player_id: StringName = &""
+	var alive := true
+	var watching := false
+
+	func is_alive() -> bool:
+		return alive
+
+
+## A stand-in for the game state: players, sides and whether there are teams.
+class Match extends RefCounted:
+	var players := {}
+	var sides := {}
+	var config := Cfg.new()
+
+	func team_of(id: StringName) -> int:
+		return int(sides.get(id, 0))
+
+
+class Cfg extends RefCounted:
+	var team_count := 2
+
+	func teams() -> bool:
+		return team_count >= 2
+
+
+func _overlay() -> void:
+	DotPlatform.touch_override = 1
+	# The real parent is the HUD, a CanvasLayer.
+	var host := CanvasLayer.new()
+	add_child(host)
+	var sampler := DotFpsTouchSampler.new(DotFpsTunables.new())
+	var seen := {}
+	var handlers := {}
+	for id: StringName in [WoTouch.ALT, WoTouch.GRAB, WoTouch.RELOAD, WoTouch.PREV, WoTouch.NEXT]:
+		handlers[id] = func(down: bool) -> void: seen[id] = down
+	var touch := WoTouch.new()
+	var controls := touch.build(self, host, sampler, DotMobileRules.new(), handlers)
+	_check(controls != null and controls.touch and controls.sampler == sampler, "the overlay drives the client's own sampler", str(touch.describe()))
+	_check(touch.buttons != null and touch.buttons.radius_of(WoTouch.FIRE) > 0.0, "the buttons are built, fire among them")
+	var tap := InputEventScreenTouch.new()
+	tap.pressed = true
+	var fake := InputEventMouseMotion.new()
+	fake.device = InputEvent.DEVICE_ID_EMULATION
+	_check(touch.takes(tap) and touch.takes(fake), "it takes touches and the mouse emulated from them")
+	_check(not touch.takes(InputEventMouseMotion.new()), "a real mouse is not its")
+	for id: StringName in [WoTouch.ALT, WoTouch.GRAB, WoTouch.RELOAD]:
+		controls.button_pressed.emit(id)
+		_check(seen.get(id, false) == true, "%s down reaches its handler" % id)
+	controls.button_released.emit(WoTouch.GRAB)
+	_check(seen.get(WoTouch.GRAB, true) == false, "grab up reaches its handler")
+	controls.button_pressed.emit(WoTouch.JUMP)
+	_check(not seen.has(WoTouch.JUMP), "jump is the overlay's own, not a handler's")
+	touch.sync(true, null)
+	_check(not controls.visible and not touch.active(), "a menu pauses it")
+	touch.sync(false, null)
+	_check(touch.active(), "and closing the menu brings it back")
+	_check(not touch.contains_point(Vector2(-9000, -9000)), "a point off every button is not a button's")
+	host.free()
+	DotPlatform.touch_override = -1
+
+
+func _crosshair() -> void:
+	var game := Match.new()
+	var me := _body(game, &"1", 1, Vector3.ZERO)
+	var enemy := _body(game, &"7", 2, Vector3(0, 0, -10))
+	var eye := Vector3(0, 1.6, 0)
+	var ahead := Vector3(0, 0, -1)
+	var foe := DotMobileAutoFire.TARGET_ENEMY
+	var friend := DotMobileAutoFire.TARGET_FRIEND
+	var none := DotMobileAutoFire.TARGET_NONE
+	_check(WoTouch.crosshair_kind(eye, ahead, me, game, null, 0) == foe, "the crosshair on a living opponent is an enemy")
+	_check(WoTouch.crosshair_kind(eye, Vector3(1, 0, 0), me, game, null, 0) == none, "looking away is nothing")
+	var mate := _body(game, &"4", 1, Vector3(0, 0, -5))
+	_check(WoTouch.crosshair_kind(eye, ahead, me, game, null, 0) == friend, "a team-mate in front holds fire")
+	mate.free()
+	game.players.erase(&"4")
+	enemy.alive = false
+	_check(WoTouch.crosshair_kind(eye, ahead, me, game, null, 0) == friend, "the dead are never shot")
+	enemy.alive = true
+	game.config.team_count = 0
+	game.sides[&"7"] = 1
+	_check(WoTouch.crosshair_kind(eye, ahead, me, game, null, 0) == foe, "without teams the nearest body is an enemy")
+	for b: Node in [me, enemy]:
+		b.free()
+
+
+func _body(game: Match, id: StringName, side: int, at: Vector3) -> Body:
+	var b := Body.new()
+	b.player_id = id
+	add_child(b)
+	b.global_position = at
+	game.players[id] = b
+	game.sides[id] = side
+	return b

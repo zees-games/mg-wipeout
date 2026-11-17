@@ -149,7 +149,12 @@ func _cluster_left() -> float:
 	if _touch_buttons == null or not is_instance_valid(_touch_buttons) or not _touch_buttons.has_method(&"footprint"):
 		return -1.0
 	var foot: Rect2 = _touch_buttons.call(&"footprint")
-	return foot.position.x if foot.size != Vector2.ZERO else -1.0
+	if foot.size == Vector2.ZERO:
+		return -1.0
+	# A mirrored (left-handed) cluster sits on the left: nothing to clear on the right.
+	if foot.position.x < _root.get_viewport_rect().size.x * 0.5:
+		return -1.0
+	return foot.position.x
 
 
 func _apply_touch_layout() -> void:

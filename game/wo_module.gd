@@ -245,6 +245,7 @@ func _bind_rule_cvars(world: WoGame) -> void:
 
 	# mp_forceview and mp_solidplayers: the client places its camera and predicts its player under them.
 	var _views := world.view_rules.bind_cvars(add_cvar, replicated)
+	var _mobile := world.mobile_rules.bind_cvars(add_cvar, replicated)
 	var _bodies := world.body_rules.bind_cvars(add_cvar, replicated)
 
 	# sv_toys*: a client hides the toys the server took away.
