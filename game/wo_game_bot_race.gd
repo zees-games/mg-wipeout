@@ -427,7 +427,7 @@ func _bot_hop(player: WoPlayer, command: DotFpsCommand, yaw: float = NAN) -> voi
 		var where_standing := at + heading * _cfg().run_speed * ahead
 		var tick := _tick + int(ahead * _rate())
 
-		if stage.knock(where_standing, false, tick, limits) == Vector3.ZERO:
+		if stage.bot_knock(where_standing, false, tick, limits) == Vector3.ZERO:
 			continue
 
 		# [b]A high arm is ducked, never jumped.[/b] If crouching clears what standing does
@@ -435,10 +435,10 @@ func _bot_hop(player: WoPlayer, command: DotFpsCommand, yaw: float = NAN) -> voi
 		# would give it, because all it knows is that something is coming.
 		var where_crouched := at + heading * _cfg().run_speed * 0.4 * ahead
 
-		if high_arm and stage.knock(where_crouched, true, tick, limits) == Vector3.ZERO:
+		if high_arm and stage.bot_knock(where_crouched, true, tick, limits) == Vector3.ZERO:
 			duck = true
 		elif ahead >= 0.2 and ahead <= 0.4 \
-				and stage.knock(where_standing + Vector3(0.0, 1.0, 0.0), false, tick, limits) == Vector3.ZERO:
+				and stage.bot_knock(where_standing + Vector3(0.0, 1.0, 0.0), false, tick, limits) == Vector3.ZERO:
 			# Only what a jump clears: a metre up a low arm has passed under, a ram or a hammer has not.
 			# Hopping a ram put the runner in it in the air (Punch Alley).
 			jump = true
@@ -598,13 +598,13 @@ func _bot_hold_for_landing(command: DotFpsCommand, at: Vector3, heading: Vector3
 	var lands := false
 	for ahead in [0.72, 0.85]:
 		var where: Vector3 = at + heading * _cfg().run_speed * ahead
-		if stage.knock(where, false, _tick + int(ahead * _rate()), limits) != Vector3.ZERO:
+		if stage.bot_knock(where, false, _tick + int(ahead * _rate()), limits) != Vector3.ZERO:
 			lands = true
 			break
 	if not lands:
 		return false
 	for ahead in [0.0, 0.15, 0.3, 0.45]:
-		if stage.knock(at, false, _tick + int(ahead * _rate()), limits) != Vector3.ZERO:
+		if stage.bot_knock(at, false, _tick + int(ahead * _rate()), limits) != Vector3.ZERO:
 			return false
 	command.move = Vector2.ZERO
 	command.set_button(DotFpsCommand.BUTTON_WALK, false)

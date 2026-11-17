@@ -26,6 +26,27 @@ func high_arm_near(at: Vector3, radius: float) -> bool:
 ## [param tick], meets no hazard. Exact: it asks [method knock] about every point at the tick it
 ## will be there, so a course no stand-in can cross has really no timing window.
 func path_clear(from: Vector3, to: Vector3, tick: int, speed: float, margin_seconds: float = 0.5) -> bool:
+	var native: Variant = hazards_native()
+
+	if native == null:
+		return path_clear_script(from, to, tick, speed, margin_seconds)
+
+	var clear: bool = native.path_clear(from, to, tick, speed, margin_seconds)
+
+	if knock_verify:
+		var script := path_clear_script(from, to, tick, speed, margin_seconds)
+		knock_checked += 1
+
+		if script != clear:
+			knock_differ += 1
+			push_error("WoCourse.path_clear: native %s, script %s from %s to %s at tick %d" % [clear, script, from, to, tick])
+			return script
+
+	return clear
+
+
+## [method path_clear] in script: the fallback with no library, and the twin [member knock_verify] holds it to.
+func path_clear_script(from: Vector3, to: Vector3, tick: int, speed: float, margin_seconds: float = 0.5) -> bool:
 	# Four fifths of the run speed: whoever asks is standing still, and the first few metres
 	# are spent getting up to speed.
 	speed *= 0.8
@@ -44,6 +65,138 @@ func path_clear(from: Vector3, to: Vector3, tick: int, speed: float, margin_seco
 
 	return true
 
+
+## Whether a stand-in's asks ([method bot_knock], [method path_clear]) go to dot-sim's `DotSimHazards` when the
+## library has it: the course's hazards written once per build, each ask one call. A player's own knock
+## ([method knock], in [WoPlayer]'s tick) stays in script. Off: the script for everything.
+static var native_knock := true
+## Whether every native ask is asked of the script too: any difference is an error and the script's answer wins.
+static var knock_verify := false
+## Asks checked and asks that differed under [member knock_verify].
+static var knock_checked := 0
+static var knock_differ := 0
+
+## The native table for this build: null before the first ask, without the module, or for a hazard it could not take.
+var _native_hazards: Variant = null
+var _native_built := false
+var _native_rate := -1
+var _native_cull := true
+
+
+## [method knock] for a stand-in: dot-sim's answer when the library has the hazards module, the script's otherwise.
+## The same throw to the bit (`headless_native_knock`).
+func bot_knock(feet: Vector3, crouched: bool, tick: int, limits: Vector3) -> Vector3:
+	var native: Variant = hazards_native()
+
+	if native == null:
+		return knock(feet, crouched, tick, limits)
+
+	var thrown: Vector3 = native.knock(feet, crouched, tick, limits)
+
+	if knock_verify:
+		var script := knock(feet, crouched, tick, limits)
+		knock_checked += 1
+
+		if script != thrown:
+			knock_differ += 1
+			push_error("WoCourse.bot_knock: native %s, script %s at %s tick %d" % [thrown, script, feet, tick])
+			return script
+
+	return thrown
+
+
+## The native hazard table for the course as built, made on the first ask after [method build]; null when
+## [member native_knock] is off or the library has no hazards module.
+func hazards_native() -> Variant:
+	if not native_knock:
+		return null
+
+	if not _native_built:
+		_native_built = true
+		_native_hazards = _make_native_hazards()
+		_native_rate = -1
+
+	if _native_hazards == null:
+		return null
+
+	if _native_rate != tick_rate:
+		_native_rate = tick_rate
+		_native_hazards.set_tick_rate(tick_rate)
+
+	if _native_cull != cull_hazards:
+		_native_cull = cull_hazards
+		_native_hazards.set_cull(cull_hazards)
+
+	return _native_hazards
+
+
+## Forgets the native table: the next ask writes the course again. [method clear] calls it.
+func drop_native_hazards() -> void:
+	_native_hazards = null
+	_native_built = false
+
+
+func _make_native_hazards() -> Variant:
+	if not DotSim.has(&"hazards"):
+		return null
+
+	var table: Variant = ClassDB.instantiate(&"DotSimHazards")
+
+	if table == null:
+		return null
+
+	table.set_tick_rate(tick_rate)
+	table.set_cull(cull_hazards)
+	_native_rate = tick_rate
+	_native_cull = cull_hazards
+
+	for piece: Dictionary in pieces:
+		if not bool(piece["hazard"]):
+			continue
+
+		var spec: Dictionary = piece["spec"]
+		var kind := str(piece["kind"])
+		var root: Node3D = piece["node"]
+		var frame := Transform3D.IDENTITY
+		var aux := Transform3D.IDENTITY
+		var numbers := PackedFloat64Array()
+
+		match kind:
+			"spinner":
+				frame = root.transform
+				numbers = PackedFloat64Array([
+					float(spec.get("arm_height", 1.0)), float(spec["arm_length"]), float(spec.get("hub_radius", 0.6)),
+					float(spec.get("arm_thickness", 0.35)), float(int(spec.get("arms", 1))), float(spec.get("phase", 0.0)),
+					float(spec["speed"]),
+				])
+			"pendulum":
+				frame = Transform3D(_yaw_basis(float(spec.get("yaw", 0.0))), spec["pivot"])
+				numbers = PackedFloat64Array([
+					float(spec["length"]), float(spec["radius"]), float(spec["swing"]), float(spec["period"]),
+					float(spec.get("phase", 0.0)),
+				])
+			"pusher":
+				var size: Vector3 = spec["size"]
+				frame = root.transform
+				aux = Transform3D(_yaw_basis(float(spec.get("yaw", 0.0))), spec["at"])
+				numbers = PackedFloat64Array([
+					size.x, size.y, size.z, float(spec["reach"]), float(spec["period"]), float(spec.get("phase", 0.0)),
+					float(spec.get("duty", 0.35)),
+				])
+			"fall":
+				var size: Vector3 = spec["size"]
+				frame = root.transform
+				aux = root.transform.affine_inverse()
+				numbers = PackedFloat64Array([
+					size.x, size.y, size.z, float(spec.get("push", 9.0)), float(spec["period"]),
+					float(spec.get("phase", 0.0)), float(spec.get("duty", 0.4)),
+				])
+
+		if not bool(table.add(kind, frame, aux, numbers, _hazard_centre(piece), _hazard_reach(piece))):
+			push_error("WoCourse: dot-sim refused hazard %s %d; stand-ins ask the script" % [kind, int(piece["index"])])
+			return null
+
+	return table
 
 ## Whether something solid is under [param point] on [param tick]: what a stand-in asks
 ## before jumping for a mover or a tile.
