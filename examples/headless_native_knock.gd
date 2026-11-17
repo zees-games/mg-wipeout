@@ -65,6 +65,52 @@ func _run() -> void:
 
 	_entered += 1
 	print("every course and arena: seeded knocks and runs, native against the script")
+	await _seeded_section(catalogue, ids)
+	_done += 1
+
+	_entered += 1
+	print("native_knock off asks the script; a rebuilt course writes its table again")
+	var doc: Dictionary = catalogue.courses[StringName(LIVE_COURSE)]
+	var game := await _fresh_world(doc)
+	var _built := game.build_stage(doc)
+	var first: Variant = game.stage.hazards_native()
+	WoCourse.native_knock = false
+	_check(game.stage.hazards_native() == null, "off, there is no native table")
+	WoCourse.native_knock = true
+	var _rebuilt := game.build_stage(doc)
+	var second: Variant = game.stage.hazards_native()
+	_check(first != null and second != null and first != second, "a new build makes a new table")
+	_done += 1
+
+	_entered += 1
+	print("a field racing with knock_verify: the script beside every live ask")
+	game = await _round(doc)
+	WoCourse.knock_checked = 0
+	WoCourse.knock_differ = 0
+	WoCourse.knock_verify = true
+	for i in range(LIVE_TICKS):
+		game.simulate(TICK)
+		if i % 512 == 0:
+			await get_tree().process_frame
+	WoCourse.knock_verify = false
+	print("  %d asks checked, %d differ" % [WoCourse.knock_checked, WoCourse.knock_differ])
+	_check(WoCourse.knock_checked > 100, "the stand-ins asked", str(WoCourse.knock_checked))
+	_check(WoCourse.knock_differ == 0, "and no ask differs", str(WoCourse.knock_differ))
+	_done += 1
+
+	_entered += 1
+	print("the cost: a %d-bot round's ticks, native and script alternated" % BOTS)
+	await _cost_section(doc)
+	_done += 1
+
+	if _world != null:
+		remove_child(_world)
+		_world.free()
+		_world = null
+	_report_sections(_entered, _done, 5, 10)
+
+
+func _seeded_section(catalogue: WoCatalogue, ids: Array) -> void:
 	var asked := 0
 	var hits := 0
 	var runs := 0
@@ -124,41 +170,10 @@ func _run() -> void:
 	_check(asked > 0 and hits >= asked / 200, "the asks hit hazards often enough to mean something", "%d of %d" % [hits, asked])
 	_check(runs > 0 and blocked > 0 and blocked < runs, "and the runs are both clear and blocked", "%d of %d blocked" % [blocked, runs])
 	_check(differ.is_empty(), "the native knock and path_clear answer as the script does", "; ".join(differ))
-	_done += 1
 
-	_entered += 1
-	print("native_knock off asks the script; a rebuilt course writes its table again")
-	var doc: Dictionary = catalogue.courses[StringName(LIVE_COURSE)]
-	var game := await _fresh_world(doc)
-	var _built := game.build_stage(doc)
-	var first: Variant = game.stage.hazards_native()
-	WoCourse.native_knock = false
-	_check(game.stage.hazards_native() == null, "off, there is no native table")
-	WoCourse.native_knock = true
-	var _rebuilt := game.build_stage(doc)
-	var second: Variant = game.stage.hazards_native()
-	_check(first != null and second != null and first != second, "a new build makes a new table")
-	_done += 1
 
-	_entered += 1
-	print("a field racing with knock_verify: the script beside every live ask")
-	game = await _round(doc)
-	WoCourse.knock_checked = 0
-	WoCourse.knock_differ = 0
-	WoCourse.knock_verify = true
-	for i in range(LIVE_TICKS):
-		game.simulate(TICK)
-		if i % 512 == 0:
-			await get_tree().process_frame
-	WoCourse.knock_verify = false
-	print("  %d asks checked, %d differ" % [WoCourse.knock_checked, WoCourse.knock_differ])
-	_check(WoCourse.knock_checked > 100, "the stand-ins asked", str(WoCourse.knock_checked))
-	_check(WoCourse.knock_differ == 0, "and no ask differs", str(WoCourse.knock_differ))
-	_done += 1
-
-	_entered += 1
-	print("the cost: a %d-bot round's ticks, native and script alternated" % BOTS)
-	game = await _round(doc)
+func _cost_section(doc: Dictionary) -> void:
+	var game := await _round(doc)
 	var spent := {"native": [], "script": []}
 	for i in range(BENCH_TICKS):
 		var mode: String = "native" if (i / 2) % 2 == 0 else "script"
@@ -179,13 +194,6 @@ func _run() -> void:
 		lines.append("%s mean %.3f ms median %.3f ms p95 %.3f ms" % [mode, total / 1000.0 / times.size(),
 			times[times.size() / 2] / 1000.0, times[int(times.size() * 0.95)] / 1000.0])
 	print("  " + "; ".join(lines))
-	_done += 1
-
-	if _world != null:
-		remove_child(_world)
-		_world.free()
-		_world = null
-	_report_sections(_entered, _done, 5, 10)
 
 
 ## Where to ask from: every route point and every hazard's centre.

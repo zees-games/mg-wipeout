@@ -866,13 +866,11 @@ func ladder_boxes() -> Array[AABB]:
 
 func _read_ladders() -> void:
 	var out: Array[AABB] = []
-
 	for piece: Dictionary in pieces:
 		if str(piece["kind"]) == "ladder":
 			var spec: Dictionary = piece["spec"]
 			var size: Vector3 = spec["size"]
 			out.append(AABB((spec["at"] as Vector3) - size * 0.5, size))
-
 	_ladders = out
 
 
