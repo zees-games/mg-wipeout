@@ -1,5 +1,5 @@
 extends "headless_run_flashlight.gd"
-## Falling off, being knocked, and dying at once: what a course does to somebody on it.
+## Falling off, being knocked, and dying at once, and the gusts and lightning: what a course does to somebody on it.
 
 
 func _test_the_knock() -> void:
@@ -118,3 +118,32 @@ func _piece(game: WoGame, kind: String) -> Dictionary:
 			return piece
 
 	return {}
+
+
+func _test_the_weather() -> void:
+	_section("gusts and lightning are drawn once and computed from the tick")
+	var game := await _world(func(c: WoConfig) -> void:
+		c.wind_chance = 1.0
+		c.storm_chance = 1.0)
+	var doc: Dictionary = game.course_doc
+	var once := game.draw_weather(doc, DotRandomStream.new(7, &"weather"), 100)
+	var twice := game.draw_weather(doc, DotRandomStream.new(7, &"weather"), 100)
+	_check(once == twice, "the same stream draws the same weather")
+	_check((once["gusts"] as Array).size() > 0 and (once["strikes"] as Array).size() == game.config.storm_strikes,
+		"wind and storm on: gusts and %d strikes" % game.config.storm_strikes)
+
+	# A known plan: one gust east from tick 200 to 600, one strike at the start at tick 300.
+	var start: Vector3 = doc["start"]["at"]
+	var planned := doc.duplicate(true)
+	planned["weather"] = {
+		"gusts": [{"from": 200, "to": 600, "dx": 1.0, "dz": 0.0, "strength": 10.0}],
+		"strikes": [{"tick": 300, "x": start.x, "y": start.y, "z": start.z, "radius": 3.0}],
+	}
+	var _built := game.build_stage(planned)
+	_check(game.stage.wind(150) == Vector3.ZERO and game.stage.wind(400).x > 9.0,
+		"the wind blows only inside its gust (%.1f at 400)" % game.stage.wind(400).x)
+	_check(game.stage.is_stormy() and not game.stage.strike_at(300).is_empty(), "the course knows its storm")
+	_check(game.stage.strike(start, 300) != Vector3.ZERO and game.stage.strike(start, 301) == Vector3.ZERO,
+		"a strike throws whoever is under it, on its tick only")
+	_check(game.stage.strike(start + Vector3(10.0, 0.0, 0.0), 300) == Vector3.ZERO, "and nobody further away")
+	_finished()
