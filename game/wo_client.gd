@@ -1382,25 +1382,15 @@ func _build_touch() -> void:
 				window.call(&"open"),
 	})
 	if platform != null:
-		# On a dense phone the fit would grow the cluster up to 92% of the height, into the course name and announcer.
-		var fit: Object = platform.get(&"screen_fit")
-		if fit != null and &"button_max_height" in fit:
-			fit.set(&"button_max_height", WoTouch.MAX_HEIGHT)
+		WoTouch.cap_button_height(platform)
 		WoTouch.touch_layout().apply(_touch.buttons, platform)
 	hud.make_room_for_touch(_touch.buttons)
-
-
-func _active_sampler() -> DotFpsSampler:
-	if _offline:
-		return player.sampler if player != null else null
-	return _sampler
+	WoTouch.menu_button_top_left(platform)
 
 
 ## A finger on the Menu button is the menu's, not the stick's or the look's.
 func _touch_ignores(position: Vector2) -> bool:
-	var menu: Object = platform.menu if platform != null else null
-	var button: Control = menu.get(&"menu_button") if menu != null else null
-	return button != null and button.is_visible_in_tree() and button.get_global_rect().has_point(position)
+	return WoTouch.over_menu_button(platform, position)
 
 
 ## True while the touch controls may act: alive, playing, not under the cover.
@@ -1410,10 +1400,8 @@ func touch_live() -> bool:
 
 ## The overlay rests while a menu, the chat box or the cover is up; the gun in hand sets auto-fire.
 func _sync_touch() -> void:
-	if _touch == null:
-		return
-	var busy := _covered() or (platform != null and platform.is_input_blocked())
-	_touch.sync(busy, weapons.current_def() if weapons != null and weapons.arsenal != null else null)
+	if _touch != null:
+		_touch.sync(_covered() or (platform != null and platform.is_input_blocked()), weapons.current_def() if weapons != null and weapons.arsenal != null else null)
 
 
 ## Fire: the mouse, or a thumb (or auto-fire) on the overlay's fire button.

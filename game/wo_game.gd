@@ -124,8 +124,7 @@ var prop_damage: DotPropDamage = null
 
 var match_node: DotMatch = null
 
-## dot-props' `sv_toys*` (whether a stage's toys are there, how many simulate at once, how hard a
-## walk pushes one). Bound by the module (REPLICATED) and followed by a client, which draws them.
+## dot-props' `sv_toys*` (whether toys are there, how many simulate, how hard a walk pushes one): bound by the module (REPLICATED), followed by a client.
 var toy_rules: DotPropBodyRules = DotPropBodyRules.new()
 
 ## What a dead body does, and which death reactions the server allows: dot-player-char's
@@ -137,8 +136,7 @@ var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
 var weapon_layer: WoWeaponLayer = null
 var drop_rules: DotWeaponDropRules = _walk_over_drops()
 
-## dot-player-controller's `mp_forceview` and `mp_solidplayers`. Bound by the module (REPLICATED) and followed by a
-## client through its link, which places its camera under the first and predicts its own player under the second.
+## dot-player-controller's `mp_forceview` (camera) and `mp_solidplayers` (own-player prediction), bound by the module (REPLICATED), followed by a client.
 var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
 ## The phone controls the server allows (sv_mobile_*, sv_autofire*, sv_aim_assist*), followed by every client.
 var mobile_rules: DotMobileRules = DotMobileRules.new()

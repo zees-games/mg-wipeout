@@ -104,6 +104,28 @@ func sync(busy: bool, gun: DotWeaponDef) -> void:
 	controls.autofire.automatic = gun == null or gun.is_continuous()
 
 
+## True over the platform's Menu button, which a finger there leaves to the menu.
+static func over_menu_button(platform: Object, position: Vector2) -> bool:
+	var menu: Object = platform.menu if platform != null else null
+	var button: Control = menu.get(&"menu_button") if menu != null else null
+	return button != null and button.is_visible_in_tree() and button.get_global_rect().has_point(position)
+
+
+## On a dense phone the fit would grow the cluster up to 92% of the height, into the course name and announcer.
+static func cap_button_height(platform: Object) -> void:
+	var fit: Object = platform.get(&"screen_fit")
+	if fit != null and &"button_max_height" in fit:
+		fit.set(&"button_max_height", MAX_HEIGHT)
+
+
+## The Menu button moves to the top left, clear of the buttons. By name: an older dot-menu has no such property.
+static func menu_button_top_left(platform: Object) -> void:
+	var menu: Object = platform.menu if platform != null else null
+	var menu_config: Object = menu.get(&"config") if menu != null else null
+	if menu_config != null and &"menu_button_corner" in menu_config:
+		menu_config.set(&"menu_button_corner", &"top_left")
+
+
 func contains_point(position: Vector2) -> bool:
 	return buttons != null and buttons.contains_point(position)
 
