@@ -2,6 +2,7 @@ extends "wo_course_asks.gd"
 
 const WoCourseDoc := preload("wo_course_doc.gd")
 const WoWorld := preload("wo_world.gd")
+const WoCourseLight := preload("wo_course_light.gd")
 
 ## A course or arena built from its document: the pieces, where each is at a tick, and the questions movement asks.
 ## An obstacle is a pure function of the tick, never replicated: a client poses every one at tick N before predicting N.
@@ -960,7 +961,7 @@ func _build_gallery() -> void:
 
 
 ## The sky, the sun and the water. Client side. The light is a dot-lighting document made from the course's theme
-## ([method light_document]). Contact shade (API 4, the Compatibility renderer has no AO) only on still boxes, bouncers
+## ([method WoCourseLight.light_document]). Contact shade (API 4, the Compatibility renderer has no AO) only on still boxes, bouncers
 ## and the start pen: moving pieces would leave it behind. By path, so an older shell draws without it.
 func _add_contact_shade() -> void:
 	if DotAddonApi.build_level("dot_lighting") < 4 or not ResourceLoader.exists(CONTACT_SHADE_SCRIPT):
@@ -987,8 +988,8 @@ func _build_world() -> void:
 	var lighting := Node3D.new()
 	lighting.name = "Lighting"
 	add_child(lighting)
-	var light := light_document(theme)
-	var sun := DotLightRig.apply(lighting, DotLightDocument.from_dictionary(light), light_profile())
+	var light := WoCourseLight.light_document(theme)
+	var sun := DotLightRig.apply(lighting, DotLightDocument.from_dictionary(light), WoCourseLight.light_profile())
 	if sun != null:
 		sun.shadow_blur = 1.5
 
@@ -1088,40 +1089,6 @@ void fragment() {
 ## Hook for [WoCourse]: the stands, banners and screens of a document's `dressing`.
 func _build_dressing() -> void:
 	pass
-
-
-## The dot-lighting document a course's theme describes. The sun is high (a deck is not in its neighbour's shadow) and
-## behind the start (the faces a runner runs toward are lit). The ambient is a pale cool grey whatever the theme, as a
-## saturated fill turns shaded faces navy. Fog starts at 120 m so nothing a player must react to is hidden.
-static func light_document(theme: Dictionary) -> Dictionary:
-	var sun: Color = theme.get("sun", Color(1.0, 0.96, 0.88))
-	var horizon: Color = theme.get("horizon", Color(0.82, 0.88, 0.94))
-	return {
-		"sun": {
-			"pitch_src": -54.0,
-			"yaw_src": 145.0,
-			"colour": [sun.r, sun.g, sun.b],
-			"brightness": 380.0,
-			"spread_degrees": 1.0,
-			"ambient_colour": [0.74, 0.78, 0.92],
-		},
-		"fog": {
-			"enabled": true,
-			"colour": [horizon.r, horizon.g, horizon.b],
-			"start": 6300.0,
-			"end": 40000.0,
-			"max_density": 0.25,
-		},
-	}
-
-
-## What this machine draws of a course's light: dot-lighting's `painted()` profile (API 3), matched to the
-## Compatibility renderer, which has no headroom above white. Shadows stay on in the browser, unlike `web()`: a mover's
-## shadow on the deck is how a player sees where it is.
-static func light_profile() -> DotLightProfile:
-	var p := DotLightProfile.painted()
-	p.sun_shadows = true
-	return p
 
 
 ## Reads the weather a server drew into the document. Called by [method build].
