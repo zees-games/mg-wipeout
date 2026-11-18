@@ -126,6 +126,7 @@ func clear() -> void:
 		child.queue_free()
 
 	pieces.clear()
+	forget_kinds()
 	drop_native_hazards()
 	io = null
 	_ladders = []

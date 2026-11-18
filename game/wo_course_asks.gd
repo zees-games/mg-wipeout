@@ -5,8 +5,44 @@ extends "wo_course_move.gd"
 ## [param at]. Only a spinner is ducked: a pendulum's ball sweeps up through crouching height
 ## at the ends of its swing, so a duck under one is a slow crawl into it.
 func high_arm_near(at: Vector3, radius: float) -> bool:
-	for piece in pieces:
-		if str(piece["kind"]) != "spinner":
+	_index_kinds()
+
+	for i in range(_high_hubs.size()):
+		var hub := _high_hubs[i]
+
+		if Vector2(at.x - hub.x, at.z - hub.z).length() <= _high_reach[i] + radius:
+			return true
+
+	return false
+
+
+## The spinners [method high_arm_near] ducks, their hubs and arm lengths in [member pieces] order, and the tile
+## grids' indexes in [member pieces]: what a stand-in's asks walk instead of every piece. Taken for a count of
+## pieces; [method forget_kinds] drops them when the course is cleared.
+var _high_hubs := PackedVector3Array()
+var _high_reach := PackedFloat64Array()
+var _tile_pieces := PackedInt32Array()
+var _kinds_for := -1
+
+
+## Builds [member _high_hubs], [member _high_reach] and [member _tile_pieces] if the pieces changed since.
+func _index_kinds() -> void:
+	if _kinds_for == pieces.size():
+		return
+
+	_high_hubs = PackedVector3Array()
+	_high_reach = PackedFloat64Array()
+	_tile_pieces = PackedInt32Array()
+
+	for index in range(pieces.size()):
+		var piece: Dictionary = pieces[index]
+		var kind := str(piece["kind"])
+
+		if kind == "tiles":
+			_tile_pieces.append(index)
+			continue
+
+		if kind != "spinner":
 			continue
 
 		var spec: Dictionary = piece["spec"]
@@ -14,12 +50,15 @@ func high_arm_near(at: Vector3, radius: float) -> bool:
 		if float(spec.get("arm_height", 1.0)) < 1.1:
 			continue
 
-		var hub: Vector3 = spec["at"]
+		_high_hubs.append(spec["at"])
+		_high_reach.append(float(spec["arm_length"]))
 
-		if Vector2(at.x - hub.x, at.z - hub.z).length() <= float(spec["arm_length"]) + radius:
-			return true
+	_kinds_for = pieces.size()
 
-	return false
+
+## Drops what [method _index_kinds] kept: the course was cleared, and a new one of the same size is not the same one.
+func forget_kinds() -> void:
+	_kinds_for = -1
 
 
 ## Whether running straight from [param from] to [param to] at [param speed], starting on
@@ -246,11 +285,10 @@ func supported(point: Vector3, tick: int) -> bool:
 ## to step to a column whose tile is up, rather than only ever running down the middle.
 func tile_columns(point: Vector3) -> Array[Vector3]:
 	var out: Array[Vector3] = []
+	_index_kinds()
 
-	for piece in pieces:
-		if str(piece["kind"]) != "tiles":
-			continue
-
+	for index in _tile_pieces:
+		var piece: Dictionary = pieces[index]
 		var spec: Dictionary = piece["spec"]
 		var root: Node3D = piece["node"]
 		var local := root.transform.affine_inverse() * point
@@ -277,12 +315,10 @@ func tile_columns(point: Vector3) -> Array[Vector3]:
 ## index into [member pieces]), or empty off every grid. A point in the gap between two rows
 ## counts as the nearer one, as [method supported] counts it.
 func tile_cell(point: Vector3) -> Dictionary:
-	for index in range(pieces.size()):
+	_index_kinds()
+
+	for index in _tile_pieces:
 		var piece: Dictionary = pieces[index]
-
-		if str(piece["kind"]) != "tiles":
-			continue
-
 		var spec: Dictionary = piece["spec"]
 		var local := (piece["node"] as Node3D).transform.affine_inverse() * point
 		var cols := int(spec["cols"])

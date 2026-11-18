@@ -40,19 +40,6 @@ func _run() -> void:
 	print("wipeout: native hazard knock")
 	print("")
 
-	_entered += 1
-	print("the library has the hazards")
-	if not DotSim.has(&"hazards"):
-		print("  dot-sim's hazards module is not loaded: the native half is skipped")
-		var required := (OS.get_environment("GS_SIM_REQUIRE_NATIVE") if OS.has_environment("GS_SIM_REQUIRE_NATIVE") else OS.get_environment("DOT_SIM_REQUIRE_NATIVE")) == "1"
-		_check(not required, "the library is loaded (GS_SIM_REQUIRE_NATIVE=1)")
-		_done += 1
-		_report_sections(_entered, _done, 1, 1)
-		return
-	_check(WoCourse.native_knock, "WoCourse.native_knock is on without the game turning it on")
-	_check(not WoCourse.knock_verify, "and knock_verify off")
-	_done += 1
-
 	var catalogue := WoCatalogue.new()
 	var _loaded := catalogue.load_from("courses")
 	var ids: Array = []
@@ -62,6 +49,24 @@ func _run() -> void:
 	for id: StringName in catalogue.arenas:
 		ids.append(id)
 	ids.sort()
+
+	_entered += 1
+	print("every course and arena, built one after another: the kept spinner and tile indexes answer as the walk")
+	await _kinds_section(catalogue, ids)
+	_done += 1
+
+	_entered += 1
+	print("the library has the hazards")
+	if not DotSim.has(&"hazards"):
+		print("  dot-sim's hazards module is not loaded: the native half is skipped")
+		var required := (OS.get_environment("GS_SIM_REQUIRE_NATIVE") if OS.has_environment("GS_SIM_REQUIRE_NATIVE") else OS.get_environment("DOT_SIM_REQUIRE_NATIVE")) == "1"
+		_check(not required, "the library is loaded (GS_SIM_REQUIRE_NATIVE=1)")
+		_done += 1
+		_report_sections(_entered, _done, 2, 4)
+		return
+	_check(WoCourse.native_knock, "WoCourse.native_knock is on without the game turning it on")
+	_check(not WoCourse.knock_verify, "and knock_verify off")
+	_done += 1
 
 	_entered += 1
 	print("every course and arena: seeded knocks and runs, native against the script")
@@ -107,7 +112,7 @@ func _run() -> void:
 		remove_child(_world)
 		_world.free()
 		_world = null
-	_report_sections(_entered, _done, 5, 10)
+	_report_sections(_entered, _done, 6, 13)
 
 
 func _seeded_section(catalogue: WoCatalogue, ids: Array) -> void:
@@ -170,6 +175,122 @@ func _seeded_section(catalogue: WoCatalogue, ids: Array) -> void:
 	_check(asked > 0 and hits >= asked / 200, "the asks hit hazards often enough to mean something", "%d of %d" % [hits, asked])
 	_check(runs > 0 and blocked > 0 and blocked < runs, "and the runs are both clear and blocked", "%d of %d blocked" % [blocked, runs])
 	_check(differ.is_empty(), "the native knock and path_clear answer as the script does", "; ".join(differ))
+
+
+## [method WoCourse.high_arm_near], [method WoCourse.tile_cell] and [method WoCourse.tile_columns] walk the spinners and
+## tile grids they keep, not every piece: on every course, built one after another in one world (so each build's clear
+## must drop the last course's), seeded points round the route, the hubs and the grids answer as the walk over every
+## piece does. Then the cost of each, kept and walked, alternated.
+func _kinds_section(catalogue: WoCatalogue, ids: Array) -> void:
+	var game := await _fresh_world(catalogue.courses[StringName(LIVE_COURSE)])
+	var asked := 0
+	var near := 0
+	var on_tiles := 0
+	var differ: Array[String] = []
+	var spent := {"kept": 0, "walk": 0}
+	var timed := {"kept": 0, "walk": 0}
+	for id: StringName in ids:
+		var doc: Dictionary = catalogue.courses.get(id, catalogue.arenas.get(id, {}))
+		var _built := game.build_stage(doc)
+		var stage: WoCourse = game.stage
+		var rng := RandomNumberGenerator.new()
+		rng.seed = hash(String(id)) ^ SEED
+		var spots := _spots(stage)
+		for piece: Dictionary in stage.pieces:
+			var kind := str(piece["kind"])
+			if kind == "spinner":
+				spots.append((piece["spec"] as Dictionary)["at"])
+			elif kind == "tiles":
+				spots.append((piece["node"] as Node3D).transform.origin)
+		for ask in range(ASKS):
+			var at: Vector3 = spots[rng.randi_range(0, spots.size() - 1)] + Vector3(
+				rng.randf_range(-8.0, 8.0), rng.randf_range(-3.5, 3.5), rng.randf_range(-8.0, 8.0))
+			var radius := rng.randf_range(0.0, 2.0)
+			var kept_high := stage.high_arm_near(at, radius)
+			var kept_cell := stage.tile_cell(at)
+			var kept_columns := stage.tile_columns(at)
+			var walk_high := _high_arm_walk(stage, at, radius)
+			var walk_cell := _tile_cell_walk(stage, at)
+			var walk_columns := _tile_columns_walk(stage, at)
+			asked += 1
+			near += 1 if walk_high else 0
+			on_tiles += 0 if walk_cell.is_empty() else 1
+			if (kept_high != walk_high or kept_cell != walk_cell or kept_columns != walk_columns) and differ.size() < 8:
+				differ.append("%s %s r %.2f: kept %s %s %s, walk %s %s %s" % [id, at, radius,
+					kept_high, kept_cell, kept_columns, walk_high, walk_cell, walk_columns])
+			var arm: String = "kept" if ask % 2 == 0 else "walk"
+			var started := Time.get_ticks_usec()
+			if arm == "kept":
+				var _a := stage.high_arm_near(at, radius)
+				var _b := stage.tile_cell(at)
+			else:
+				var _a := _high_arm_walk(stage, at, radius)
+				var _b := _tile_cell_walk(stage, at)
+			spent[arm] += Time.get_ticks_usec() - started
+			timed[arm] += 1
+		await get_tree().process_frame
+	print("  %d courses; %d points asked (%d by a high arm, %d on tiles)" % [ids.size(), asked, near, on_tiles])
+	print("  high_arm_near + tile_cell: kept %.3f us, walk %.3f us a pair" % [
+		float(spent["kept"]) / maxi(1, timed["kept"]), float(spent["walk"]) / maxi(1, timed["walk"])])
+	_check(near > 0 and on_tiles > 0, "the points are near high arms and on tiles", "%d near, %d on tiles" % [near, on_tiles])
+	_check(near < asked and on_tiles < asked, "and off them", "%d near, %d on tiles of %d" % [near, on_tiles, asked])
+	_check(differ.is_empty(), "the kept indexes answer as the walk over every piece", "; ".join(differ))
+
+
+## [method WoCourse.high_arm_near] as it was, over every piece.
+func _high_arm_walk(stage: WoCourse, at: Vector3, radius: float) -> bool:
+	for piece: Dictionary in stage.pieces:
+		if str(piece["kind"]) != "spinner":
+			continue
+		var spec: Dictionary = piece["spec"]
+		if float(spec.get("arm_height", 1.0)) < 1.1:
+			continue
+		var hub: Vector3 = spec["at"]
+		if Vector2(at.x - hub.x, at.z - hub.z).length() <= float(spec["arm_length"]) + radius:
+			return true
+	return false
+
+
+## [method WoCourse.tile_cell] as it was, over every piece.
+func _tile_cell_walk(stage: WoCourse, point: Vector3) -> Dictionary:
+	for index in range(stage.pieces.size()):
+		var piece: Dictionary = stage.pieces[index]
+		if str(piece["kind"]) != "tiles":
+			continue
+		var spec: Dictionary = piece["spec"]
+		var local := (piece["node"] as Node3D).transform.affine_inverse() * point
+		var cols := int(spec["cols"])
+		var rows := int(spec["rows"])
+		var pitch := float(spec["tile"]) + float(spec.get("gap", 0.25))
+		var col := int(roundf(local.x / pitch + float(cols - 1) * 0.5))
+		var row := int(roundf(local.z / pitch + float(rows - 1) * 0.5))
+		if col >= 0 and col < cols and row >= 0 and row < rows and absf(local.y) < 3.0:
+			return {"piece": index, "row": row, "col": col}
+	return {}
+
+
+## [method WoCourse.tile_columns] as it was, over every piece.
+func _tile_columns_walk(stage: WoCourse, point: Vector3) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	for piece: Dictionary in stage.pieces:
+		if str(piece["kind"]) != "tiles":
+			continue
+		var spec: Dictionary = piece["spec"]
+		var root: Node3D = piece["node"]
+		var local := root.transform.affine_inverse() * point
+		var cols := int(spec["cols"])
+		var rows := int(spec["rows"])
+		var pitch := float(spec["tile"]) + float(spec.get("gap", 0.25))
+		var row := int(roundf(local.z / pitch + float(rows - 1) * 0.5))
+		if row < 0 or row >= rows or absf(local.y) > 3.0 \
+				or absf(local.x) > float(cols) * pitch * 0.5 + 0.5:
+			continue
+		for col in range(cols):
+			var x := (float(col) - float(cols - 1) * 0.5) * pitch
+			out.append(root.transform.basis * Vector3(x - local.x, 0.0, 0.0))
+		out.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.length() < b.length())
+		return out
+	return out
 
 
 func _cost_section(doc: Dictionary) -> void:
