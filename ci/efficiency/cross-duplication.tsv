@@ -1,0 +1,29 @@
+# duplication (cross-game)
+# Baselines only shrink: scripts/<gate> --update lowers or drops entries and refuses to add.
+examples/dedicated.gd	91
+examples/dedicated_late.gd	63
+examples/headless_config.gd	36
+examples/headless_net_rig.gd	33
+examples/headless_net_workbench.gd	47
+examples/headless_run_client.gd	33
+game/net/wo_events.gd	163
+game/net/wo_net_link.gd	120
+game/net/wo_player_net.gd	37
+game/net/wo_prop_net.gd	33
+game/net/wo_toy_net.gd	32
+game/wo_audio.gd	50
+game/wo_avatars.gd	50
+game/wo_catalogue.gd	32
+game/wo_client.gd	123
+game/wo_client_view.gd	36
+game/wo_course_doc.gd	54
+game/wo_figure.gd	87
+game/wo_game.gd	62
+game/wo_hud.gd	36
+game/wo_progress.gd	78
+game/wo_services.gd	120
+game/wo_textures.gd	76
+props/wo_prop_body.gd	44
+tools/client_bench.gd	31
+tools/render_cover.gd	81
+tools/visual_qa.gd	166
