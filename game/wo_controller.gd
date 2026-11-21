@@ -1,4 +1,4 @@
-extends DotFpsController
+extends GSFpsController
 
 ## The first-person controller with the hooks a course needs INSIDE the tick: dot-net's predictor replays ticks by
 ## calling `simulate_tick` directly, so anything done around the tick is skipped on a replay and obstacles would be
@@ -7,7 +7,7 @@ extends DotFpsController
 ## `func(tick: int) -> void`: put the world where it is on [param tick], before the motor runs.
 var before_fn: Callable = Callable()
 
-## `func(tick: int, state: DotFpsState) -> void`: what the world does to the player after
+## `func(tick: int, state: GSFpsState) -> void`: what the world does to the player after
 ## the motor has moved them — a carry, a knock, a bounce.
 var after_fn: Callable = Callable()
 

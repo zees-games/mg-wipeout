@@ -7,7 +7,7 @@ func _test_finish_round_waits_for_a_live_round() -> void:
 	_section("finish_round waits for a live round, not warmup")
 	var module := _module()
 	var vote: Node = module.get("vote") if module != null else null
-	var director: DotVoteDirector = vote.get("director") if vote != null else null
+	var director: GSVoteDirector = vote.get("director") if vote != null else null
 	var hook: Variant = director.get("round_in_progress_fn") if director != null else null
 	_check(hook is Callable and (hook as Callable).is_valid(), "the game tells its vote whether a round is live")
 
@@ -15,21 +15,21 @@ func _test_finish_round_waits_for_a_live_round() -> void:
 		_finished()
 		return
 
-	var match_node: DotMatch = game.match_node
+	var match_node: GSMatch = game.match_node
 	var was := match_node.state
-	match_node.state = DotMatch.State.WARMUP
+	match_node.state = GSMatch.State.WARMUP
 	var warm_applied := []
 	var warm := _finish_round_probe(hook, warm_applied)
 	_check(warm_applied == [&"b"] and not warm.is_finishing_round(),
 		"in warmup a time limit with finish_round changes at once", str(warm_applied))
 
-	match_node.state = DotMatch.State.LIVE
+	match_node.state = GSMatch.State.LIVE
 	var live_applied := []
 	var live := _finish_round_probe(hook, live_applied)
 	_check(live_applied.is_empty() and live.is_finishing_round(),
 		"during a live round it waits for the round", str(live_applied))
 
-	match_node.state = DotMatch.State.INTERMISSION
+	match_node.state = GSMatch.State.INTERMISSION
 	live.advance(0.1)
 	_check(live_applied == [&"b"], "and the round ending is the change", str(live_applied))
 
@@ -41,27 +41,27 @@ func _test_finish_round_waits_for_a_live_round() -> void:
 
 ## A director under `time_up: finish_round` carrying [param hook], its clock run out with a
 ## winner already decided: what dot-vote's own suite builds, with the game's answer in it.
-func _finish_round_probe(hook: Callable, applied: Array) -> DotVoteDirector:
-	var source := DotVoteListSource.new()
-	var _a := source.add(DotVoteChoice.of(&"a", "A"))
-	var _b := source.add(DotVoteChoice.of(&"b", "B"))
-	source.apply_fn = func(id: StringName) -> DotResult:
+func _finish_round_probe(hook: Callable, applied: Array) -> GSVoteDirector:
+	var source := GSVoteListSource.new()
+	var _a := source.add(GSVoteChoice.of(&"a", "A"))
+	var _b := source.add(GSVoteChoice.of(&"b", "B"))
+	source.apply_fn = func(id: StringName) -> GSResult:
 		applied.append(id)
-		return DotResult.success(id)
+		return GSResult.success(id)
 
-	var rules := DotVoteRules.new()
+	var rules := GSVoteRules.new()
 	rules.apply_delay_sec = 0.0
 	rules.duration_sec = 100.0
 	rules.vote_lead_sec = 40.0
 	rules.vote_duration_sec = 5.0
 	rules.include_extend = false
-	rules.apply = DotVoteRules.Apply.END_OF_TIME
+	rules.apply = GSVoteRules.Apply.END_OF_TIME
 	rules.cooldown = 0
-	rules.time_up = DotVoteRules.TimeUp.FINISH_ROUND
+	rules.time_up = GSVoteRules.TimeUp.FINISH_ROUND
 	# For ever: only the hook may release it.
 	rules.finish_round_max_sec = 0.0
 
-	var probe := DotVoteDirector.new()
+	var probe := GSVoteDirector.new()
 	probe.rules = rules
 	probe.source = source
 	probe.register_service = false
@@ -93,7 +93,7 @@ func _test_a_module_reload() -> void:
 
 	for _i in range(2):
 		_check(server.modules.unload_module("wipeout").ok, "the module unloads")
-		var back: DotResult = await server.modules.load_module("res://game/wo_module.gd")
+		var back: GSResult = await server.modules.load_module("res://game/wo_module.gd")
 		_check(back.ok, "and loads again", back.error.message if not back.ok else "")
 	for _i in range(5):
 		await get_tree().process_frame
@@ -109,7 +109,7 @@ func _test_a_module_reload() -> void:
 	side.name = "ReloadClient"
 	add_child(side)
 	get_tree().set_multiplayer(MultiplayerAPI.create_default_interface(), side.get_path())
-	var link := DotClientLink.new()
+	var link := GSClientLink.new()
 	link.name = "Server"
 	link.player_name = "Reloaded"
 	link.transport_preference = "udp"
@@ -129,7 +129,7 @@ func _test_a_module_reload() -> void:
 	link.spawned.connect(func() -> void: spawned[0] = true)
 	link.connect_to_server("127.0.0.1:%d" % PORT)
 	var joined := await _until(func() -> bool:
-		return spawned[0] or link.phase == DotClientLink.Phase.FAILED, 30.0)
+		return spawned[0] or link.phase == GSClientLink.Phase.FAILED, 30.0)
 	_check(joined and spawned[0], "a real client still hears the server's events after two reloads")
 	link.disconnect_from_server("done")
 	for _i in range(10):
@@ -146,7 +146,7 @@ func _test_a_covered_seat_is_not_harmed() -> void:
 
 	var module := _module()
 	var c := await _join_cover_client(module)
-	var link: DotClientLink = c["link"]
+	var link: GSClientLink = c["link"]
 	var peer: int = c["peer"]
 	var session: int = c["session"]
 	var key := WoNetBridge.player_key(session)
@@ -175,7 +175,7 @@ func _join_cover_client(module: Object) -> Dictionary:
 	side.name = "CoverClient"
 	add_child(side)
 	get_tree().set_multiplayer(MultiplayerAPI.create_default_interface(), side.get_path())
-	var link := DotClientLink.new()
+	var link := GSClientLink.new()
 	link.name = "Server"
 	link.player_name = "Covered"
 	link.transport_preference = "udp"
@@ -199,7 +199,7 @@ func _join_cover_client(module: Object) -> Dictionary:
 	link.spawned.connect(func() -> void: spawned[0] = true)
 	link.connect_to_server("127.0.0.1:%d" % PORT)
 	var joined := await _until(func() -> bool:
-		return spawned[0] or link.phase == DotClientLink.Phase.FAILED, 30.0)
+		return spawned[0] or link.phase == GSClientLink.Phase.FAILED, 30.0)
 	joined = joined and spawned[0]
 	var peer := side.multiplayer.get_unique_id() if joined else 0
 	var session := 0
@@ -211,7 +211,7 @@ func _join_cover_client(module: Object) -> Dictionary:
 	return {"side": side, "link": link, "peer": peer, "session": session}
 
 
-func _cover_checks(module: Object, link: DotClientLink, peer: int, session: int, victim: WoPlayer) -> void:
+func _cover_checks(module: Object, link: GSClientLink, peer: int, session: int, victim: WoPlayer) -> void:
 	var key := WoNetBridge.player_key(session)
 	_check(bool(module.call("is_peer_loading", peer)) and not game.can_be_harmed(key),
 		"the server holds it as loading from its spawn")
@@ -228,7 +228,7 @@ func _cover_checks(module: Object, link: DotClientLink, peer: int, session: int,
 	var deaths := []
 	var on_died := func(id: StringName, _by: StringName, _why: StringName, _weapon: StringName) -> void: deaths.append(id)
 	game.player_died.connect(on_died)
-	var hit := DotDamage.make(0, victim.entity_id, victim.health.max_health * 10.0, null)
+	var hit := GSDamage.make(0, victim.entity_id, victim.health.max_health * 10.0, null)
 	hit.tick = game._tick
 	hit.context = {"why": &"shot"}
 	var _applied: Variant = game.combat.apply_damage(hit)
@@ -243,7 +243,7 @@ func _cover_checks(module: Object, link: DotClientLink, peer: int, session: int,
 		"a fall is not counted against it and does not eliminate it", "falls %d -> %d" % [falls, victim.falls])
 
 	var slain: Variant = (module.get("services") as Object).call("_mod_hurt", StringName(str(session)), -1.0)
-	_check(slain is DotResult and (slain as DotResult).ok and deaths.has(key),
+	_check(slain is GSResult and (slain as GSResult).ok and deaths.has(key),
 		"an admin's slay still passes", str(slain))
 	game.player_died.disconnect(on_died)
 	victim.health.alive = true
@@ -252,12 +252,12 @@ func _cover_checks(module: Object, link: DotClientLink, peer: int, session: int,
 	await _cover_lifted(module, link, peer, victim, key)
 
 
-func _cover_lifted(module: Object, link: DotClientLink, peer: int, victim: WoPlayer, key: StringName) -> void:
-	DotGameClient.report_cover(link, false)
+func _cover_lifted(module: Object, link: GSClientLink, peer: int, victim: WoPlayer, key: StringName) -> void:
+	GSGameClient.report_cover(link, false)
 	var lifted := await _until(func() -> bool: return not bool(module.call("is_peer_loading", peer)), 10.0)
 	_check(lifted and game.can_be_harmed(key), "its cover report crosses the wire and ends the loading state")
 	var after_lift := victim.health.health
-	var late := DotDamage.make(0, victim.entity_id, 1.0, null)
+	var late := GSDamage.make(0, victim.entity_id, 1.0, null)
 	late.tick = game._tick
 	late.context = {"why": &"late"}
 	var _late_applied: Variant = game.combat.apply_damage(late)
@@ -273,7 +273,7 @@ func _rotation_ballot_checks(catalogue, vote: Node) -> void:
 	if vote != null:
 		vote.call("refresh_maps")
 		var ballot: Array = []
-		for choice in (vote.get("source") as DotVoteListSource).entries:
+		for choice in (vote.get("source") as GSVoteListSource).entries:
 			ballot.append(String(choice.id))
 		_check(ballot.has("rot_0") and not ballot.has("rot_2"), "never on a ballot", str(ballot))
 		var refused := _run_command("nominate rot_2")

@@ -36,9 +36,9 @@ static func parse(text: String) -> Array:
 
 
 ## Puts back what the last file changed, then applies [param text]. Returns how many cvars it
-## set. [param console] is a [DotConsole]; with none (a solo game has no console) nothing is
+## set. [param console] is a [GSConsole]; with none (a solo game has no console) nothing is
 ## applied, which is why the file is a server's.
-func apply(console: DotConsole, text: String) -> int:
+func apply(console: GSConsole, text: String) -> int:
 	revert(console)
 
 	if console == null:
@@ -51,14 +51,14 @@ func apply(console: DotConsole, text: String) -> int:
 		var cvar := console.find_cvar(cvar_name)
 
 		if not cvar_name.begins_with("wo_") or cvar == null:
-			DotLog.warn(CHANNEL, "a course cfg line was skipped", {"cvar": cvar_name})
+			GSLog.warn(CHANNEL, "a course cfg line was skipped", {"cvar": cvar_name})
 			continue
 
 		var old := cvar.get_string()
 		var res := cvar.set_value(str(pair[1]))
 
 		if not res.ok:
-			DotLog.warn(CHANNEL, "a course cfg value was refused", {
+			GSLog.warn(CHANNEL, "a course cfg value was refused", {
 				"cvar": cvar_name, "value": str(pair[1]), "why": res.error.message,
 			})
 			continue
@@ -74,7 +74,7 @@ func apply(console: DotConsole, text: String) -> int:
 	return set_count
 
 
-func revert(console: DotConsole) -> void:
+func revert(console: GSConsole) -> void:
 	if console != null:
 		for cvar_name: String in _applied:
 			var cvar := console.find_cvar(cvar_name)

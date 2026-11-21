@@ -1,4 +1,4 @@
-extends DotMatchRules
+extends GSMatchRules
 
 ## A round ends when the game says so: neither of dot-match's shipped shapes fits, as nobody dies or scores on a
 ## course. What decides is [WoGame], which knows who finished; this only reads that answer, and returns NONE every
@@ -8,7 +8,7 @@ extends DotMatchRules
 var decision_fn: Callable = Callable()
 
 
-static func make() -> DotMatchRules:
+static func make() -> GSMatchRules:
 	# Not this class's own name, for dot-match's reason: a script that names itself in an
 	# expression cuts Godot 4.7.2's exit teardown short. See docs/gdscript-hazards.md.
 	var rules := new()
@@ -27,8 +27,8 @@ static func make() -> DotMatchRules:
 
 
 func _round_outcome(
-	_scoreboard: DotScoreboard,
-	_teams: DotTeamManager,
+	_scoreboard: GSScoreboard,
+	_teams: GSTeamManager,
 	_elapsed_sec: float
 ) -> Outcome:
 	if not decision_fn.is_valid():
@@ -43,7 +43,7 @@ func _round_outcome(
 	return super._round_outcome(_scoreboard, _teams, _elapsed_sec)
 
 
-func _round_winner(_scoreboard: DotScoreboard, _teams: DotTeamManager) -> int:
+func _round_winner(_scoreboard: GSScoreboard, _teams: GSTeamManager) -> int:
 	if not decision_fn.is_valid():
 		return 0
 

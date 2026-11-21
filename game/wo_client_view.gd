@@ -40,12 +40,12 @@ var hud: WoHud = null
 var blurb_label: WoBlurb = null
 
 ## The Tab board, the menu's. See [method _wire_board].
-var board: DotMenuScoreboard = null
+var board: GSMenuScoreboard = null
 
 ## When this client started, for an offline board's "time".
 var _started_msec: int = Time.get_ticks_msec()
 
-var chat: DotGameChatClient = null
+var chat: GSGameChatClient = null
 
 ## What the game sounds like. See [WoAudio].
 var audio: WoAudio = null
@@ -58,8 +58,8 @@ var settings: WoSettings = null
 
 var break_fx: WoBreakFx = null
 
-## The player's console. See [method DotConsoleKit.build].
-var console: DotConsoleController = null
+## The player's console. See [method GSConsoleKit.build].
+var console: GSConsoleController = null
 
 ## The weapons in this player's own hands, once they have picked one up in a final death.
 ## Drawn, never decided: every shot that matters is the server's; the rig is for a view model
@@ -68,13 +68,13 @@ var weapons: ZeeWeaponRig = null
 
 var view_model: ZeeViewModel = null
 
-var net: DotNetManager = null
+var net: GSNetManager = null
 
 ## Asks a server whether this player may edit it (sv_workbench_remote); null offline.
-var workbench_remote: DotGameWorkbenchRemoteClient = null
+var workbench_remote: GSGameWorkbenchRemoteClient = null
 
 ## The tuning panel's host: F9 solo, the admin's remote panel on a server that allows it.
-var workbench: DotGameWorkbench = null
+var workbench: GSGameWorkbench = null
 
 var bridge: WoNetBridge = null
 
@@ -85,17 +85,17 @@ var _offline: bool = true
 ## The final killcam ([WoKillcam]) and the winner reveal, which play in the intermission.
 var killcam: WoKillcam = null
 
-var winner_reveal: DotWinnerReveal = null
+var winner_reveal: GSWinnerReveal = null
 
 var _reveal_hid: Dictionary = {}
 
-var _sampler: DotFpsSampler = null
+var _sampler: GSFpsSampler = null
 
 ## The phone's on-screen buttons; null off a touch device.
 var _touch: WoTouch = null
 
 ## The spectator's free camera while roaming, and the mouse motion not yet turned into a look.
-var _free_cam: DotSpectatorFreeCam = null
+var _free_cam: GSSpectatorFreeCam = null
 
 var _roam_look: Vector2 = Vector2.ZERO
 
@@ -112,9 +112,9 @@ var _introduced_msec: int = -1000000
 var _stage_seconds: float = -1.0
 
 ## The camera rig, in third person. Null in first.
-var _arm: DotCameraBoom = null
+var _arm: GSCameraBoom = null
 
-var _fade: DotCameraFade = null
+var _fade: GSCameraFade = null
 
 ## How far above the player's feet the camera, or in third person the arm, is hung.
 var _rig_height: float = 0.0
@@ -128,7 +128,7 @@ var _reloading: bool = false
 
 var _slot: int = 0
 
-var _wheel: DotWeaponWheel
+var _wheel: GSWeaponWheel
 
 ## The grab key, held. Picks up or puts down a prop in a final death; see `WoGame._advance_grabs`.
 var _grab: bool = false
@@ -144,14 +144,14 @@ var _beeped: int = -1
 
 ## Keeps the screen covered, and the local body, the keys and the clocks still, until the course
 ## is built, the local player exists and its camera is current.
-var gate: DotLoadGate = null
+var gate: GSLoadGate = null
 
 ## dot-game's client platform: the cover, settings and menu, console, HUD theme, Tab, M, the
-## pointer and the input block. See [DotGameClient].
-var platform: DotGameClient = null
+## pointer and the input block. See [GSGameClient].
+var platform: GSGameClient = null
 
 ## Where the dead lie: dot-player-char's ragdolls under the game's (the server's) rules.
-var ragdolls: DotPlayerRagdolls = null
+var ragdolls: GSPlayerRagdolls = null
 
 ## Simulated seconds the drawn gun has gone without a trigger, a reload or a switch.
 var _drawn_quiet: float = 0.0
@@ -165,8 +165,8 @@ func _build_camera() -> void:
 ## dot-game's chat box and microphone, with this game's channels and voice format, and dot-server's
 ## own lines (arriving on the shell's client link, not the bridge). Static so a suite builds the
 ## same box the client does.
-static func new_chat() -> DotGameChatClient:
-	var box := DotGameChatClient.new()
+static func new_chat() -> GSGameChatClient:
+	var box := GSGameChatClient.new()
 	box.name = "Chat"
 	box.channels = [
 		{"id": WoServices.CH_ALL, "label": "All", "colour": Color(0.93, 0.94, 0.96)},
@@ -175,7 +175,7 @@ static func new_chat() -> DotGameChatClient:
 	]
 	box.max_length = WoServices.chat_rules().max_length
 	box.voice_config = WoServices.voice_format()
-	if DotPlatform.has_touch():
+	if GSPlatform.has_touch():
 		# Three rows in the corner left of the buttons, clear of the blurb and the bar (WoHud.touch_rects).
 		box.window_settings = {"max_lines": 3, "width": WoHud.TOUCH_CHAT_WIDTH, "margin_left": 12.0, "margin_bottom": 8.0}
 	return box
@@ -266,15 +266,15 @@ func _arm_locally(weapon_id: StringName = &"") -> void:
 	weapons.tick_rate = game.tick_rate
 	# The held weapon lowers at every brush that stops the player, fences and clip included.
 	weapons.wall_extra_mask = player.controller.tunables.collision_mask if player.controller != null else 0
-	weapons.view_model_ref = DotNodeRef.of_path(view_model.get_path())
-	weapons.player_ref = DotNodeRef.of_path(player.get_path())
+	weapons.view_model_ref = GSNodeRef.of_path(view_model.get_path())
+	weapons.player_ref = GSNodeRef.of_path(player.get_path())
 	weapons.ads_rules = game.ads_rules
 	player.add_child(weapons)
 
 	var ready_now := weapons.setup()
 
 	if not ready_now.ok:
-		DotLog.warn(CHANNEL, "the view model would not set up", {
+		GSLog.warn(CHANNEL, "the view model would not set up", {
 			"why": ready_now.error.message,
 		})
 		_disarm_locally()
@@ -287,7 +287,7 @@ func _arm_locally(weapon_id: StringName = &"") -> void:
 
 	# Your own shots, from your own rig: a predicted use, heard the tick it happens rather
 	# than when the server's snapshot says it did. At the camera, so it is at full volume.
-	weapons.used.connect(func(outcome: DotWeaponOutcome) -> void:
+	weapons.used.connect(func(outcome: GSWeaponOutcome) -> void:
 		if audio != null and camera != null:
 			var _heard := audio.on_weapon(
 				camera.global_position, ZeeWeaponNet.kind_number(outcome.kind)
@@ -315,7 +315,7 @@ func _give_locally(weapon_id: StringName) -> void:
 		return
 	var given := weapons.give(weapon_id)
 	if not given.ok:
-		DotLog.warn(CHANNEL, "the drawn rig refused a weapon", {"weapon": String(weapon_id), "why": given.error.message})
+		GSLog.warn(CHANNEL, "the drawn rig refused a weapon", {"weapon": String(weapon_id), "why": given.error.message})
 
 
 func _disarm_locally() -> void:
@@ -348,12 +348,12 @@ func _dress_board() -> void:
 		return
 	board.title_text = "Wipeout"
 	board.columns = [
-		{"key": &"avatar", "kind": DotMenuScoreboard.KIND_AVATAR, "width": 0.0},
+		{"key": &"avatar", "kind": GSMenuScoreboard.KIND_AVATAR, "width": 0.0},
 		{"key": &"name", "title": "Player", "width": 3.0},
-		{"key": &"points", "title": "Points", "kind": DotMenuScoreboard.KIND_NUMBER},
+		{"key": &"points", "title": "Points", "kind": GSMenuScoreboard.KIND_NUMBER},
 		{"key": &"place", "title": "Place", "align": HORIZONTAL_ALIGNMENT_RIGHT},
-		{"key": &"seconds", "title": "Time", "kind": DotMenuScoreboard.KIND_DURATION},
-		{"key": &"ping", "title": "Ping", "kind": DotMenuScoreboard.KIND_PING},
+		{"key": &"seconds", "title": "Time", "kind": GSMenuScoreboard.KIND_DURATION},
+		{"key": &"ping", "title": "Ping", "kind": GSMenuScoreboard.KIND_PING},
 	]
 	board.sort_with = func(a: Dictionary, b: Dictionary) -> bool:
 		if int(a.get("points", 0)) != int(b.get("points", 0)):

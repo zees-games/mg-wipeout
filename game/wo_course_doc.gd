@@ -41,7 +41,7 @@ const PIECES := {
 	"conveyor": ["at", "size", "speed"],
 	"bouncer": ["at", "size", "power"],
 	# A ladder: a thin box against a wall (`at` its middle), climbed through dot-player-controller's
-	# DotFpsLadderMode. Not solid.
+	# GSFpsLadderMode. Not solid.
 	"ladder": ["at", "size"],
 	# A pad that moves whoever steps on it to `to` (their feet), facing `heading` degrees. Solid,
 	# and still: it is a place, not a machine.
@@ -64,19 +64,19 @@ const ROLES := ["deck", "pillar", "cannon", "arena", "hazard", "safe"]
 
 
 ## Reads a document from JSON text, and checks it.
-static func parse_json(text: String, origin: String = "") -> DotResult:
+static func parse_json(text: String, origin: String = "") -> GSResult:
 	var json := JSON.new()
 	var parsed := json.parse(text)
 
 	if parsed != OK:
-		return DotResult.fail(
-			DotError.CODE_PARSE,
+		return GSResult.fail(
+			GSError.CODE_PARSE,
 			"The document is not JSON.",
 			"%s line %d: %s" % [origin, json.get_error_line(), json.get_error_message()]
 		)
 
 	if typeof(json.data) != TYPE_DICTIONARY:
-		return DotResult.fail(DotError.CODE_PARSE, "The document is not a JSON object.", origin)
+		return GSResult.fail(GSError.CODE_PARSE, "The document is not a JSON object.", origin)
 
 	return validate(json.data as Dictionary)
 
@@ -84,7 +84,7 @@ static func parse_json(text: String, origin: String = "") -> DotResult:
 ## Checks a document and returns a normalised copy: every optional field present, every number a float, every position
 ## three of them. A copy, so the builder sees what this said the mapper meant, the version a client is also sent: a
 ## missing `yaw` is 0.0 on both ends.
-static func validate(source: Dictionary) -> DotResult:
+static func validate(source: Dictionary) -> GSResult:
 	var doc := source.duplicate(true)
 
 	var format := int(doc.get("format", 0))
@@ -138,7 +138,7 @@ static func validate(source: Dictionary) -> DotResult:
 	if doc.has("toys"):
 		var toys: Array = []
 		for raw: Variant in (doc["toys"] if doc["toys"] is Array else []):
-			var toy := DotPropBodyBox.normal_placement(raw)
+			var toy := GSPropBodyBox.normal_placement(raw)
 			if toy.is_empty():
 				return _refuse("toy %d is not {toy, at}" % toys.size(), doc)
 			toys.append(toy)
@@ -151,10 +151,10 @@ static func validate(source: Dictionary) -> DotResult:
 	if not rest.ok:
 		return rest.wrap("%s %s" % [kind, id])
 
-	return DotResult.success(doc)
+	return GSResult.success(doc)
 
 
-static func _course(doc: Dictionary) -> DotResult:
+static func _course(doc: Dictionary) -> GSResult:
 	doc["water_height"] = float(doc.get("water_height", -8.0))
 	doc["course_seconds"] = float(doc.get("course_seconds", 0.0))
 
@@ -178,7 +178,7 @@ static func _course(doc: Dictionary) -> DotResult:
 	var start: Variant = doc.get("start")
 
 	if typeof(start) != TYPE_DICTIONARY or not (start as Dictionary).has("at"):
-		return DotResult.fail(DotError.CODE_INVALID, "A course needs a start: {at, size, yaw}.")
+		return GSResult.fail(GSError.CODE_INVALID, "A course needs a start: {at, size, yaw}.")
 
 	doc["start"] = {
 		"at": _v3((start as Dictionary)["at"]),
@@ -189,7 +189,7 @@ static func _course(doc: Dictionary) -> DotResult:
 	var finish: Variant = doc.get("finish")
 
 	if typeof(finish) != TYPE_DICTIONARY or not (finish as Dictionary).has("at"):
-		return DotResult.fail(DotError.CODE_INVALID, "A course needs a finish: {at, size}.")
+		return GSResult.fail(GSError.CODE_INVALID, "A course needs a finish: {at, size}.")
 
 	doc["finish"] = {
 		"at": _v3((finish as Dictionary)["at"]),
@@ -204,7 +204,7 @@ static func _course(doc: Dictionary) -> DotResult:
 
 	for entry: Variant in doc.get("checkpoints", []):
 		if typeof(entry) != TYPE_DICTIONARY or not (entry as Dictionary).has("at"):
-			return DotResult.fail(DotError.CODE_INVALID, "A checkpoint needs at least an `at`.")
+			return GSResult.fail(GSError.CODE_INVALID, "A checkpoint needs at least an `at`.")
 
 		checkpoints.append({
 			"at": _v3((entry as Dictionary)["at"]),
@@ -237,16 +237,16 @@ static func _course(doc: Dictionary) -> DotResult:
 	if doc.has("dressing"):
 		doc["dressing"] = _dressing(doc["dressing"])
 
-	return DotResult.success(doc)
+	return GSResult.success(doc)
 
 
 ## Normalises `route` (every point a typed dictionary) into `doc`, or fails on a malformed or forked-at-the-ends one.
-static func _route(doc: Dictionary) -> DotResult:
+static func _route(doc: Dictionary) -> GSResult:
 	var route: Array = []
 
 	for entry: Variant in doc.get("route", []):
 		if typeof(entry) != TYPE_DICTIONARY or not (entry as Dictionary).has("at"):
-			return DotResult.fail(DotError.CODE_INVALID, "A route point needs an `at`.")
+			return GSResult.fail(GSError.CODE_INVALID, "A route point needs an `at`.")
 
 		route.append({
 			"at": _v3((entry as Dictionary)["at"]),
@@ -279,10 +279,10 @@ static func _route(doc: Dictionary) -> DotResult:
 
 	if not route.is_empty() and (int((route[0] as Dictionary)["branch"]) != 0 \
 			or int((route[route.size() - 1] as Dictionary)["branch"]) != 0):
-		return DotResult.fail(DotError.CODE_INVALID, "A route starts and ends on the way everybody goes (branch 0).")
+		return GSResult.fail(GSError.CODE_INVALID, "A route starts and ends on the way everybody goes (branch 0).")
 
 	doc["route"] = route
-	return DotResult.success(doc)
+	return GSResult.success(doc)
 
 
 ## What a course is dressed in for the show: stands, banners, light towers, a screen, flags. Client only ([WoCourse]
@@ -319,14 +319,14 @@ static func _dressing(source: Variant) -> Array:
 	return out
 
 
-static func _arena(doc: Dictionary) -> DotResult:
+static func _arena(doc: Dictionary) -> GSResult:
 	doc["kill_height"] = float(doc.get("kill_height", -10.0))
 
 	var spawns: Array = []
 
 	for entry: Variant in doc.get("spawns", []):
 		if typeof(entry) != TYPE_DICTIONARY or not (entry as Dictionary).has("at"):
-			return DotResult.fail(DotError.CODE_INVALID, "A spawn area needs an `at`.")
+			return GSResult.fail(GSError.CODE_INVALID, "A spawn area needs an `at`.")
 
 		spawns.append({
 			"at": _v3((entry as Dictionary)["at"]),
@@ -337,8 +337,8 @@ static func _arena(doc: Dictionary) -> DotResult:
 	# is what a mapper should give it: with exactly as many areas as sides, the draw of who
 	# goes where is the only thing left to chance and the arena plays the same every time.
 	if spawns.size() < 2:
-		return DotResult.fail(
-			DotError.CODE_INVALID, "An arena needs at least two spawn areas (four is better)."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "An arena needs at least two spawn areas (four is better)."
 		)
 
 	doc["spawns"] = spawns
@@ -347,7 +347,7 @@ static func _arena(doc: Dictionary) -> DotResult:
 
 	for entry: Variant in doc.get("drops", []):
 		if typeof(entry) != TYPE_DICTIONARY or not (entry as Dictionary).has("at"):
-			return DotResult.fail(DotError.CODE_INVALID, "A drop area needs an `at`.")
+			return GSResult.fail(GSError.CODE_INVALID, "A drop area needs an `at`.")
 
 		drops.append({
 			"at": _v3((entry as Dictionary)["at"]),
@@ -355,15 +355,15 @@ static func _arena(doc: Dictionary) -> DotResult:
 		})
 
 	if drops.is_empty():
-		return DotResult.fail(DotError.CODE_INVALID, "An arena needs at least one drop area.")
+		return GSResult.fail(GSError.CODE_INVALID, "An arena needs at least one drop area.")
 
 	doc["drops"] = drops
 
 	var gallery: Variant = doc.get("gallery")
 
 	if typeof(gallery) != TYPE_DICTIONARY or not (gallery as Dictionary).has("at"):
-		return DotResult.fail(
-			DotError.CODE_INVALID, "An arena needs a gallery: {at, size} for everybody watching."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "An arena needs a gallery: {at, size} for everybody watching."
 		)
 
 	doc["gallery"] = {
@@ -371,34 +371,34 @@ static func _arena(doc: Dictionary) -> DotResult:
 		"size": _v2((gallery as Dictionary).get("size", [12.0, 6.0])),
 	}
 
-	return DotResult.success(doc)
+	return GSResult.success(doc)
 
 
-static func _piece(source: Variant, index: int) -> DotResult:
+static func _piece(source: Variant, index: int) -> GSResult:
 	if typeof(source) != TYPE_DICTIONARY:
-		return DotResult.fail(DotError.CODE_INVALID, "Piece %d is not an object." % index)
+		return GSResult.fail(GSError.CODE_INVALID, "Piece %d is not an object." % index)
 
 	var piece := (source as Dictionary).duplicate(true)
 	var kind := str(piece.get("kind", ""))
 
 	if not PIECES.has(kind):
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"Piece %d is a \"%s\", which this build does not know." % [index, kind],
 			"known: %s" % ", ".join(PIECES.keys())
 		)
 
 	for field: String in PIECES[kind]:
 		if not piece.has(field):
-			return DotResult.fail(
-				DotError.CODE_INVALID, "Piece %d (%s) has no `%s`." % [index, kind, field]
+			return GSResult.fail(
+				GSError.CODE_INVALID, "Piece %d (%s) has no `%s`." % [index, kind, field]
 			)
 
 	var role := str(piece.get("role", _default_role(kind)))
 
 	if not ROLES.has(role):
-		return DotResult.fail(
-			DotError.CODE_INVALID, "Piece %d has role \"%s\"." % [index, role],
+		return GSResult.fail(
+			GSError.CODE_INVALID, "Piece %d has role \"%s\"." % [index, role],
 			"roles: %s" % ", ".join(ROLES)
 		)
 
@@ -435,18 +435,18 @@ static func _piece(source: Variant, index: int) -> DotResult:
 	# The few numbers that would divide by zero or never move, refused here rather than
 	# found as a NaN in the middle of a round.
 	if out.has("period") and float(out["period"]) <= 0.05:
-		return DotResult.fail(DotError.CODE_INVALID, "Piece %d has a period of %s." % [index, out["period"]])
+		return GSResult.fail(GSError.CODE_INVALID, "Piece %d has a period of %s." % [index, out["period"]])
 
 	if kind == "tiles" and (int(out["cols"]) < 1 or int(out["rows"]) < 1):
-		return DotResult.fail(DotError.CODE_INVALID, "Piece %d has no tiles." % index)
+		return GSResult.fail(GSError.CODE_INVALID, "Piece %d has no tiles." % index)
 
 	if out.has("size"):
 		var size: Vector3 = out["size"]
 
 		if size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
-			return DotResult.fail(DotError.CODE_INVALID, "Piece %d has a size of %s." % [index, size])
+			return GSResult.fail(GSError.CODE_INVALID, "Piece %d has a size of %s." % [index, size])
 
-	return DotResult.success(out)
+	return GSResult.success(out)
 
 
 static func _default_role(kind: String) -> String:
@@ -487,26 +487,26 @@ static func encode(doc: Dictionary) -> PackedByteArray:
 	return out
 
 
-static func decode(bytes: PackedByteArray) -> DotResult:
+static func decode(bytes: PackedByteArray) -> GSResult:
 	if bytes.size() < 9:
-		return DotResult.fail(DotError.CODE_PARSE, "A course on the wire was empty.")
+		return GSResult.fail(GSError.CODE_PARSE, "A course on the wire was empty.")
 
 	var size := bytes.decode_u32(0)
 
 	# Both lengths, so a torn or padded body is refused here rather than handed to the
 	# decompressor, which prints an engine error for it before returning nothing.
 	if bytes.decode_u32(4) != bytes.size() - 8:
-		return DotResult.fail(DotError.CODE_PARSE, "A course on the wire is not the length it says.")
+		return GSResult.fail(GSError.CODE_PARSE, "A course on the wire is not the length it says.")
 
 	# A size this large is a corrupt header or somebody else's bytes; decompressing it would
 	# allocate whatever it says.
 	if size <= 0 or size > WIRE_LIMIT * 16:
-		return DotResult.fail(DotError.CODE_PARSE, "A course on the wire says it is %d bytes." % size)
+		return GSResult.fail(GSError.CODE_PARSE, "A course on the wire says it is %d bytes." % size)
 
 	var raw := bytes.slice(8).decompress(size, FileAccess.COMPRESSION_DEFLATE)
 
 	if raw.size() != size:
-		return DotResult.fail(DotError.CODE_PARSE, "A course on the wire would not decompress.")
+		return GSResult.fail(GSError.CODE_PARSE, "A course on the wire would not decompress.")
 
 	return parse_json(raw.get_string_from_utf8(), "wire")
 
@@ -596,8 +596,8 @@ static func _is_id(id: String) -> bool:
 	return true
 
 
-static func _refuse(why: String, doc: Dictionary) -> DotResult:
-	DotLog.debug(CHANNEL, "a course document was refused", {"id": str(doc.get("id", "?")), "why": why})
-	return DotResult.fail(
-		DotError.CODE_INVALID, "The document is refused: %s." % why, str(doc.get("id", "?"))
+static func _refuse(why: String, doc: Dictionary) -> GSResult:
+	GSLog.debug(CHANNEL, "a course document was refused", {"id": str(doc.get("id", "?")), "why": why})
+	return GSResult.fail(
+		GSError.CODE_INVALID, "The document is refused: %s." % why, str(doc.get("id", "?"))
 	)

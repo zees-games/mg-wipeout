@@ -41,12 +41,12 @@ func _sent_to(game: WoGame, player: WoPlayer) -> Array:
 
 
 ## The volumes with a team filter that turns a body of no team away, by name: what a runner can never trigger.
-func _rejected(game: WoGame, world: DotMapWorld, who: WoPlayer) -> Array:
+func _rejected(game: WoGame, world: GSMapWorld, who: WoPlayer) -> Array:
 	var body := game.io_body(who)
 	var out: Array = []
 
-	for node: DotMapVolumeNode in world.volumes.nodes:
-		if node.volume.filter != "" and DotMapVolumeNode.TRIGGER_KINDS.has(node.volume.kind) and not node._filter_passes(world.io, body):
+	for node: GSMapVolumeNode in world.volumes.nodes:
+		if node.volume.filter != "" and GSMapVolumeNode.TRIGGER_KINDS.has(node.volume.kind) and not node._filter_passes(world.io, body):
 			var found := world.io.find(node.volume.filter)
 			var by: String = found[0].classname if not found.is_empty() else "?"
 			out.append("%s %s (%s %s)" % [node.volume.kind, node.volume.targetname if node.volume.targetname != "" else "#%d" % node.volume.entity,
@@ -58,10 +58,10 @@ func _rejected(game: WoGame, world: DotMapWorld, who: WoPlayer) -> Array:
 ## The volumes of [param kind] that are on now and would act on a player, above [param floor_y] (a body below the
 ## water is out of the round, as on a map's side arena), roomiest first, each with its middle (a thin slab is no
 ## place to stand a body for a check). At most eight.
-func _live(world: DotMapWorld, kind: String, damage: float, floor_y: float) -> Array:
+func _live(world: GSMapWorld, kind: String, damage: float, floor_y: float) -> Array:
 	var found: Array = []
 
-	for node: DotMapVolumeNode in world.volumes.nodes:
+	for node: GSMapVolumeNode in world.volumes.nodes:
 		var v := node.volume
 
 		if v.kind != kind or not node.active() or float(v.record.get("damage", 0.0)) < damage:
@@ -78,15 +78,15 @@ func _live(world: DotMapWorld, kind: String, damage: float, floor_y: float) -> A
 	return found.slice(0, 8)
 
 
-func _push_velocity(node: DotMapVolumeNode) -> Vector3:
-	if node.entity is DotMapPush:
-		return (node.entity as DotMapPush).velocity()
+func _push_velocity(node: GSMapVolumeNode) -> Vector3:
+	if node.entity is GSMapPush:
+		return (node.entity as GSMapPush).velocity()
 
 	return node.volume.push_velocity()
 
 
 ## The roomiest of a volume's brush boxes.
-func _widest(v: DotMapVolume) -> AABB:
+func _widest(v: GSMapVolume) -> AABB:
 	var best := AABB(Vector3.ZERO, Vector3(INF, INF, INF))
 	var room := -1.0
 
@@ -101,10 +101,10 @@ func _widest(v: DotMapVolume) -> AABB:
 
 
 ## The volumes of [param kind] that hold [param who] now.
-func _inside_of(world: DotMapWorld, kind: String, who: String) -> Array:
+func _inside_of(world: GSMapWorld, kind: String, who: String) -> Array:
 	var out: Array = []
 
-	for node: DotMapVolumeNode in world.volumes.nodes:
+	for node: GSMapVolumeNode in world.volumes.nodes:
 		if node.volume.kind == kind and node.inside.has(who):
 			out.append(node)
 
@@ -112,7 +112,7 @@ func _inside_of(world: DotMapWorld, kind: String, who: String) -> Array:
 
 
 ## The longest delay of a button's OnPressed outputs, in seconds.
-func _press_delay(button: DotMapMoverNode) -> float:
+func _press_delay(button: GSMapMoverNode) -> float:
 	var longest := 0.0
 
 	for link: Dictionary in button.links:
@@ -122,7 +122,7 @@ func _press_delay(button: DotMapMoverNode) -> float:
 	return longest
 
 
-func _on_pressed(button: DotMapMoverNode) -> bool:
+func _on_pressed(button: GSMapMoverNode) -> bool:
 	for link: Dictionary in button.links:
 		if str(link["output"]).to_lower() == "onpressed":
 			return true
@@ -130,25 +130,25 @@ func _on_pressed(button: DotMapMoverNode) -> bool:
 	return false
 
 
-func _buttons(world: DotMapWorld) -> Array[DotMapMoverNode]:
-	var out: Array[DotMapMoverNode] = []
-	for e: DotMapEntity in world.io.entities:
-		if e.classname == "func_button" and e is DotMapMoverNode and (e as DotMapMoverNode).node != null:
-			out.append(e as DotMapMoverNode)
+func _buttons(world: GSMapWorld) -> Array[GSMapMoverNode]:
+	var out: Array[GSMapMoverNode] = []
+	for e: GSMapEntity in world.io.entities:
+		if e.classname == "func_button" and e is GSMapMoverNode and (e as GSMapMoverNode).node != null:
+			out.append(e as GSMapMoverNode)
 	return out
 
 
-## Fires `DotMapWorld.shoot` at every shootable thing's middle from outside along each axis. -1: the map has none;
+## Fires `GSMapWorld.shoot` at every shootable thing's middle from outside along each axis. -1: the map has none;
 ## the entity index of one that answered; -2: it has some and none answered.
-func _shoot_something(game: WoGame, world: DotMapWorld) -> int:
+func _shoot_something(game: WoGame, world: GSMapWorld) -> int:
 	var space := game.stage.get_world_3d().direct_space_state
 	var any := false
-	for e: DotMapEntity in world.io.entities:
+	for e: GSMapEntity in world.io.entities:
 		var node: Node3D = null
-		if e is DotMapMoverNode:
-			node = (e as DotMapMoverNode).node as Node3D
-		elif e is DotMapBreakable:
-			node = (e as DotMapBreakable).node as Node3D
+		if e is GSMapMoverNode:
+			node = (e as GSMapMoverNode).node as Node3D
+		elif e is GSMapBreakable:
+			node = (e as GSMapBreakable).node as Node3D
 		if node == null or not e.key("model").begins_with("*"):
 			continue
 		var box := AABB()
@@ -161,7 +161,7 @@ func _shoot_something(game: WoGame, world: DotMapWorld) -> int:
 		if not found:
 			continue
 		any = true
-		_shot_could_hurt = e is DotMapBreakable and (e as DotMapBreakable).is_breakable() and (e as DotMapBreakable).min_damage <= 10.0
+		_shot_could_hurt = e is GSMapBreakable and (e as GSMapBreakable).is_breakable() and (e as GSMapBreakable).min_damage <= 10.0
 		var centre := box.get_center()
 		for axis in [Vector3.UP, Vector3.DOWN, Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]:
 			var from: Vector3 = centre + (axis as Vector3) * (box.size.length() * 0.5 + 0.3)
@@ -170,7 +170,7 @@ func _shoot_something(game: WoGame, world: DotMapWorld) -> int:
 	return -2 if any else -1
 
 
-func _centre_of(mover: DotMapMoverNode) -> Vector3:
+func _centre_of(mover: GSMapMoverNode) -> Vector3:
 	for shape: CollisionShape3D in mover.node.find_children("*", "CollisionShape3D", true, false):
 		if shape.shape != null:
 			return (shape.global_transform * shape.shape.get_debug_mesh().get_aabb()).get_center()
@@ -186,7 +186,7 @@ func _finished() -> void:
 	_sections_finished += 1
 
 
-func _entity_centre(e: DotMapEntity) -> Vector3:
+func _entity_centre(e: GSMapEntity) -> Vector3:
 	var box := AABB()
 	var found := false
 	for shape: CollisionShape3D in e.node.find_children("*", "CollisionShape3D", true, false):

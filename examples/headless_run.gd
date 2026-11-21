@@ -10,7 +10,7 @@ const CHECKS := 261
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
@@ -88,8 +88,8 @@ func _test_config() -> void:
 	config.finale_weapons_per_side = 25
 	config.prop_budget = 0
 	_check(config.validate().ok, "nine teams, 60 props, 25 weapons and no prop budget validate")
-	_check(DotTeamSet.palette_name(8) == "Team 9" and DotTeamSet.palette_colour(8) != DotTeamSet.palette_colour(7)
-		and DotTeamSet.palette_colour(0) == DotTeamSet.PALETTE_COLOURS[0], "teams past six get a name and their own colour")
+	_check(GSTeamSet.palette_name(8) == "Team 9" and GSTeamSet.palette_colour(8) != GSTeamSet.palette_colour(7)
+		and GSTeamSet.palette_colour(0) == GSTeamSet.PALETTE_COLOURS[0], "teams past six get a name and their own colour")
 	config.team_count = -1
 	_check(not config.validate().ok, "a negative team count is refused")
 	config.team_count = 3
@@ -175,7 +175,7 @@ func _test_catalogue() -> void:
 	_check(ids.size() == 1 or not ids.has(&"wo_practice"),
 		"practice drops out once there is a real course", "%d playable" % ids.size())
 
-	var stream := DotRandomStream.new(7)
+	var stream := GSRandomStream.new(7)
 	var first := catalogue.next_course(PackedStringArray(), true, stream, &"")
 	var second := catalogue.next_course(PackedStringArray(), true, stream, StringName(str(first["id"])))
 	_check(ids.size() < 2 or str(first["id"]) != str(second["id"]),
@@ -384,10 +384,10 @@ func _test_the_start_box() -> void:
 	var inside := true
 	for yaw in [0.0, 90.0, 180.0, 270.0]:
 		for _i in range(40):
-			var command := DotFpsCommand.new()
+			var command := GSFpsCommand.new()
 			command.move = Vector2(0, 1)
 			command.yaw = yaw
-			command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+			command.set_button(GSFpsCommand.BUTTON_JUMP, true)
 			runner.controller.apply_command(command)
 			await _step(game, 1)
 			inside = inside and _in_pen(game, runner.controller.state.position, 0.0)
@@ -476,9 +476,9 @@ func _test_a_server_skips_a_course_without_its_mesh() -> void:
 	game.next_course_id = &""
 	var before := game.stage.id()
 	# The game logs "no course can be built" at ERROR here, which is the behaviour under test.
-	DotLog.set_level(DotLog.Level.OFF)
+	GSLog.set_level(GSLog.Level.OFF)
 	game._lay_out_course()
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_check(cleared[0] == 0 and game.stage.id() == before, "with no buildable course the standing one stays untouched")
 	_check(game.catalogue.courses.has(&"wo_a_missing_fixture"), "and the fixture is still catalogued")
 	_finished()
@@ -519,12 +519,12 @@ func _test_a_ladder_climbs() -> void:
 	var runner := game.add_player(&"u1", "Ada")
 	var yaw := 0.0
 	for candidate in [0.0, 90.0, 180.0, 270.0]:
-		if DotFpsMotor._view_basis(candidate, 0.0).forward.x > 0.9:
+		if GSFpsMotor._view_basis(candidate, 0.0).forward.x > 0.9:
 			yaw = candidate
 	runner.place_at(Vector3(11.5, 3.0, -20.0), yaw)
 	await _step(game, 20)
 	for _i in range(150):
-		var command := DotFpsCommand.new()
+		var command := GSFpsCommand.new()
 		command.move = Vector2(0.0, 1.0)
 		command.yaw = yaw
 		command.pitch = 50.0
@@ -592,12 +592,12 @@ func _test_ducking() -> void:
 	var hub: Vector3 = _piece(game, "spinner")["spec"]["at"]
 	standing.place_at(hub + Vector3(2.5, 0.05, 0.0), 0.0)
 	crouching.place_at(hub + Vector3(-2.5, 0.05, 0.0), 0.0)
-	var duck := DotFpsCommand.new()
-	duck.set_button(DotFpsCommand.BUTTON_CROUCH, true)
+	var duck := GSFpsCommand.new()
+	duck.set_button(GSFpsCommand.BUTTON_CROUCH, true)
 
 	for _i in range(TICK_RATE * 3):
 		crouching.controller.apply_command(duck.duplicate_command())
-		standing.controller.apply_command(DotFpsCommand.new())
+		standing.controller.apply_command(GSFpsCommand.new())
 		await _step(game, 1)
 
 	_check(standing.knocks > 0, "standing, it hit them", "%d" % standing.knocks)
@@ -613,7 +613,7 @@ func _test_course_cfg() -> void:
 	_check(parsed.size() == 2 and parsed[0] == ["wo_instant_death", "1"] and parsed[1] == ["wo_courses_per_round", "2"],
 		"a file is a cvar and a value a line, comments and strays dropped", str(parsed))
 
-	var console := DotConsole.new()
+	var console := GSConsole.new()
 	add_child(console)
 	var death := console.cvar("wo_instant_death", "0")
 	var rounds := console.cvar("wo_courses_per_round", "3")
@@ -664,7 +664,7 @@ func _test_a_bot_runs_the_course() -> void:
 	var finished_at := -1.0
 
 	for i in range(TICK_RATE * 40):
-		other.controller.apply_command(DotFpsCommand.new())
+		other.controller.apply_command(GSFpsCommand.new())
 		await _step(game, 1)
 
 		if bot.finished:
@@ -680,17 +680,17 @@ func _test_a_bot_runs_the_course() -> void:
 
 ## How the stand-ins race: dot-bot's preset picks the column, an override outlives a preset,
 ## `bot_mistakes` 0 is never wrong, every bot is its own runner, and the finale aims through
-## dot-bot's DotBotAim.
+## dot-bot's GSBotAim.
 func _test_the_racers() -> void:
 	_section("stand-ins race by bot_difficulty, each its own runner, and aim with dot-bot")
 	var game := await _world()
-	var settings := DotBotSettings.of(game)
+	var settings := GSBotSettings.of(game)
 	var racer: WoRacer = game.racer
 	_check(racer != null and is_equal_approx(racer.value("fumble"), WoRacer.preset_value("medium", "fumble")),
 		"medium by default, its fumble chance the medium column", "%s" % (racer.value("fumble") if racer != null else -1.0))
 	var _hard := settings.set_difficulty("hard")
 	_check(is_equal_approx(racer.value("hop_miss"), WoRacer.preset_value("hard", "hop_miss"))
-			and racer.reaction() <= DotBotProfile.preset_value("hard", "reaction") + 0.001,
+			and racer.reaction() <= GSBotProfile.preset_value("hard", "reaction") + 0.001,
 		"bot_difficulty hard moves the racing columns and the reaction with it")
 	var _over := racer.set_value("fumble", "20")
 	var _easy := settings.set_difficulty("easy")
@@ -713,22 +713,22 @@ func _test_the_racers() -> void:
 	_check(not is_equal_approx(fa, fb) and absf(fa - 1.0) <= spread + 0.001 and absf(fb - 1.0) <= spread + 0.001,
 		"two stand-ins are two runners: their own share of the mistakes", "%.2f and %.2f" % [fa, fb])
 
-	# The finale's aim: dot-bot's DotBotAim, so the view turns at bot_turn_rate and the trigger
+	# The finale's aim: dot-bot's GSBotAim, so the view turns at bot_turn_rate and the trigger
 	# waits for bot_reaction after the target first comes into view.
 	var _medium := settings.set_difficulty("medium")
 	var profile := settings.profile
 	a.place_at(Vector3(0.0, 0.0, 0.0), 0.0)
 	b.place_at(Vector3(-8.0, 0.0, 6.0), 0.0)
-	var command := DotFpsCommand.new()
+	var command := GSFpsCommand.new()
 	command.yaw = a.controller.state.yaw
 	var first := -1.0
 	var fastest := 0.0
 	var start := game._bot_now()
 	for _i in range(TICK_RATE * 2):
 		var before := command.yaw
-		(game._racer_of(a)["aim"] as DotBotAim).view_from(command.yaw, command.pitch)
+		(game._racer_of(a)["aim"] as GSBotAim).view_from(command.yaw, command.pitch)
 		game._aim_bot(a, command, b)
-		if command.is_pressed(DotFpsCommand.BUTTON_USER_0) and first < 0.0:
+		if command.is_pressed(GSFpsCommand.BUTTON_USER_0) and first < 0.0:
 			first = game._bot_now() - start
 		fastest = maxf(fastest, absf(wrapf(command.yaw - before, -180.0, 180.0)) * TICK_RATE)
 		game._tick += 1
@@ -841,10 +841,10 @@ func _test_free_roam() -> void:
 		"the game's rules allow roaming and are the manager's own")
 	a.watching = true
 	game.spectate.on_died(id, b.player_id, false, Vector3(0, 2, 0), 0.0, 0)
-	game.spectate.manager.set_mode(String(id), DotSpectatorView.Mode.CHASE)
+	game.spectate.manager.set_mode(String(id), GSSpectatorView.Mode.CHASE)
 	_check(game.spectate.can_roam(id), "somebody who is out may roam")
 	_check(game.spectate.toggle_roam(id).ok and game.spectate.is_roaming(id), "the key enters the free camera")
-	var cam := DotSpectatorFreeCam.new()
+	var cam := GSSpectatorFreeCam.new()
 	cam.rules = game.spectate_rules
 	cam.seed_from(Transform3D(Basis.IDENTITY, Vector3(0, 2, 0)))
 	var pose := cam.step(Vector3(0, 0, 1), false, false, 0.5)
@@ -855,7 +855,7 @@ func _test_free_roam() -> void:
 
 	var _off := game.spectate_rules.set_cvar("mp_freeroam", "0")
 	var refused := game.spectate.toggle_roam(id)
-	_check(not refused.ok and refused.error.code == DotError.CODE_FORBIDDEN and not game.spectate.is_roaming(id),
+	_check(not refused.ok and refused.error.code == GSError.CODE_FORBIDDEN and not game.spectate.is_roaming(id),
 		"mp_freeroam 0 refuses it")
 	var _on := game.spectate_rules.set_cvar("mp_freeroam", "1")
 	var _own := game.spectate_rules.set_cvar("mp_forcecamera", "1")
@@ -924,7 +924,7 @@ func _test_the_final_death() -> void:
 	_check(a.weapons != null and not game.pickups.has(pickup_id), "standing on a weapon picks it up")
 
 	# A prop picked up and thrown at somebody.
-	var prop: DotPropInstance = game.props.all_props()[0]
+	var prop: GSPropInstance = game.props.all_props()[0]
 	var body := prop.body()
 	body.global_position = b.controller.state.position + Vector3(0, 1.0, -3.0)
 	body.linear_velocity = Vector3.ZERO
@@ -941,7 +941,7 @@ func _test_the_final_death() -> void:
 	# The last one standing. Drawn first, as a client draws everybody it can see: the body that
 	# falls is copied from this figure.
 	var _drawn := b.present_body(false, b.controller.state.position, Color.WHITE)
-	var damage := DotDamage.make(a.entity_id, b.entity_id, 500.0, null)
+	var damage := GSDamage.make(a.entity_id, b.entity_id, 500.0, null)
 	damage.tick = game.current_tick()
 	damage.direction = Vector3(1, 0, 0)
 	var _applied := game.combat.apply_damage(damage)
@@ -952,11 +952,11 @@ func _test_the_final_death() -> void:
 	# How the body falls: the server picked it, DEATH carries it, a client builds it.
 	_check(b.death != null and b.death.direction.distance_to(Vector3(1, 0, 0)) < 0.01,
 		"the server picked how the body falls, along the blow", str(b.death.describe()) if b.death != null else "none")
-	var carried := WoEvents.read_death(DotNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT, b.death)))
-	_check(bool(carried["ok"]) and carried.has("death") and (carried["death"] as DotPlayerDeath).reaction == b.death.reaction
-		and not WoEvents.read_death(DotNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT))).has("death"),
+	var carried := WoEvents.read_death(GSNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT, b.death)))
+	_check(bool(carried["ok"]) and carried.has("death") and (carried["death"] as GSPlayerDeath).reaction == b.death.reaction
+		and not WoEvents.read_death(GSNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT))).has("death"),
 		"DEATH carries it, and one without it still reads",
-		str(WoEvents.read_death(DotNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT)))))
+		str(WoEvents.read_death(GSNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT)))))
 	var client := WoClient.new()
 	client.game = game
 	client._build_ragdolls()
@@ -978,9 +978,9 @@ func _test_the_toys() -> void:
 	var game := await _world()
 	var toys := game.stage.toys
 	var start: Vector3 = game.course_doc["start"]["at"]
-	var in_pen := toys.toys.filter(func(t: DotPropBody) -> bool:
+	var in_pen := toys.toys.filter(func(t: GSPropBody) -> bool:
 		return absf(t.global_position.x - start.x) < 5.0 and absf(t.global_position.z - start.z) < 4.0)
-	_check(toys.count() == 2 and in_pen.size() == 2 and in_pen.all(func(t: DotPropBody) -> bool: return t.kind == &"ball"),
+	_check(toys.count() == 2 and in_pen.size() == 2 and in_pen.all(func(t: GSPropBody) -> bool: return t.kind == &"ball"),
 		"the practice course's two beach balls are in the start pen", "%d toys, %d in the pen" % [toys.count(), in_pen.size()])
 
 	# Run into the right-hand ball across the pen, side on: it goes, the runner does not slow.
@@ -1011,7 +1011,7 @@ func _test_the_toys() -> void:
 	toys = game.stage.toys
 	var football := toys.toy(1)
 	var resting := football.body.global_position
-	var shot := DotShot.new()
+	var shot := GSShot.new()
 	shot.origin = resting + Vector3(-6.0, 0.0, 0.0)
 	shot.direction = Vector3(1, 0, 0)
 	shot.damage = 25.0
@@ -1032,9 +1032,9 @@ func _test_the_toys() -> void:
 	_check(beach.body.global_position.distance_to(beach_was) > 0.5, "a barrel's blast throws a ball",
 		"%.2f m" % beach.body.global_position.distance_to(beach_was))
 
-	var _off := game.toy_rules.set_cvar(DotPropBodyRules.CVAR_ENABLED, "0")
+	var _off := game.toy_rules.set_cvar(GSPropBodyRules.CVAR_ENABLED, "0")
 	_check(not toys.toy(0).visible and toys.toy(0).process_mode == Node.PROCESS_MODE_DISABLED, "sv_toys 0 takes them away")
-	var _on := game.toy_rules.set_cvar(DotPropBodyRules.CVAR_ENABLED, "1")
+	var _on := game.toy_rules.set_cvar(GSPropBodyRules.CVAR_ENABLED, "1")
 	_finished()
 
 
@@ -1194,7 +1194,7 @@ func _test_hard_landings() -> void:
 	_check(game.fling_wildness(1.0) == 0.0, "knockout_fling_below 0 turns the flight off")
 	game.config.knockout_fling_below = 0.5
 
-	var hurt := DotDamage.make(0, victim.entity_id, 10.0, null)
+	var hurt := GSDamage.make(0, victim.entity_id, 10.0, null)
 	hurt.direction = Vector3(1.0, 0.0, 0.0)
 	hurt.context = {"why": WoGame.DIED_KNOCKED, "health_before": 5.0}
 	var low := game.decide_death(victim, hurt)
@@ -1235,7 +1235,7 @@ func _test_hard_landings() -> void:
 ## starved tick's view and buttons but drops its movement.
 func _hold_for(game: WoGame, player: WoPlayer, move: Vector2, yaw: float, ticks: int) -> void:
 	for _i in range(ticks):
-		var command := DotFpsCommand.new()
+		var command := GSFpsCommand.new()
 		command.move = move
 		command.yaw = yaw
 		player.controller.apply_command(command)
@@ -1285,7 +1285,7 @@ func _test_the_machinery_is_heard() -> void:
 			var audio := WoAudio.new()
 			add_child(audio)
 			var _ready_now := audio.setup()
-			var sink := audio.manager.sink as DotAudioSinkNull
+			var sink := audio.manager.sink as GSAudioSinkNull
 			var listener := _beside_a(game.stage, str(case[1]))
 			# The ears first, as the client puts them every frame: the manager culls by
 			# distance from them, and left at the origin it culled a spinner 34 m away.

@@ -1,4 +1,4 @@
-extends DotGameCheckSuite
+extends GSGameCheckSuite
 const WOTestPorts := preload("test_ports.gd")
 
 const WoConfig := preload("../game/wo_config.gd")
@@ -19,7 +19,7 @@ const TICK_RATE := 60
 var _sections_entered := 0
 var _sections_finished := 0
 
-var server: DotServer = null
+var server: GSServer = null
 var game: WoGame = null
 
 
@@ -32,13 +32,13 @@ func _until(condition: Callable, seconds: float) -> bool:
 	return bool(condition.call())
 
 
-func _module() -> DotModule:
+func _module() -> GSModule:
 	return server.modules.get_module("wipeout") if server != null and server.modules != null else null
 
 
 func _run_command(line: String) -> PackedStringArray:
 	var captured: Array[String] = []
-	var context := DotCmdContext.console("", PackedStringArray())
+	var context := GSCmdContext.console("", PackedStringArray())
 	context.reply_sink = func(text: String) -> void: captured.append(text)
 	server.console.execute(line, context)
 	return PackedStringArray(captured)

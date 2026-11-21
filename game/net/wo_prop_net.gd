@@ -1,4 +1,4 @@
-extends DotNetBehaviour
+extends GSNetBehaviour
 
 ## What a prop replicates: where it is and how it is turned. Server-authoritative and never predicted: Godot's rigid-
 ## body solver is not reproducible across machines, so a predicted sky of crates would disagree within a second. A
@@ -11,10 +11,10 @@ var net_rotation: Quaternion = Quaternion.IDENTITY
 
 
 func _register_net_vars() -> void:
-	replicate(&"net_position", DotNetVar.Type.VECTOR3_POSITION).interpolated()
+	replicate(&"net_position", GSNetVar.Type.VECTOR3_POSITION).interpolated()
 	# Smallest-three, nine bits an element. A tumbling crate's orientation does not need
 	# more: the error is under a degree, and nobody aligns a falling crate to a degree.
-	replicate(&"net_rotation", DotNetVar.Type.QUATERNION).bits(9).interpolated()
+	replicate(&"net_rotation", GSNetVar.Type.QUATERNION).bits(9).interpolated()
 
 
 ## Authority only. The body is moved by the physics server; this copies where it ended up
@@ -35,7 +35,7 @@ func _drawable() -> bool:
 
 
 ## Where this body is, for anything that does not care what kind of body it is. A method, not a read of [member
-## net_position], because [WoCopterNet] replicates through [DotVehicleNetSync] (three separate floats): reading it off
+## net_position], because [WoCopterNet] replicates through [GSVehicleNetSync] (three separate floats): reading it off
 ## a mirrored chopper gave zero, and a late joiner was told every machine was at the origin.
 func replicated_position() -> Vector3:
 	return net_position

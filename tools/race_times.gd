@@ -17,13 +17,13 @@ var _csv: Array[String] = ["course,difficulty,round,bot,finished,seconds,falls,k
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
 func _run() -> void:
 	var only_course := ""
-	var difficulties: Array = DotBotProfile.PRESETS.duplicate()
+	var difficulties: Array = GSBotProfile.PRESETS.duplicate()
 	var bots := 8
 	var rounds := 1
 	var damage := true
@@ -221,7 +221,7 @@ func _new_world(doc: Dictionary, difficulty: String, round_index: int, damage: b
 	add_child(game)
 	game.set_physics_process(false)
 	_world = game
-	var _set := DotBotSettings.of(game).set_difficulty(difficulty)
+	var _set := GSBotSettings.of(game).set_difficulty(difficulty)
 	if extra != "" and game.catalogue != null:
 		var _added := game.catalogue.add_directory(extra)
 	for field: String in overrides:
@@ -234,7 +234,7 @@ func _add_bots(game: WoGame, bots: int) -> Array[WoPlayer]:
 	var taken: Array = []
 
 	for i in range(bots):
-		var bot_name := DotBotNames.pick(taken, i, WoGame.BOT_NAMES)
+		var bot_name := GSBotNames.pick(taken, i, WoGame.BOT_NAMES)
 		taken.append(bot_name)
 		var bot := game.add_player(StringName("u%d" % (900100 + i)), bot_name)
 		bot.is_bot = true
@@ -244,7 +244,7 @@ func _add_bots(game: WoGame, bots: int) -> Array[WoPlayer]:
 
 func _trace_bots(game: WoGame, field: Array[WoPlayer], follow: String, last_at: Dictionary, columns: Dictionary) -> void:
 		for bot in field:
-			var grounded := bot.controller.state.mode == DotFpsState.Mode.GROUND
+			var grounded := bot.controller.state.mode == GSFpsState.Mode.GROUND
 			if bot.display_name == follow:
 				var st := bot.controller.state
 				print("  %-10s t=%6.2f at=%s v=%s %s route=%s" % [follow, game.course_elapsed, st.position.snapped(Vector3.ONE * 0.01),

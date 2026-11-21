@@ -1,4 +1,4 @@
-extends DotGameCheckSuite
+extends GSGameCheckSuite
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoConfig := preload("../game/wo_config.gd")
@@ -6,7 +6,7 @@ const WoCourse := preload("../game/wo_course.gd")
 const WoGame := preload("../game/wo_game.gd")
 
 ## What a stand-in asks of the course's hazards ([method WoCourse.bot_knock], [method WoCourse.path_clear]) goes to
-## dot-sim's `DotSimHazards` when the library is there, and it must answer as the script does: on every course, seeded
+## dot-sim's `GSSimHazards` when the library is there, and it must answer as the script does: on every course, seeded
 ## feet round the route and the hazards, ticks, crouches and limits give the same throw to the bit with the cull on and
 ## off, and seeded runs between route points the same path_clear; [member WoCourse.native_knock] off asks the script;
 ## a rebuilt course writes its table again; and a field of stand-ins racing with [member WoCourse.knock_verify] on
@@ -32,7 +32,7 @@ var _world: WoGame = null
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
@@ -57,7 +57,7 @@ func _run() -> void:
 
 	_entered += 1
 	print("the library has the hazards")
-	if not DotSim.has(&"hazards"):
+	if not GSSim.has(&"hazards"):
 		print("  dot-sim's hazards module is not loaded: the native half is skipped")
 		var required := (OS.get_environment("GS_SIM_REQUIRE_NATIVE") if OS.has_environment("GS_SIM_REQUIRE_NATIVE") else OS.get_environment("DOT_SIM_REQUIRE_NATIVE")) == "1"
 		_check(not required, "the library is loaded (GS_SIM_REQUIRE_NATIVE=1)")

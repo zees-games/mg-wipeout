@@ -14,7 +14,7 @@ signal picked(player_id: StringName, weapon_id: StringName)
 ## How far in front of the eye a thrown gun starts, so it clears the thrower's own body.
 const REACH := 0.6
 
-var drops: DotWeaponDrops = null
+var drops: GSWeaponDrops = null
 var game: Node = null
 
 
@@ -23,7 +23,7 @@ func setup(owner_game: Node) -> void:
 	game = owner_game
 	name = "WeaponLayer"
 	game.add_child(self)
-	drops = DotWeaponDrops.new()
+	drops = GSWeaponDrops.new()
 	drops.name = "WeaponDrops"
 	drops.rules = game.drop_rules
 	drops.is_authority = game.authoritative
@@ -36,7 +36,7 @@ func setup(owner_game: Node) -> void:
 
 ## The drop key. Server side. Returns the drop's id, or 0 when nothing was thrown.
 func throw_for(player_id: StringName) -> int:
-	var r: DotWeaponDropRules = game.drop_rules.resolve(null)
+	var r: GSWeaponDropRules = game.drop_rules.resolve(null)
 	var player: WoPlayer = game.players.get(player_id)
 	if drops == null or player == null or not r.enabled or not r.key_enabled or not _may_carry(player):
 		return 0
@@ -68,7 +68,7 @@ func tick() -> void:
 
 ## Called as a fighter dies: the gun in hand stays on the floor. Server side.
 func drop_dead(player_id: StringName) -> void:
-	var r: DotWeaponDropRules = game.drop_rules.resolve(null)
+	var r: GSWeaponDropRules = game.drop_rules.resolve(null)
 	var player: WoPlayer = game.players.get(player_id)
 	if drops == null or player == null or not r.enabled or not r.on_death or game.phase != game.Phase.FINALE:
 		return

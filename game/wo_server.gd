@@ -3,7 +3,7 @@ extends Node
 const WoConfig := preload("wo_config.gd")
 const WoGame := preload("wo_game.gd")
 
-## What a [DotServer] loads as its game scene; never a client. Lives in `game/`, not `scenes/`: a vendored game copies
+## What a [GSServer] loads as its game scene; never a client. Lives in `game/`, not `scenes/`: a vendored game copies
 ## `game/` and only the `.tscn`s, so a script under `scenes/` never reaches the build. The rest is in `wo_module.gd`.
 
 const CHANNEL := "wo.server"
@@ -16,12 +16,12 @@ func _ready() -> void:
 	var config := WoConfig.new()
 
 	# The family's `defaults < JSON < environment < argv` chain, on the server too (`WO_COURSE_SECONDS`,
-	# `--wo-columns`); the module's cvars are its live half. Through DotGameConfigBinder: strict on a dedicated server.
+	# `--wo-columns`); the module's cvars are its live half. Through GSGameConfigBinder: strict on a dedicated server.
 	var binder := WoConfig.make_binder(config, "user://cfg/wipeout.json")
 	var loaded := binder.load_layers()
 
 	if not loaded.ok:
-		DotGameConfigBinder.fail_boot(get_tree(), loaded)
+		GSGameConfigBinder.fail_boot(get_tree(), loaded)
 		return
 
 	game = WoGame.new()
@@ -33,7 +33,7 @@ func _ready() -> void:
 	game.tick_rate = Engine.physics_ticks_per_second
 	add_child(game)
 
-	DotLog.info(CHANNEL, "the world is up", {
+	GSLog.info(CHANNEL, "the world is up", {
 		"tick_rate": game.tick_rate,
 		"courses": config.course_directory,
 		"teams": config.team_count,

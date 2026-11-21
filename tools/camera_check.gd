@@ -1,7 +1,7 @@
 extends Node
 
 ## The cameras and bodies a play test caught, in the real offline game: the chase cameras flown round the start and
-## every checkpoint (DotCameraCheck), and the player walked into another held still (capsules never overlap at
+## every checkpoint (GSCameraCheck), and the player walked into another held still (capsules never overlap at
 ## `mp_solidplayers 1`, do at 0). `--render` adds frames to screenshots/cameras/; run `camera_check.sh`.
 
 const WoClient := preload("../game/wo_client.gd")
@@ -56,7 +56,7 @@ func _fly(game: WoGame) -> void:
 			continue
 		for side in [Vector3(1.6, 0, 0), Vector3(-1.6, 0, 0), Vector3(0, 0, 1.6)]:
 			var eye: Vector3 = (spec["at"] as Vector3) + side + Vector3.UP * WoPlayer.EYE_HEIGHT
-			if not DotCameraProbe.is_inside(space, eye, 0.3, _client.call("_level_mask")):
+			if not GSCameraProbe.is_inside(space, eye, 0.3, _client.call("_level_mask")):
 				pivots.append(eye)
 	var mask: int = _client.call("_level_mask")
 	var world := _client.get_viewport().world_3d
@@ -67,8 +67,8 @@ func _fly(game: WoGame) -> void:
 	for name in cases:
 		var total := {}
 		for pivot in pivots:
-			total = DotCameraCheck.add(total, DotCameraCheck.fly(world, DotCameraCheck.orbit_path(pivot), cases[name], mask))
-		_check(DotCameraCheck.passed(total), "%s round %d points of the course: %s" % [name, pivots.size(), DotCameraCheck.summary(total)])
+			total = GSCameraCheck.add(total, GSCameraCheck.fly(world, GSCameraCheck.orbit_path(pivot), cases[name], mask))
+		_check(GSCameraCheck.passed(total), "%s round %d points of the course: %s" % [name, pivots.size(), GSCameraCheck.summary(total)])
 
 
 ## Walks the player into another held still, passing through and then solid; returns `[pass_through_closest,
@@ -88,7 +88,7 @@ func _bodies(game: WoGame) -> Array:
 			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(probe + Vector3.UP, probe + Vector3.DOWN, mask))
 			if hit.is_empty() or absf((hit["position"] as Vector3).y - spot.y) > 0.3:
 				continue
-			if DotCameraProbe.is_inside(space, probe + Vector3.UP * 0.9, 0.36, mask):
+			if GSCameraProbe.is_inside(space, probe + Vector3.UP * 0.9, 0.36, mask):
 				continue
 			var from: Vector3 = hit["position"]
 			var loose: float = await _walk(game, me, other, spot, from, false)
@@ -142,7 +142,7 @@ func _views(game: WoGame) -> void:
 
 	# The play test's face at the lens: a stand-in on the player's eye. Before: nothing hides it; after: the fade
 	# does (and solid bodies keep it from getting there). Re-placed every frame, because its brain moves it on.
-	var fade: DotCameraFade = _client.get("_fade")
+	var fade: GSCameraFade = _client.get("_fade")
 	var camera: Camera3D = _client.get("camera")
 	var bot: WoPlayer = null
 	for id in game.players:

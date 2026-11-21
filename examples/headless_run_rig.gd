@@ -1,4 +1,4 @@
-extends DotGameCheckSuite
+extends GSGameCheckSuite
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoConfig := preload("../game/wo_config.gd")

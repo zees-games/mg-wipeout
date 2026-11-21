@@ -30,7 +30,7 @@ var refused: Dictionary = {}
 var workshop: Dictionary = {}
 
 ## The Workshop's index and the `map_kind`s taken from it; see [method follow_content].
-var content_index: DotContentIndex = null
+var content_index: GSContentIndex = null
 var content_kinds: PackedStringArray = PackedStringArray()
 
 ## The order courses come up in when they are not shuffled.
@@ -38,11 +38,11 @@ var _order: Array[StringName] = []
 var _next: int = 0
 
 ## The server's maps.yml, or null when there is none (every course rotates, as it always did).
-## dot-map's rotation file speaks DotMapDef; this catalogue holds course documents, so [member _defs]
+## dot-map's rotation file speaks GSMapDef; this catalogue holds course documents, so [member _defs]
 ## mirrors the ids and the file marks `in_rotation` on the mirror. See [method rotating].
-var rotation_file: DotMapRotationFile = null
-var _defs: DotMapCatalogue = DotMapCatalogue.new()
-var _rotation: DotMapRotation = DotMapRotation.of(_defs)
+var rotation_file: GSMapRotationFile = null
+var _defs: GSMapCatalogue = GSMapCatalogue.new()
+var _rotation: GSMapRotation = GSMapRotation.of(_defs)
 var _workshop_docs: Dictionary = {}
 
 
@@ -64,7 +64,7 @@ func load_from(directory: String) -> int:
 	loaded += _read_directory(USER_MAPS)
 	_rebuild_order()
 
-	DotLog.info(CHANNEL, "courses loaded", {
+	GSLog.info(CHANNEL, "courses loaded", {
 		"courses": courses.size(), "arenas": arenas.size(), "refused": refused.size(),
 	})
 	return loaded
@@ -77,7 +77,7 @@ func add_directory(root: String) -> int:
 	var loaded := _read_directory(root)
 	_rebuild_order()
 
-	DotLog.info(CHANNEL, "courses added", {
+	GSLog.info(CHANNEL, "courses added", {
 		"from": root, "read": loaded, "courses": courses.size(), "arenas": arenas.size(),
 	})
 	return loaded
@@ -87,7 +87,7 @@ func _read_directory(root: String) -> int:
 	var dir := DirAccess.open(root)
 
 	if dir == null:
-		DotLog.info(CHANNEL, "no course directory here", {"looked_at": root})
+		GSLog.info(CHANNEL, "no course directory here", {"looked_at": root})
 		return 0
 
 	var files := PackedStringArray()
@@ -116,7 +116,7 @@ func _read_directory(root: String) -> int:
 			refused[file] = parsed.error.message
 			# WARN: a server is running without a course somebody installed, and the mapper
 			# needs the sentence. Not ERROR: every other course still plays.
-			DotLog.warn(CHANNEL, "a document was refused", {
+			GSLog.warn(CHANNEL, "a document was refused", {
 				"file": file, "why": parsed.error.message, "detail": parsed.error.detail,
 			})
 			continue
@@ -167,7 +167,7 @@ func _rebuild_order() -> void:
 ## Takes the courses subscribed packs provide, for the index's current session only. Opt-in. A pack's map is a course
 ## document named by the entry's `scene` path, with `map_kind` in [param accepted_kinds] ("*" all, empty none); arenas
 ## are not offered. Synced on every read, as the index filters by session; see [method playable_courses].
-func follow_content(index: DotContentIndex, accepted_kinds: PackedStringArray = PackedStringArray()) -> void:
+func follow_content(index: GSContentIndex, accepted_kinds: PackedStringArray = PackedStringArray()) -> void:
 	content_index = index
 	content_kinds = accepted_kinds
 	sync_content()
@@ -214,14 +214,14 @@ func sync_content() -> void:
 		_rebuild_order()
 
 
-func _workshop_doc(entry: DotContentEntry) -> Dictionary:
+func _workshop_doc(entry: GSContentEntry) -> Dictionary:
 	if _workshop_docs.has(entry.key):
 		return _workshop_docs[entry.key]
 
 	var path := entry.path("scene")
 	var text := FileAccess.get_file_as_string(path) if path != "" else ""
 	var parsed := WoCourseDoc.parse_json(text, path) if text != "" \
-		else DotResult.fail(DotError.CODE_IO, "empty or unreadable", path)
+		else GSResult.fail(GSError.CODE_IO, "empty or unreadable", path)
 	var doc: Dictionary = {}
 
 	if parsed.ok and str(parsed.value.get("kind", "")) == WoCourseDoc.KIND_COURSE:
@@ -230,7 +230,7 @@ func _workshop_doc(entry: DotContentEntry) -> Dictionary:
 	else:
 		var why: String = parsed.error.message if not parsed.ok else "a pack map must be a course, not an arena"
 		refused[entry.key] = why
-		DotLog.warn(CHANNEL, "a Workshop course was refused", {"entry": entry.key, "why": why})
+		GSLog.warn(CHANNEL, "a Workshop course was refused", {"entry": entry.key, "why": why})
 
 	_workshop_docs[entry.key] = doc
 	return doc
@@ -303,7 +303,7 @@ func apply_rotation(allowed: PackedStringArray = PackedStringArray()) -> void:
 		var def := _defs.get_map(id)
 
 		if def == null:
-			def = DotMapDef.new()
+			def = GSMapDef.new()
 			def.id = id
 			def.scene_path = "wo:%s" % id
 			def.display_name = str((courses.get(id, {}) as Dictionary).get("name", id))
@@ -311,7 +311,7 @@ func apply_rotation(allowed: PackedStringArray = PackedStringArray()) -> void:
 
 		def.enabled = allowed.is_empty() or allowed.has(String(id))
 
-	for def: DotMapDef in _defs.maps.duplicate():
+	for def: GSMapDef in _defs.maps.duplicate():
 		if not seen.has(def.id):
 			var _gone := _defs.remove(def.id)
 
@@ -320,21 +320,21 @@ func apply_rotation(allowed: PackedStringArray = PackedStringArray()) -> void:
 		# Captures the mirror, never self: a lambda on self held by a member is a reference cycle,
 		# and a RefCounted cycle is a leak the exit check reports.
 		var mirror := _defs
-		rotation_file.fallback_in = func(def: DotMapDef) -> bool:
+		rotation_file.fallback_in = func(def: GSMapDef) -> bool:
 			return def.id != &"wo_practice" or mirror.size() == 1
 		var _applied := rotation_file.apply(_rotation)
 		return
 
 	_rotation.order = []
 
-	for def: DotMapDef in _defs.maps:
+	for def: GSMapDef in _defs.maps:
 		def.in_rotation = true
 
 
 ## `wo_rotation <name>`: the live switch to another named rotation in the file.
-func switch_rotation(rotation_name: String) -> DotResult:
+func switch_rotation(rotation_name: String) -> GSResult:
 	if not has_rotation_file():
-		return DotResult.fail(DotError.CODE_STATE, "There is no maps.yml to switch rotations in.")
+		return GSResult.fail(GSError.CODE_STATE, "There is no maps.yml to switch rotations in.")
 
 	apply_rotation()
 	return rotation_file.switch(_rotation, rotation_name)
@@ -398,7 +398,7 @@ func playable_arenas(allowed: PackedStringArray) -> Array[StringName]:
 ## The next course: drawn from [param stream] when shuffling, in order otherwise; a maps.yml with rotations replaces
 ## both. Never the same course twice running when there is a choice: a shuffle that repeats is what every player
 ## notices first.
-func next_course(allowed: PackedStringArray, shuffle: bool, stream: DotRandomStream,
+func next_course(allowed: PackedStringArray, shuffle: bool, stream: GSRandomStream,
 		previous: StringName) -> Dictionary:
 	if has_rotation_file():
 		apply_rotation(allowed)
@@ -414,7 +414,7 @@ func next_course(allowed: PackedStringArray, shuffle: bool, stream: DotRandomStr
 	var ids := rotating(allowed)
 
 	if ids.is_empty():
-		DotLog.warn(CHANNEL, "no course matches the allowed list; playing practice", {
+		GSLog.warn(CHANNEL, "no course matches the allowed list; playing practice", {
 			"allowed": ",".join(allowed),
 		})
 		return courses.get(&"wo_practice", practice())
@@ -433,7 +433,7 @@ func next_course(allowed: PackedStringArray, shuffle: bool, stream: DotRandomStr
 	return courses[pick]
 
 
-func pick_arena(allowed: PackedStringArray, stream: DotRandomStream) -> Dictionary:
+func pick_arena(allowed: PackedStringArray, stream: GSRandomStream) -> Dictionary:
 	var ids := playable_arenas(allowed)
 
 	if ids.is_empty():

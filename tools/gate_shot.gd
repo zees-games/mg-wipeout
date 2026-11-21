@@ -9,7 +9,7 @@ var _frame := 0
 
 
 func _initialize() -> void:
-	DotLog.set_level(DotLog.Level.WARN)
+	GSLog.set_level(GSLog.Level.WARN)
 	_client = (load("res://game/wo.tscn") as PackedScene).instantiate()
 	_client.force_offline = true
 	root.add_child(_client)
@@ -18,7 +18,7 @@ func _initialize() -> void:
 func _process(_delta: float) -> bool:
 	_frame += 1
 	var p = _client.player
-	var gate: DotLoadGate = _client.get("gate")
+	var gate: GSLoadGate = _client.get("gate")
 	var y: float = p.global_position.y if p != null else NAN
 	print("f%d open=%s settling=%s y=%.2f phase=%d" % [_frame,
 		gate.is_open() if gate != null else "nogate",

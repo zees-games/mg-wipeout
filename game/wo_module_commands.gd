@@ -1,4 +1,4 @@
-extends DotGameModule
+extends GSGameModule
 
 const WoServices := preload("wo_services.gd")
 const WoWorld := preload("wo_world.gd")
@@ -22,14 +22,14 @@ func _add_delivered_courses(world: WoGame) -> int:
 	# skip each course whose mesh is in a download group and play the one that has none.
 	var _failed: PackedStringArray = await WoWorld.fetch_all_groups()
 
-	for root in await DotGameContent.map_dirs(server, "courses"):
+	for root in await GSGameContent.map_dirs(server, "courses"):
 		read += world.catalogue.add_directory(root)
 
 	return read
 
 
 func _on_say_requested(peer_id: int, channel_id: StringName, text: String) -> void:
-	var said: DotResult = services.call("say", peer_id, channel_id, text)
+	var said: GSResult = services.call("say", peer_id, channel_id, text)
 
 	if said.ok:
 		return
@@ -51,12 +51,12 @@ func _on_chat_command(peer_id: int, command: String, args: PackedStringArray) ->
 		return
 
 	for reply in server.run_command_as_uid(
-		session.uid(), command, args, DotCmdContext.Source.CHAT
+		session.uid(), command, args, GSCmdContext.Source.CHAT
 	):
 		bridge.call("notice", peer_id, reply)
 
 
-func _cmd_say(ctx: DotCmdContext) -> void:
+func _cmd_say(ctx: GSCmdContext) -> void:
 	var text := ctx.rest()
 
 	if text.strip_edges() == "":
@@ -69,14 +69,14 @@ func _cmd_say(ctx: DotCmdContext) -> void:
 
 	var announced: Variant = services.get("chat").call("announce", text, WoServices.CH_ALL)
 
-	if announced is DotResult and not (announced as DotResult).ok:
+	if announced is GSResult and not (announced as GSResult).ok:
 		ctx.reply_error(announced)
 		return
 
 	ctx.reply("Said: %s" % text)
 
 
-func _cmd_status(ctx: DotCmdContext) -> void:
+func _cmd_status(ctx: GSCmdContext) -> void:
 	var world := game as WoGame
 
 	if world == null:
@@ -86,7 +86,7 @@ func _cmd_status(ctx: DotCmdContext) -> void:
 	ctx.reply_lines(world.describe_lines())
 
 
-func _cmd_net(ctx: DotCmdContext) -> void:
+func _cmd_net(ctx: GSCmdContext) -> void:
 	if bridge == null:
 		ctx.reply("No bridge; this server is not replicating anything.")
 		return
@@ -97,7 +97,7 @@ func _cmd_net(ctx: DotCmdContext) -> void:
 		ctx.reply_lines(services.call("describe_lines"))
 
 
-func _cmd_courses(ctx: DotCmdContext) -> void:
+func _cmd_courses(ctx: GSCmdContext) -> void:
 	var world := game as WoGame
 
 	if world == null or world.catalogue == null:
@@ -108,7 +108,7 @@ func _cmd_courses(ctx: DotCmdContext) -> void:
 	ctx.reply("playing: %s" % str(world.course_doc.get("id", "-")))
 
 
-func _cmd_rotation(ctx: DotCmdContext) -> void:
+func _cmd_rotation(ctx: GSCmdContext) -> void:
 	var world := game as WoGame
 
 	if world == null or world.catalogue == null or not world.catalogue.has_rotation_file():
@@ -134,7 +134,7 @@ func _cmd_rotation(ctx: DotCmdContext) -> void:
 	ctx.reply("Rotation: %s" % wanted)
 
 
-func _cmd_maps_reload(ctx: DotCmdContext) -> void:
+func _cmd_maps_reload(ctx: GSCmdContext) -> void:
 	var world := game as WoGame
 
 	if world == null or world.catalogue == null:
@@ -149,7 +149,7 @@ func _cmd_maps_reload(ctx: DotCmdContext) -> void:
 	ctx.reply("maps.yml read." if read.ok else read.error.message)
 
 
-func _cmd_reload(ctx: DotCmdContext) -> void:
+func _cmd_reload(ctx: GSCmdContext) -> void:
 	var world := game as WoGame
 
 	if world == null or world.catalogue == null:

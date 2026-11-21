@@ -10,7 +10,7 @@ const WoNetCommand := preload("../game/net/wo_net_command.gd")
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
@@ -72,45 +72,45 @@ func _test_neutralise() -> void:
 func _test_the_codec() -> void:
 	_section("every event decodes to what was encoded")
 
-	var hello := WoEvents.read_hello(DotNetReader.new(
+	var hello := WoEvents.read_hello(GSNetReader.new(
 		WoEvents.write_hello(SESSION, 64, 1234, 0, 4.0, 210.0, 4.0, 100.0)))
 	_check(bool(hello["ok"]) and int(hello["player_id"]) == SESSION and int(hello["team_count"]) == 0
 		and absf(float(hello["course_seconds"]) - 210.0) < 0.1
 		and absf(float(hello["countdown_seconds"]) - 4.0) < 0.01, "HELLO", str(hello))
 
 	var doc := WoCatalogue.practice()
-	var stage := WoEvents.read_stage(DotNetReader.new(WoEvents.write_stage(WoCourseDoc.encode(doc))))
-	var decoded := WoCourseDoc.decode(stage["encoded"]) if bool(stage["ok"]) else DotResult.fail(DotError.CODE_PARSE, "no stage")
+	var stage := WoEvents.read_stage(GSNetReader.new(WoEvents.write_stage(WoCourseDoc.encode(doc))))
+	var decoded := WoCourseDoc.decode(stage["encoded"]) if bool(stage["ok"]) else GSResult.fail(GSError.CODE_PARSE, "no stage")
 	_check(decoded.ok and WoCourseDoc.digest(decoded.value) == WoCourseDoc.digest(doc), "STAGE carries the document whole")
 
-	var toys := WoEvents.read_toys(DotNetReader.new(WoEvents.write_toys(&"wo_first_splash", PackedInt64Array([7, 300, 9001]))))
+	var toys := WoEvents.read_toys(GSNetReader.new(WoEvents.write_toys(&"wo_first_splash", PackedInt64Array([7, 300, 9001]))))
 	_check(bool(toys["ok"]) and toys["stage_id"] == &"wo_first_splash" and toys["ids"] == PackedInt64Array([7, 300, 9001]),
 		"TOYS carries the stage and its toys' ids in order", str(toys))
 
-	var join := WoEvents.read_join(DotNetReader.new(WoEvents.write_join(SESSION, 9, "Ada", 101, null)))
+	var join := WoEvents.read_join(GSNetReader.new(WoEvents.write_join(SESSION, 9, "Ada", 101, null)))
 	_check(bool(join["ok"]) and int(join["team"]) == 101,
 		"JOIN carries a solo side, numbered past any team", str(join.get("team")))
 
-	var round_info := WoEvents.read_round(DotNetReader.new(WoEvents.write_round(3, false, 104, "Bo won the final death")))
+	var round_info := WoEvents.read_round(GSNetReader.new(WoEvents.write_round(3, false, 104, "Bo won the final death")))
 	_check(bool(round_info["ok"]) and int(round_info["winner"]) == 104 and str(round_info["why"]) == "Bo won the final death",
 		"ROUND carries the winning side and the sentence")
 
-	var moved := WoEvents.read_progress(DotNetReader.new(WoEvents.write_progress(SESSION, WoEvents.Progress.FINISHED, 2, 61.25)))
+	var moved := WoEvents.read_progress(GSNetReader.new(WoEvents.write_progress(SESSION, WoEvents.Progress.FINISHED, 2, 61.25)))
 	_check(bool(moved["ok"]) and int(moved["kind"]) == WoEvents.Progress.FINISHED and int(moved["value"]) == 2
 		and absf(float(moved["seconds"]) - 61.25) < 0.01, "PROGRESS", str(moved))
 
-	var pickup := WoEvents.read_pickup(DotNetReader.new(WoEvents.write_pickup(5, &"shotgun", Vector3(3, 0.7, -12))))
+	var pickup := WoEvents.read_pickup(GSNetReader.new(WoEvents.write_pickup(5, &"shotgun", Vector3(3, 0.7, -12))))
 	_check(bool(pickup["ok"]) and pickup["weapon_id"] == &"shotgun"
 		and (pickup["position"] as Vector3).distance_to(Vector3(3, 0.7, -12)) < 0.01, "PICKUP")
 
-	var gone := WoEvents.read_pickup_gone(DotNetReader.new(WoEvents.write_pickup_gone(5, SESSION)))
+	var gone := WoEvents.read_pickup_gone(GSNetReader.new(WoEvents.write_pickup_gone(5, SESSION)))
 	_check(bool(gone["ok"]) and int(gone["by"]) == SESSION, "PICKUP_GONE")
 
-	var clock := WoEvents.read_clock(DotNetReader.new(WoEvents.write_clock(2, 12.5, 40.25, WoGame.Phase.FINALE, 3, 2, true)))
+	var clock := WoEvents.read_clock(GSNetReader.new(WoEvents.write_clock(2, 12.5, 40.25, WoGame.Phase.FINALE, 3, 2, true)))
 	_check(bool(clock["ok"]) and int(clock["phase"]) == WoGame.Phase.FINALE
 		and absf(float(clock["course_elapsed"]) - 40.25) < 0.1 and int(clock["finished"]) == 3, "CLOCK", str(clock))
 
-	var shatter := WoEvents.read_shatter(DotNetReader.new(WoEvents.write_shatter(Vector3(3, 1, -2), 2)))
+	var shatter := WoEvents.read_shatter(GSNetReader.new(WoEvents.write_shatter(Vector3(3, 1, -2), 2)))
 	_check(bool(shatter["ok"]) and int(shatter["material"]) == 2
 		and (shatter["position"] as Vector3).distance_to(Vector3(3, 1, -2)) < 0.1, "SHATTER", str(shatter))
 
@@ -121,7 +121,7 @@ func _test_the_codec() -> void:
 	_check(WoRequest.fits(), "every request kind fits the request's kind field",
 		"%d kinds in %d bits" % [WoEvents.Ask.size(), WoRequest.KIND_BITS])
 	_check(WoEvents.chat_kinds_fit(), "every chat kind fits the chat line's kind field",
-		"%d kinds in %d bits" % [DotChatMessage.KIND_NAMES.size(), WoEvents.CHAT_KIND_BITS])
+		"%d kinds in %d bits" % [GSChatMessage.KIND_NAMES.size(), WoEvents.CHAT_KIND_BITS])
 
 	_finished()
 
@@ -161,7 +161,7 @@ func _build() -> bool:
 	# This harness stamps every command itself (`_tick + INPUT_LEAD`), so the client must not ask for dot-net's
 	# input-lead report: steered by reports about commands it never stamped, the clock runs away. By the constant
 	# map, so this parses against an older dot-net.
-	var lead_bit := int((DotNetMessageRegistry as Script).get_script_constant_map().get("FEATURE_INPUT_LEAD", 0))
+	var lead_bit := int((GSNetMessageRegistry as Script).get_script_constant_map().get("FEATURE_INPUT_LEAD", 0))
 	_client_net.messages.features &= ~lead_bit
 
 	_server_bridge = WoNetBridge.new()
@@ -281,7 +281,7 @@ func _test_an_imported_mesh_arrives() -> void:
 			_check((client_world.get_node("Drawn") as Node3D).get_child_count() == (server_world.get_node("Drawn") as Node3D).get_child_count(),
 				"and the same drawn faces")
 		else:
-			_check(client_world is DotMapWorld and server_world is DotMapWorld, "both are dot-map worlds (an io course)")
+			_check(client_world is GSMapWorld and server_world is GSMapWorld, "both are dot-map worlds (an io course)")
 
 	var back := _server_game.change_course_now(&"wo_practice")
 	_exchange()
@@ -362,7 +362,7 @@ func _test_the_toys_reach_the_client() -> void:
 	# The client loses its stage, and is told the toys again (a joiner whose STAGE never built).
 	var ids: Array = []
 	for behaviour: Node in (_server_bridge.get("_toy_nets") as Array):
-		ids.append((behaviour.get("identity") as DotNetIdentity).net_id)
+		ids.append((behaviour.get("identity") as GSNetIdentity).net_id)
 	# As a STAGE this build could not build does it: the old stage cleared, nothing in its place.
 	_client_game.world_clearing.emit()
 	_client_game.stage.clear()
@@ -461,7 +461,7 @@ func _test_the_local_player_is_predicted() -> void:
 	server_me.place_at(start, 0.0)
 	await _steps(20)
 	var before := mine.controller.state.position
-	var forward := DotFpsCommand.new()
+	var forward := GSFpsCommand.new()
 	forward.move = Vector2(0.0, 1.0)
 	await _step(forward)
 	_check(mine.controller.state.position.distance_to(before) > 0.01,
@@ -596,7 +596,7 @@ func _test_the_final_death_crosses() -> void:
 	await _test_a_hit_is_the_shooters()
 
 	_section("the final death's result crosses")
-	var damage := DotDamage.make(0, _stand_in.entity_id, 500.0, null)
+	var damage := GSDamage.make(0, _stand_in.entity_id, 500.0, null)
 	damage.tick = _tick
 	var _applied := _server_game.combat.apply_damage(damage)
 	await _steps(6)
@@ -621,12 +621,12 @@ func _test_a_hit_is_the_shooters() -> void:
 	# A second connected player, READY, so a HIT that went to everybody would reach somebody.
 	var _seated := _server_bridge.add_player(BYSTANDER_PEER, BYSTANDER_SESSION, "Bo")
 	_server_bridge._admit(BYSTANDER_PEER)
-	var still := DotFpsCommand.new()
+	var still := GSFpsCommand.new()
 	await _steps(4, still)
 
 	# Point-blank, straight down the aim: the stand-in three metres in front of the shooter's eye,
 	# hit but never killed (a kill ends the fight and takes the gun this section counts).
-	var aim := DotWeaponCommand.new()
+	var aim := GSWeaponCommand.new()
 	_stand_in.place_at(server_me.global_position + aim.aim_direction() * 3.0, 180.0)
 	var target_health := _server_game.combat.health_of(_stand_in.entity_id)
 	target_health.cannot_die = true
@@ -634,8 +634,8 @@ func _test_a_hit_is_the_shooters() -> void:
 	_sent_events.clear()
 	_listening = true
 
-	var fire := DotFpsCommand.new()
-	fire.set_button(DotFpsCommand.BUTTON_USER_0, true)
+	var fire := GSFpsCommand.new()
+	fire.set_button(GSFpsCommand.BUTTON_USER_0, true)
 	await _steps(2, fire)
 	await _steps(INPUT_LEAD + 6, still)
 
@@ -651,9 +651,9 @@ func _test_a_hit_is_the_shooters() -> void:
 	# Shot back: this player the victim, and a victim is told nothing.
 	hits.clear()
 	_sent_events.clear()
-	var shot_back := DotShot.new()
+	var shot_back := GSShot.new()
 	shot_back.attacker = _stand_in.entity_id
-	var wound := DotDamage.make(_stand_in.entity_id, server_me.entity_id, 1.0, null)
+	var wound := GSDamage.make(_stand_in.entity_id, server_me.entity_id, 1.0, null)
 	wound.health_lost = 1.0
 	wound.point = server_me.global_position + Vector3.UP
 	shot_back.damages.append(wound)
@@ -710,14 +710,14 @@ func _test_a_hit_is_the_shooters() -> void:
 ## How many events of [param kind] the server sent to [param peer_id] (0: broadcast).
 func _test_the_killcam_names_the_weapon() -> void:
 	_section("the killcam banner shows the weapon DEATH carried")
-	var dead := WoEvents.read_death(DotNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT, null, &"pistol")))
+	var dead := WoEvents.read_death(GSNetReader.new(WoEvents.write_death(2, 1, WoGame.DIED_SHOT, null, &"pistol")))
 	_check(bool(dead["ok"]) and dead["weapon_id"] == &"pistol", "DEATH carries the weapon id", str(dead))
-	var fell := WoEvents.read_death(DotNetReader.new(WoEvents.write_death(2, 0, WoGame.DIED_FELL)))
+	var fell := WoEvents.read_death(GSNetReader.new(WoEvents.write_death(2, 0, WoGame.DIED_FELL)))
 	_check(bool(fell["ok"]) and fell["weapon_id"] == &"" and not fell.has("death"),
 		"a fall carries an empty weapon id", str(fell))
 	var kc: Node = preload("res://game/wo_killcam.gd").new()
 	add_child(kc)
-	var banner := DotKillcamBanner.new()
+	var banner := GSKillcamBanner.new()
 	banner.icon_provider = kc.killcam.icon_provider
 	add_child(banner)
 	banner.present({"killer": "Rival", "weapon": "Shot", "weapon_id": "pistol"})
@@ -736,16 +736,16 @@ func _test_the_killcam_names_the_weapon() -> void:
 		clock[0] = 11.0
 		kc.note_kill("k", "v", "shot", weapon)
 		_check(kc.round_ended(), "a round ending on a kill with weapon '%s' plays the killcam" % weapon)
-		var shown: DotKillcamBanner = kc.killcam.banner
+		var shown: GSKillcamBanner = kc.killcam.banner
 		var has_icon := shown != null and shown.icon_rect.visible and shown.icon_rect.texture != null
 		_check(has_icon == (weapon != ""), "the killcam banner icon is %s for weapon '%s'" % [
 			"shown" if weapon != "" else "absent", weapon])
 		kc.killcam.skip()
-	_check(kc.camera_mode_fn.call() == DotKillViewRules.Camera.EYE, "the killcam camera is the eye until the server says")
-	kc.camera_mode_fn = func() -> int: return DotKillViewRules.Camera.BEHIND
-	var framing := DotKillcamFraming.new(null, 1)
+	_check(kc.camera_mode_fn.call() == GSKillViewRules.Camera.EYE, "the killcam camera is the eye until the server says")
+	kc.camera_mode_fn = func() -> int: return GSKillViewRules.Camera.BEHIND
+	var framing := GSKillcamFraming.new(null, 1)
 	var eye := Transform3D(Basis.IDENTITY, Vector3(0, 1.6, 0))
-	var placed: Dictionary = framing.place(DotKillViewRules.Camera.BEHIND, eye, 75.0, Vector3(0, 1.2, -20))
+	var placed: Dictionary = framing.place(GSKillViewRules.Camera.BEHIND, eye, 75.0, Vector3(0, 1.2, -20))
 	_check((placed["transform"] as Transform3D).origin.z > 1.0, "the behind camera sits behind the killer's eye")
 	kc.queue_free()
 	killer.free()

@@ -1,4 +1,4 @@
-extends DotGameCheckSuite
+extends GSGameCheckSuite
 
 ## Run: `godot --headless --path . res://examples/headless_config.tscn`.
 
@@ -18,7 +18,7 @@ var _finished := 0
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.FATAL)
+	GSLog.set_level(GSLog.Level.FATAL)
 	_run.call_deferred()
 
 
@@ -46,9 +46,9 @@ func _run() -> void:
 	for k in ["course_seconds", "finale_seconds", "knock_damage_per_speed", "thrown_seconds", "friendly_fire", "bot_hop_speed", "bot_ground_brake", "bot_tile_start_seconds", "bot_tile_margin_seconds", "gravity", "map_rotation_file"]:
 		_check(keys.has(k), "%s is exposed" % k)
 
-	var console := DotConsole.new()
+	var console := GSConsole.new()
 	add_child(console)
-	binder.bind_cvars(console.cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
+	binder.bind_cvars(console.cvar, GSConVar.FLAG_ARCHIVE, console.has_name)
 	console.set_cvar("wo_courses_per_round", "7")
 	_check(config.courses_per_round == 7 and binder.source_of("courses_per_round") == "cvar", "a cvar writes the field")
 	_check(binder.diff_yaml().contains("courses_per_round: 7"), "the diff names the edit")
@@ -73,17 +73,17 @@ func _run() -> void:
 	_finished += 1
 
 	_entered += 1
-	var wb := DotGameWorkbench.new()
+	var wb := GSGameWorkbench.new()
 	wb.panel_mode = 1
 	wb.config = {"enabled": false}
-	for set: DotProfileSet in binder.profile_sets():
+	for set: GSProfileSet in binder.profile_sets():
 		wb.add_set(set, set.rel_path)
 	add_child(wb)
 	_check(wb.start().ok, "the workbench starts")
 	binder.attach(wb.api.runtime)
 	var listed := PackedStringArray()
 	for kind: String in wb.api.kinds():
-		var got: DotResult = wb.api.handle(DotGameWorkbench.LOCAL_ACTOR, {"op": "get", "kind": kind, "id": binder.profile_id})
+		var got: GSResult = wb.api.handle(GSGameWorkbench.LOCAL_ACTOR, {"op": "get", "kind": kind, "id": binder.profile_id})
 		if got.ok:
 			listed.append_array(PackedStringArray((got.value as Dictionary).get("values", {}).keys()))
 	var missing := PackedStringArray()
@@ -91,7 +91,7 @@ func _run() -> void:
 		if not listed.has(k):
 			missing.append(k)
 	_check(missing.is_empty() and binder.profile_sets().size() == 3, "the workbench lists all %d keys over %d files" % [keys.size(), binder.profile_sets().size()], ",".join(missing))
-	var res: DotResult = wb.api.handle(DotGameWorkbench.LOCAL_ACTOR, {"op": "set", "kind": "config_round", "id": binder.profile_id, "key": "course_seconds", "value": 90.0})
+	var res: GSResult = wb.api.handle(GSGameWorkbench.LOCAL_ACTOR, {"op": "set", "kind": "config_round", "id": binder.profile_id, "key": "course_seconds", "value": 90.0})
 	_check(res.ok and config.course_seconds == 90.0, "a workbench edit reaches the live config")
 	var files: Dictionary = wb.exporter.call("collect")
 	var text: String = files.get("cfg/game/mg-wipeout/config_round/game.yml", "")
@@ -112,11 +112,11 @@ func _check_look() -> void:
 		var rect := WoBlurb.rect_for(view)
 		var centre := Rect2(view * Vector2(0.3, 0.2), view * Vector2(0.4, 0.7))
 		_check(not rect.intersects(centre) and rect.end.x <= view.x * 0.3 and rect.position.y < view.y * 0.2 + 100.0, "the blurb clears the middle at %dx%d" % [view.x, view.y], str(rect))
-	var blue := DotMapSurfaces.limit_chroma(Vector3(0.192, 0.206, 0.877), WoWorld.MAX_CHROMA_RATIO)
+	var blue := GSMapSurfaces.limit_chroma(Vector3(0.192, 0.206, 0.877), WoWorld.MAX_CHROMA_RATIO)
 	var ratio := maxf(blue.x, maxf(blue.y, blue.z)) / minf(blue.x, minf(blue.y, blue.z))
 	_check(ratio <= WoWorld.MAX_CHROMA_RATIO + 0.01, "a saturated blue bake (Destiny Course) is brought within the ratio", "%s %.2f" % [blue, ratio])
-	_check(DotMapSurfaces.limit_chroma(Vector3(0.2, 0.21, 0.19), WoWorld.MAX_CHROMA_RATIO) == Vector3(0.2, 0.21, 0.19), "a neutral bake is left alone")
-	_check(DotMapSurfaces.limit_chroma(Vector3.ZERO, WoWorld.MAX_CHROMA_RATIO) == Vector3.ZERO, "a black page is left alone")
+	_check(GSMapSurfaces.limit_chroma(Vector3(0.2, 0.21, 0.19), WoWorld.MAX_CHROMA_RATIO) == Vector3(0.2, 0.21, 0.19), "a neutral bake is left alone")
+	_check(GSMapSurfaces.limit_chroma(Vector3.ZERO, WoWorld.MAX_CHROMA_RATIO) == Vector3.ZERO, "a black page is left alone")
 
 
 ## Child process: loads the layers strictly over the test root and prints what the live config holds.
@@ -126,9 +126,9 @@ func _probe() -> void:
 	binder.strict = true
 	binder.roots = PackedStringArray([ProjectSettings.globalize_path(ROOT)])
 	var loaded := binder.load_layers()
-	var console := DotConsole.new()
+	var console := GSConsole.new()
 	add_child(console)
-	binder.bind_cvars(console.cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
+	binder.bind_cvars(console.cvar, GSConVar.FLAG_ARCHIVE, console.has_name)
 	print("PROBE ok=%s round=%s round_src=%s wind=%s wind_src=%s cvar=%s speed=%s speed_src=%s grav=%s grav_src=%s" % [
 		loaded.ok, config.course_seconds, binder.source_of("course_seconds"), config.wind_strength, binder.source_of("wind_strength"),
 		console.find_cvar("wo_wind_strength").get_string(), config.run_speed, binder.source_of("run_speed"),
@@ -164,12 +164,12 @@ func _layers() -> void:
 	OS.unset_environment("WO_WIND_STRENGTH")
 	_write("game/%s/config_round/game.yml" % GAME, "wind_strength: 9.0\n")
 	_check(_child().contains("PROBE ok=false"), "strict: a key in the wrong file is refused")
-	var removed := DotPaths.remove_tree(ProjectSettings.globalize_path(ROOT))
+	var removed := GSPaths.remove_tree(ProjectSettings.globalize_path(ROOT))
 	_check(removed.ok and not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(ROOT)), "the per-process cfg fixture directory is removed", ROOT if removed.ok else str(removed.error))
 
 
 ## The shipped cfg files hold every key, in step with WoConfig, and change nothing as they are.
-func _templates(binder: DotGameConfigBinder) -> void:
+func _templates(binder: GSGameConfigBinder) -> void:
 	var files := binder.template_files()
 	_check(files.size() == 3, "three shipped cfg files", str(files.size()))
 	var stale := PackedStringArray()

@@ -2,7 +2,7 @@ extends "wo_game_bot_race.gd"
 ## How a stand-in runs a course: the route walk, tile waits, windows and take-offs.
 
 
-func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
+func _bot_run(player: WoPlayer, command: GSFpsCommand) -> void:
 	var route := stage.route()
 
 	if route.is_empty():
@@ -27,7 +27,7 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 		return
 
 	var at := player.controller.state.position
-	var grounded := player.controller.state.mode == DotFpsState.Mode.GROUND
+	var grounded := player.controller.state.mode == GSFpsState.Mode.GROUND
 	var ground_id := player.controller.state.ground_id
 	# On a tile of a grid of trapdoors (not merely near one): see [method _bot_tile_column].
 	var on_tile := grounded and not stage.tile_under(ground_id).is_empty()
@@ -78,7 +78,7 @@ func _bot_run(player: WoPlayer, command: DotFpsCommand) -> void:
 
 
 ## The second half of [method _bot_run]: unstick, board the edge, back up, take off, then move on along the route.
-func _bot_run_reach(player: WoPlayer, command: DotFpsCommand, racing: Dictionary, point: Dictionary, next: Dictionary,
+func _bot_run_reach(player: WoPlayer, command: GSFpsCommand, racing: Dictionary, point: Dictionary, next: Dictionary,
 		next_index: int, index: int, toward: Vector3, at: Vector3, grounded: bool, ground_id: int, on_tile: bool) -> void:
 	_bot_unstick(player, command)
 
@@ -143,7 +143,7 @@ func _bot_run_reach(player: WoPlayer, command: DotFpsCommand, racing: Dictionary
 
 ## Heading for something to land on, the jump is at whatever edge the bot reaches first, which on a moving floor
 ## no route point names. A gap a stride crosses is stepped, not jumped.
-func _bot_board_edge(player: WoPlayer, command: DotFpsCommand, point: Dictionary, at: Vector3, ground_id: int,
+func _bot_board_edge(player: WoPlayer, command: GSFpsCommand, point: Dictionary, at: Vector3, ground_id: int,
 		on_tile: bool) -> void:
 	var heading := Vector3(-sin(deg_to_rad(command.yaw)), 0.0, -cos(deg_to_rad(command.yaw)))
 	# From a deck onto tiles, the jump is put off until the runner is nearly at the edge (a walk's jump is two metres).
@@ -156,12 +156,12 @@ func _bot_board_edge(player: WoPlayer, command: DotFpsCommand, point: Dictionary
 			command.move = Vector2.ZERO
 	elif not stage.supported(ahead, _tick) \
 			and not stage.supported(at + heading * 1.6 + Vector3(0.0, 0.1, 0.0), _tick):
-		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+		command.set_button(GSFpsCommand.BUTTON_JUMP, true)
 
 
 ## Waiting on a deck or a tile for the thing to board. Returns the point to go on with (another column's, perhaps),
 ## or an empty one when the tick is spent.
-func _bot_tile_wait(player: WoPlayer, command: DotFpsCommand, racing: Dictionary, point: Dictionary, original: Vector3,
+func _bot_tile_wait(player: WoPlayer, command: GSFpsCommand, racing: Dictionary, point: Dictionary, original: Vector3,
 		before: Vector3, on_tile: bool) -> Dictionary:
 	var at := player.controller.state.position
 	var ground_id := player.controller.state.ground_id
@@ -218,18 +218,18 @@ func _bot_tile_wait(player: WoPlayer, command: DotFpsCommand, racing: Dictionary
 				if not stage.supported(at + forward * 1.3 + Vector3(0.0, 0.1, 0.0), _tick):
 					command.yaw = rad_to_deg(atan2(-forward.x, -forward.z))
 					command.move = Vector2(0.0, -1.0)
-					command.set_button(DotFpsCommand.BUTTON_WALK, true)
+					command.set_button(GSFpsCommand.BUTTON_WALK, true)
 				elif across.length() > TILE_LINED_UP * 0.5:
 					command.yaw = rad_to_deg(atan2(-across.x, -across.z))
 					command.move = Vector2(0.0, 1.0)
-					command.set_button(DotFpsCommand.BUTTON_WALK, true)
+					command.set_button(GSFpsCommand.BUTTON_WALK, true)
 			return {}
 	return point
 
 
 ## A late take-off under way: running on the way it was going (past the point, which would otherwise turn it
 ## round), then the jump, whether or not there is still ground under it.
-func _bot_late_takeoff(player: WoPlayer, command: DotFpsCommand, racing: Dictionary, next_index: int, grounded: bool) -> void:
+func _bot_late_takeoff(player: WoPlayer, command: GSFpsCommand, racing: Dictionary, next_index: int, grounded: bool) -> void:
 	command.yaw = float(racing["late_yaw"])
 	command.move = Vector2(0.0, 1.0)
 	if int(racing["late"]) > 0:
@@ -239,13 +239,13 @@ func _bot_late_takeoff(player: WoPlayer, command: DotFpsCommand, racing: Diction
 		return
 	racing["late_going"] = false
 	if grounded and not bool(racing["fumble"]):
-		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+		command.set_button(GSFpsCommand.BUTTON_JUMP, true)
 	_bot_route[player.player_id] = next_index
 
 
 ## Waiting at a point for a window. The window is SEEN, then gone for a reaction later (dot-bot's `bot_reaction`):
 ## a person does not set off on the tick a ram starts home. True while the bot still holds.
-func _bot_window_holds(player: WoPlayer, command: DotFpsCommand, racing: Dictionary, point: Dictionary, at: Vector3,
+func _bot_window_holds(player: WoPlayer, command: GSFpsCommand, racing: Dictionary, point: Dictionary, at: Vector3,
 		index: int) -> bool:
 	var waited := int(_bot_wait.get(player.player_id, 0))
 
@@ -254,7 +254,7 @@ func _bot_window_holds(player: WoPlayer, command: DotFpsCommand, racing: Diction
 			and not _span_clear(at, index, int(point["span"])):
 		_bot_wait[player.player_id] = waited + 1
 		command.move = Vector2.ZERO
-		command.set_button(DotFpsCommand.BUTTON_JUMP, false)
+		command.set_button(GSFpsCommand.BUTTON_JUMP, false)
 		return true
 
 	if int(racing["window"]) < 0:
@@ -263,17 +263,17 @@ func _bot_window_holds(player: WoPlayer, command: DotFpsCommand, racing: Diction
 	var react := int(racer.reaction() * float(racing["factor"]) * float(_rate()))
 	if _tick - int(racing["window"]) < react:
 		command.move = Vector2.ZERO
-		command.set_button(DotFpsCommand.BUTTON_JUMP, false)
+		command.set_button(GSFpsCommand.BUTTON_JUMP, false)
 		return true
 	return false
 
 
 ## The take-off at a jump point: face, run up, back up, late or fumbled. False when the tick is spent, true when
 ## the bot has jumped (or is done) and the route moves on.
-func _bot_takeoff(player: WoPlayer, command: DotFpsCommand, racing: Dictionary, point: Dictionary, next: Dictionary,
+func _bot_takeoff(player: WoPlayer, command: GSFpsCommand, racing: Dictionary, point: Dictionary, next: Dictionary,
 		toward: Vector3, index: int) -> bool:
 	var at := player.controller.state.position
-	var grounded := player.controller.state.mode == DotFpsState.Mode.GROUND
+	var grounded := player.controller.state.mode == GSFpsState.Mode.GROUND
 	if not grounded:
 		racing["grounded_for"] = 0
 		return false
@@ -320,12 +320,12 @@ func _bot_takeoff(player: WoPlayer, command: DotFpsCommand, racing: Dictionary, 
 
 	# A fumble is a jump not taken, decided once per bot, point and attempt.
 	if not bool(racing["fumble"]):
-		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+		command.set_button(GSFpsCommand.BUTTON_JUMP, true)
 	return true
 
 
 ## Where a take-off faces: the next top, or onward past an edge, braking off any excess speed.
-func _bot_takeoff_aim(player: WoPlayer, command: DotFpsCommand, point: Dictionary, next: Dictionary, toward: Vector3,
+func _bot_takeoff_aim(player: WoPlayer, command: GSFpsCommand, point: Dictionary, next: Dictionary, toward: Vector3,
 		at: Vector3) -> void:
 	# On a top, face the next one, never the point: a landing is aimed a little past the point (see [method
 	# _bot_land_on]), so turning to it is running backwards and the take-off slows to two metres a second. Past
@@ -366,7 +366,7 @@ func _bot_takeoff_aim(player: WoPlayer, command: DotFpsCommand, point: Dictionar
 
 
 ## Up to speed before the jump. True while the bot is still running up (the tick is spent).
-func _bot_takeoff_runup(player: WoPlayer, command: DotFpsCommand, point: Dictionary, next: Dictionary, toward: Vector3,
+func _bot_takeoff_runup(player: WoPlayer, command: GSFpsCommand, point: Dictionary, next: Dictionary, toward: Vector3,
 		at: Vector3) -> bool:
 	# Up to speed first, for a few ticks: a landing on a ball or a turning log costs speed,
 	# and a jump taken at four metres a second off a log falls short of the next one — a
@@ -414,7 +414,7 @@ func _bot_takeoff_runup(player: WoPlayer, command: DotFpsCommand, point: Diction
 
 
 ## The air and mover cases of [method _bot_run]. True when the tick is done.
-func _bot_run_air(player: WoPlayer, command: DotFpsCommand, point: Dictionary, next_index: int, before: Vector3,
+func _bot_run_air(player: WoPlayer, command: GSFpsCommand, point: Dictionary, next_index: int, before: Vector3,
 		before_index: int, toward: Vector3, grounded: bool) -> bool:
 	# In the air, aimed at a top (or something to board) to land on: brake if the jump would carry past it.
 	if not grounded and (bool(point["jump"]) or bool(point.get("bounce", false)) or bool(point["board"])):
@@ -440,7 +440,7 @@ func _bot_run_air(player: WoPlayer, command: DotFpsCommand, point: Dictionary, n
 
 
 ## Walk, queue and window rules of [method _bot_run]. True when the tick is done.
-func _bot_run_stops(player: WoPlayer, command: DotFpsCommand, racing: Dictionary, point: Dictionary, next: Dictionary,
+func _bot_run_stops(player: WoPlayer, command: GSFpsCommand, racing: Dictionary, point: Dictionary, next: Dictionary,
 		toward: Vector3, on_tile: bool) -> bool:
 	# Walked into, for its last metre and a half, a point it may have to stop at (a run slides a metre past, off the
 	# edge beside a mover). Never on the tiles (see [method _bot_may_board]).
@@ -448,12 +448,12 @@ func _bot_run_stops(player: WoPlayer, command: DotFpsCommand, racing: Dictionary
 
 	# Only on the way IN: a window timed at a run is missed by a bot that walks through it.
 	if bool(point["walk"]) or (stops and toward.length() < 1.6 and toward.length() > float(point["reach"])):
-		command.set_button(DotFpsCommand.BUTTON_WALK, true)
+		command.set_button(GSFpsCommand.BUTTON_WALK, true)
 
 	# Onto a tile at a walk (a running jump overshoots a row of two metres), once on them at a run.
 	if bool(point["board"]) and not bool(point["ride"]) and not on_tile \
 			and not stage.tile_columns(point["at"]).is_empty():
-		command.set_button(DotFpsCommand.BUTTON_WALK, true)
+		command.set_button(GSFpsCommand.BUTTON_WALK, true)
 
 	# Two seconds at the most behind anybody: whoever is in front may be stuck themselves.
 	if bool(point["jump"]) and toward.length() < 4.0 and int(racing.get("queued", 0)) < _rate() * 2 \
@@ -465,10 +465,10 @@ func _bot_run_stops(player: WoPlayer, command: DotFpsCommand, racing: Dictionary
 
 ## True when the hop under way carries past the jump point ahead, which makes it the jump: the route moves on.
 func _bot_hop_is_jump(player: WoPlayer, point: Dictionary, next: Dictionary, next_index: int, toward: Vector3,
-		at: Vector3, grounded: bool, command: DotFpsCommand) -> bool:
+		at: Vector3, grounded: bool, command: GSFpsCommand) -> bool:
 	# A hop that carries past the jump point ahead is the jump: the route moves on and the landing is steered onto
 	# what is beyond the gap.
-	if grounded and command.is_pressed(DotFpsCommand.BUTTON_JUMP) and bool(point["jump"]) \
+	if grounded and command.is_pressed(GSFpsCommand.BUTTON_JUMP) and bool(point["jump"]) \
 			and float(point["reach"]) <= 0.6 and not next.is_empty():
 		var airtime := 2.0 * sqrt(2.0 * _cfg().gravity * _cfg().jump_height) / _cfg().gravity
 		var flat := Vector3(player.controller.state.velocity.x, 0.0, player.controller.state.velocity.z)

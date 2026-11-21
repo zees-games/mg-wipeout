@@ -16,8 +16,8 @@ const FLING := &"wipeout_fling"
 ## How far a prop may be from somebody's eyes to be picked up, in metres.
 const GRAB_REACH := 3.5
 
-# Team colours and names are dot-team's, for any number of teams: [method DotTeamSet.palette_colour] and
-# [method DotTeamSet.palette_name] (index 0 is team id 1).
+# Team colours and names are dot-team's, for any number of teams: [method GSTeamSet.palette_colour] and
+# [method GSTeamSet.palette_name] (index 0 is team id 1).
 
 ## Which part of the round it is.
 enum Phase {
@@ -36,11 +36,11 @@ enum Phase {
 ## The course, or during a final death the arena. One node, rebuilt. See [method _begin_handover].
 var stage: WoCourse = null
 
-var props: DotPropSpawner = null
+var props: GSPropSpawner = null
 
-var random: DotRandomManager = null
+var random: GSRandomManager = null
 
-var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
+var body_rules: GSPlayerBodyRules = GSPlayerBodyRules.new()
 
 var progress: WoProgress = null
 
@@ -64,12 +64,12 @@ var _tick: int = 0
 ## Whether this instance decides anything. A client sets this false.
 @export var authoritative: bool = true
 
-var combat: DotCombatManager = null
+var combat: GSCombatManager = null
 
 ## `func(player_id: StringName) -> bool`: whether a player may be hurt now, assigned by the
 ## module from dot-game's `can_peer_be_harmed`. Unset offline, and a bot is never loading.
 var harm_gate: Callable = Callable()
 
-var physics: DotPhysicsLayout = null
+var physics: GSPhysicsLayout = null
 
 @export_range(1, 240, 1) var tick_rate: int = 64

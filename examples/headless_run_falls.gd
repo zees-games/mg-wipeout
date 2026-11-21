@@ -126,8 +126,8 @@ func _test_the_weather() -> void:
 		c.wind_chance = 1.0
 		c.storm_chance = 1.0)
 	var doc: Dictionary = game.course_doc
-	var once := game.draw_weather(doc, DotRandomStream.new(7, &"weather"), 100)
-	var twice := game.draw_weather(doc, DotRandomStream.new(7, &"weather"), 100)
+	var once := game.draw_weather(doc, GSRandomStream.new(7, &"weather"), 100)
+	var twice := game.draw_weather(doc, GSRandomStream.new(7, &"weather"), 100)
 	_check(once == twice, "the same stream draws the same weather")
 	_check((once["gusts"] as Array).size() > 0 and (once["strikes"] as Array).size() == game.config.storm_strikes,
 		"wind and storm on: gusts and %d strikes" % game.config.storm_strikes)

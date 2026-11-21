@@ -1,8 +1,8 @@
 extends "dedicated_late.gd"
 
 
-## The game as a deployed server runs it: a real [DotServer] booted from a config file, the module loaded BY PATH as an
-## operator names it. The only place [WoModule] loads, [DotGameModule]'s order runs, a cvar is typed at a console and a
+## The game as a deployed server runs it: a real [GSServer] booted from a config file, the module loaded BY PATH as an
+## operator names it. The only place [WoModule] loads, [GSGameModule]'s order runs, a cvar is typed at a console and a
 ## round is played by the stand-ins the module seats.
 
 const SECTIONS := 16
@@ -10,7 +10,7 @@ const CHECKS := 121
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
@@ -18,12 +18,12 @@ func _run() -> void:
 	print("wipeout as a dedicated server")
 	print("")
 
-	DotPaths.remove_tree(SERVER_DIR)
+	GSPaths.remove_tree(SERVER_DIR)
 	DirAccess.make_dir_recursive_absolute(SERVER_DIR)
 
 	await _boot()
 
-	if server != null and server.state == DotServer.State.RUNNING:
+	if server != null and server.state == GSServer.State.RUNNING:
 		await _test_the_module_loads()
 		_test_the_commands()
 		_test_config_and_noblock()
@@ -42,11 +42,11 @@ func _run() -> void:
 	_test_no_message_preloads_itself()
 
 	await _shut_down()
-	DotPaths.remove_tree(SERVER_DIR)
+	GSPaths.remove_tree(SERVER_DIR)
 	_report_sections(_sections_entered, _sections_finished, SECTIONS, CHECKS)
 
 
-## Takes the server down before quitting: a booted [DotServer]'s listener holds the main loop,
+## Takes the server down before quitting: a booted [GSServer]'s listener holds the main loop,
 ## and a run that only called `quit()` prints its results and hangs. See mg-smash-copter.
 func _shut_down() -> void:
 	if server == null:
@@ -84,7 +84,7 @@ func _boot() -> void:
 	cfg.store_line("sv_tickrate %d" % TICK_RATE)
 	cfg.close()
 
-	var config := DotServerConfig.new()
+	var config := GSServerConfig.new()
 	config.startup_config = cfg_path
 	config.autoexec_config = ""
 	config.hostname = "wipeout test"
@@ -100,7 +100,7 @@ func _boot() -> void:
 	# exit without.
 	config.stdin_console_enabled = false
 
-	server = DotServer.new()
+	server = GSServer.new()
 	server.name = "Server"
 	server.config = config
 	add_child(server)
@@ -108,10 +108,10 @@ func _boot() -> void:
 	for _i in range(120):
 		await get_tree().process_frame
 
-		if server.state == DotServer.State.RUNNING:
+		if server.state == GSServer.State.RUNNING:
 			break
 
-	_check(server.state == DotServer.State.RUNNING, "the server boots", DotServer.State.keys()[server.state])
+	_check(server.state == GSServer.State.RUNNING, "the server boots", GSServer.State.keys()[server.state])
 	_check(Engine.physics_ticks_per_second == TICK_RATE, "and sv_tickrate reached the engine",
 		"%d" % Engine.physics_ticks_per_second)
 	_finished()
@@ -140,11 +140,11 @@ func _test_the_module_loads() -> void:
 	add_child(game)
 	await get_tree().process_frame
 
-	_check(DotRegistry.get_node_service(WoGame.SERVICE) == game, "the world publishes itself where a module looks")
+	_check(GSRegistry.get_node_service(WoGame.SERVICE) == game, "the world publishes itself where a module looks")
 	_check(game.stage.is_course(), "and already has a course")
 
 	(load("res://game/wo_module.gd") as GDScript).set("punishments_file", "%s/punishments.json" % SERVER_DIR)
-	var loaded: DotResult = await server.modules.load_module("res://game/wo_module.gd")
+	var loaded: GSResult = await server.modules.load_module("res://game/wo_module.gd")
 	_check(loaded.ok, "the module loads into the server", loaded.error.message if not loaded.ok else "")
 
 	var module := _module()
@@ -153,7 +153,7 @@ func _test_the_module_loads() -> void:
 	_check(module != null and module.get("net") != null and module.get("bridge") != null,
 		"with its netcode and the game's bridge")
 
-	var net: DotNetManager = module.get("net") if module != null else null
+	var net: GSNetManager = module.get("net") if module != null else null
 	_check(net != null and net.config.tick_rate == TICK_RATE, "the netcode runs at the configured rate")
 	_check(net != null and absf(net.config.world_extent - WoGame.NET_WORLD_EXTENT) < 0.01,
 		"against the world extent both ends decode with")
@@ -194,7 +194,7 @@ func _test_the_commands() -> void:
 	# under the server's level rather than its default.
 	var shared := server.console.find_cvar("mp_teammate_passthrough")
 	var _two := _run_command("mp_teammate_passthrough 2")
-	_check(shared != null and shared.has_flag(DotConVar.FLAG_REPLICATED)
+	_check(shared != null and shared.has_flag(GSConVar.FLAG_REPLICATED)
 			and server.console.replicated_values().get("mp_teammate_passthrough", "") == "2",
 		"mp_teammate_passthrough is replicated: a client is sent the server's level",
 		str(server.console.replicated_values()))
@@ -216,15 +216,15 @@ func _test_config_and_noblock() -> void:
 	var _back := _run_command("wo_health_enabled 1")
 	_check(game.config.health_enabled and console.get_string("wo_health", "") == "1", "and the field's cvar moves the alias")
 	var module := _module()
-	var wb: DotGameWorkbench = module.get("workbench") if module != null else null
+	var wb: GSGameWorkbench = module.get("workbench") if module != null else null
 	_check(wb != null and wb.api != null, "the module hosts a workbench")
 	if wb == null or wb.api == null:
 		return
 	var rel := "config_players"
-	var res: DotResult = wb.api.handle(DotGameWorkbench.LOCAL_ACTOR, {"op": "set", "kind": rel, "id": binder.profile_id, "key": "friendly_fire", "value": true})
+	var res: GSResult = wb.api.handle(GSGameWorkbench.LOCAL_ACTOR, {"op": "set", "kind": rel, "id": binder.profile_id, "key": "friendly_fire", "value": true})
 	_check(res.ok and game.config.friendly_fire and game.combat.rules.friendly_fire and console.get_string("wo_friendly_fire", "") == "1",
 		"a workbench edit changes the field, the live cvar and the combat rules", "" if res.ok else res.error.message)
-	var amb: DotResult = wb.api.handle(DotGameWorkbench.LOCAL_ACTOR, {"op": "set", "kind": "ambience", "id": DotGameWorkbench.CVAR_SET_ID, "key": "wo_ambient_volume", "value": 0.2})
+	var amb: GSResult = wb.api.handle(GSGameWorkbench.LOCAL_ACTOR, {"op": "set", "kind": "ambience", "id": GSGameWorkbench.CVAR_SET_ID, "key": "wo_ambient_volume", "value": 0.2})
 	_check(amb.ok and is_equal_approx(console.get_float("wo_ambient_volume"), 0.2), "the wo_ambient* cvars are a workbench set and an edit moves the cvar", "" if amb.ok else amb.error.message)
 	var _restore := console.set_cvar("wo_ambient_volume", "0.35")
 	var teamblock := console.find_cvar("mp_teamblock")
@@ -257,7 +257,7 @@ func _test_a_round_runs() -> void:
 	_check(bots == game.config.minimum_players, "the module seated stand-ins up to the minimum", "%d" % bots)
 	_check(not rounds.is_empty(), "and a round was decided", str(rounds))
 	_check(not rounds.is_empty() and str(rounds[0][2]) != "", "with a sentence saying why", str(rounds))
-	# A person takes a stand-in's place, and leaving gives it back (DotBotQuota's fill mode). Driven by calling the
+	# A person takes a stand-in's place, and leaving gives it back (GSBotQuota's fill mode). Driven by calling the
 	# roster check rather than waiting for its interval, with a person added through the bridge (peer zero, not a
 	# stand-in), so the count is exact.
 	var quota_module := _module()
@@ -265,11 +265,11 @@ func _test_a_round_runs() -> void:
 	_check(server.console.find_cvar("bot_quota") != null and server.console.find_cvar("bot_quota_mode") != null,
 		"the shared bot_quota cvars are registered")
 	# How the stand-ins race and aim is one word, dot-bot's, plus this game's racing settings.
-	var bot_settings := DotBotSettings.of(game)
+	var bot_settings := GSBotSettings.of(game)
 	_check(server.console.get_string("bot_difficulty", "") == "medium" and bot_settings.difficulty() == "medium",
 		"bot_difficulty is the module's and medium is the default")
 	var _hard := _run_command("bot_difficulty hard")
-	_check(is_equal_approx(server.console.get_float("bot_reaction"), DotBotProfile.preset_value("hard", "reaction"))
+	_check(is_equal_approx(server.console.get_float("bot_reaction"), GSBotProfile.preset_value("hard", "reaction"))
 			and is_equal_approx(server.console.get_float("wo_bot_fumble"), WoRacer.preset_value("hard", "fumble")),
 		"bot_difficulty hard writes bot_reaction and the racing wo_bot_* settings",
 		"%s / %s" % [server.console.get_string("bot_reaction"), server.console.get_string("wo_bot_fumble")])
@@ -284,7 +284,7 @@ func _test_a_round_runs() -> void:
 	if quota_module != null and quota_bridge != null:
 		quota_module.call("_keep_the_round_full")
 		var bots_before: int = (quota_module.get("_bot_ids") as Array).size()
-		var joined: DotResult = quota_bridge.call("add_player", 0, 9001, "Person")
+		var joined: GSResult = quota_bridge.call("add_player", 0, 9001, "Person")
 		quota_module.call("_keep_the_round_full")
 		var bots_with: int = (quota_module.get("_bot_ids") as Array).size()
 		_check(joined.ok and bots_before == 3 and bots_with == bots_before - 1,
@@ -320,7 +320,7 @@ func _test_a_round_runs() -> void:
 func _test_a_reload_keeps_delivered_courses() -> void:
 	_section("a reload keeps the courses the server names")
 	var key := "dot-test/wo-delivered@1.0.0"
-	var mount := DotGameContent.mount_of(key)
+	var mount := GSGameContent.mount_of(key)
 	var dir := mount.path_join("courses")
 	var id := &"wo_delivered_check"
 	DirAccess.make_dir_recursive_absolute(dir)
@@ -336,7 +336,7 @@ func _test_a_reload_keeps_delivered_courses() -> void:
 	# `_current` is the manager's own, and nothing else in this suite should see the pack.
 	var manager: Object = server.games
 	var was: Variant = manager.get("_current")
-	var named := DotGameDescriptor.new()
+	var named := GSGameDescriptor.new()
 	named.maps = PackedStringArray([key])
 	manager.set("_current", named)
 
@@ -384,9 +384,9 @@ func _test_the_course_vote() -> void:
 	_check(commands_there, "and registered dot-vote's vote, rtv and nominate")
 
 
-	# Hibernation: DotGameModule hands the director the server, the ballot's timer waits with
+	# Hibernation: GSGameModule hands the director the server, the ballot's timer waits with
 	# it, and waking starts both again from the top.
-	var director: DotVoteDirector = vote.get("director")
+	var director: GSVoteDirector = vote.get("director")
 	_check(server.hibernation_changed.is_connected(director.set_hibernating),
 		"the vote follows the server's hibernation without a line of this game's")
 	vote.set("_opened_this_map", true)
@@ -405,7 +405,7 @@ func _test_the_course_vote() -> void:
 	vote.call("refresh_maps")
 	var ids: Array = []
 
-	for choice: DotVoteChoice in (vote.get("source") as DotVoteListSource).entries:
+	for choice: GSVoteChoice in (vote.get("source") as GSVoteListSource).entries:
 		ids.append(String(choice.id))
 
 	_check(ids.has("wo_grand_tour") and ids.has("wo_log_roll") and not ids.has("wo_arena_pit"),
@@ -431,7 +431,7 @@ func _test_the_course_vote() -> void:
 	_check(director.is_voting() and options.has(StringName(wanted)),
 		"the ballot opens on its own clock, with the nomination on it", str(options))
 	# The feed is polled each tick before the ballot timer opens one, so it sees it next tick.
-	(vote.get("feed") as DotVoteBallotFeed).poll()
+	(vote.get("feed") as GSVoteBallotFeed).poll()
 	var drawn: Dictionary = captured.back() if not captured.is_empty() else {}
 	_check(bool(drawn.get("open", false)) and str(drawn.get("command", "")) == "vote" \
 			and (drawn.get("options", []) as Array).size() == options.size(),
@@ -483,11 +483,11 @@ func _course_vote_menu(vote: Node) -> void:
 		and server.console.find_cvar("sv_map_menu_flag").get_string() == "generic"
 		and (menu_half.get("change_fn") as Callable).is_valid(),
 		"the map menu is there, staff-only by default, changing the course now")
-	var staff := DotCmdContext.new()
-	staff.source = DotCmdContext.Source.CHAT
+	var staff := GSCmdContext.new()
+	staff.source = GSCmdContext.Source.CHAT
 	staff.permissions = PackedStringArray(["generic"])
-	var player := DotCmdContext.new()
-	player.source = DotCmdContext.Source.CHAT
+	var player := GSCmdContext.new()
+	player.source = GSCmdContext.Source.CHAT
 	var offered: Dictionary = menu_half.call("offer", player)
 	_check((offered["maps"] as Array).size() > 1 and not bool(offered["allowed"]) and bool(offered["vote"]),
 		"a player is offered every course, as a vote")
@@ -525,7 +525,7 @@ func _test_rotation_file_frees() -> void:
 	file.store_string("defaults:\n  rotations:\n    short:\n      mode: cycle\n      maps: [\"*\"]\n")
 	file.close()
 
-	var read := DotMapRotationFile.load_files(PackedStringArray([path]), "mg-wipeout")
+	var read := GSMapRotationFile.load_files(PackedStringArray([path]), "mg-wipeout")
 	_check(read.ok, "and read by dot-map", str(read.error))
 	var probe := _apply_and_drop(read.value)
 	_check(probe.get_ref() == null, "the catalogue it was applied to is freed with its last reference")
@@ -533,7 +533,7 @@ func _test_rotation_file_frees() -> void:
 
 
 ## Own function so no local keeps the catalogue alive when the WeakRef is read.
-func _apply_and_drop(rotation_file: DotMapRotationFile) -> WeakRef:
+func _apply_and_drop(rotation_file: GSMapRotationFile) -> WeakRef:
 	var catalogue = load("res://game/wo_catalogue.gd").new()
 	catalogue.rotation_file = rotation_file
 	catalogue.apply_rotation()
@@ -563,7 +563,7 @@ func _test_rotation_file() -> void:
 	var keep_a: Array = ["rot_0", "rot_1"]
 	var keep_b: Array = ["rot_2", "rot_3"]
 
-	var parsed := DotMapRotationFile.from_trees([{"defaults": {
+	var parsed := GSMapRotationFile.from_trees([{"defaults": {
 		"rotation": "a",
 		"rotations": {"a": {"maps": keep_a, "mode": "random"}, "b": {"maps": keep_b, "mode": "cycle"}},
 		"commands": {"names": {"rtv": "rockit", "wo_courses": "courselist"}},
@@ -621,7 +621,7 @@ func _rotation_switch_checks(catalogue, vote: Node, keep_b: Array) -> void:
 		"the game's own map command is renameable from the file")
 
 	var host := CommandHost.new()
-	var bound: DotResult = vote.call("install_commands", host) if vote != null else null
+	var bound: GSResult = vote.call("install_commands", host) if vote != null else null
 	_check(bound != null and bound.ok and host.added.has("rockit") and not host.added.has("rtv"),
 		"and a renamed rtv is registered under its new name", ", ".join(host.added.keys().slice(0, 6)))
 	host.free()
@@ -636,7 +636,7 @@ func _rotation_switch_checks(catalogue, vote: Node, keep_b: Array) -> void:
 ## The family cvar `stats_report` is registered, off, and turning it on makes the game's tracker report.
 func _test_stats_report() -> void:
 	_section("stats_report")
-	var cv: DotConVar = server.console.find_cvar("stats_report")
+	var cv: GSConVar = server.console.find_cvar("stats_report")
 	var game_node := _module().get("game") as WoGame
 	var progress: Node = game_node.progress if game_node != null else null
 	_check(cv != null and cv.get_string() == "0", "stats_report is registered and off by default")
@@ -652,23 +652,23 @@ func _test_stats_report() -> void:
 	script.source_code = "extends Node\nfunc post_integration(_a = null, _b = null, _c = null): return null\n"
 	var _reloaded := script.reload()
 	client.set_script(script)
-	DotRegistry.register(&"dot_backbone_client", client)
+	GSRegistry.register(&"dot_backbone_client", client)
 	var _r0 := cv.set_value("0")
 	var _r1 := cv.set_value("1")
 	_check(progress.stats.report_to_backbone, "on with a backbone client makes the tracker report")
 	var _r2 := cv.set_value("0")
 	_check(not progress.stats.report_to_backbone, "off stops it again")
-	DotRegistry.unregister_instance(&"dot_backbone_client", client)
+	GSRegistry.unregister_instance(&"dot_backbone_client", client)
 	client.free()
 
-	var zoned := DotDamage.make(1, 2, 5.0, game_node.combat.damage_type(&"kinetic"))
-	zoned.hit_group = DotHitGroup.NECK
+	var zoned := GSDamage.make(1, 2, 5.0, game_node.combat.damage_type(&"kinetic"))
+	zoned.hit_group = GSHitGroup.NECK
 	zoned.weapon_id = &"probe"
 	progress.stats.begin(&"wo-test", "wo-test")
 	progress.feed.key_of = func(id: Variant) -> StringName: return StringName(str(id))
 	var _ok: bool = progress.feed.report_hit(&"wo-test", &"wo-victim", "probe", zoned.hit_group, 5.0)
 	_check(
-		progress.stats.session_values(&"wo-test").get_cell(DotStatsHitzones.HITS, "zone:neck") >= 1.0,
+		progress.stats.session_values(&"wo-test").get_cell(GSStatsHitzones.HITS, "zone:neck") >= 1.0,
 		"a hit with a hit_group is filed by body zone through the dot-stats hitzone hook"
 	)
 	_check(preload("../game/wo_progress.gd").schema().validate().ok, "the stats schema, hitzones included, validates")
@@ -679,16 +679,16 @@ func _test_stats_report() -> void:
 	var _p: float = progress.rank.publish(&"wo-rank", {"wo.rounds_won": 2.0, "wo.courses_finished": 1.0})
 	_check(progress.stats.session_values(&"wo-rank").get_value(&"rank_score", 0.0) == 7.0,
 		"the weighted rank files rank_score (2 wins x 3 + 1 finish)")
-	var _held := DotStatsValues.new()
+	var _held := GSStatsValues.new()
 	_held.values = {"wo.rounds_won": 10.0}
 	progress.rank.seed_baseline(&"wo-rank", _held)
 	var _life: float = progress.rank.publish_lifetime(&"wo-rank", progress.stats.session_values(&"wo-rank"), progress.stats.schema)
 	_check(_life == 30.0, "a stored lifetime baseline (10 wins) is what the published rank is built on")
 	var _elo = server.console.find_cvar("wo_rank").set_value("elo")
-	_check(progress.rank.mode == DotStatsRank.MODE_ELO,
+	_check(progress.rank.mode == GSStatsRank.MODE_ELO,
 		"wo_rank elo switches the mode")
 	var _back = server.console.find_cvar("wo_rank").set_value("weighted")
-	_check(progress.rank.mode == DotStatsRank.MODE_WEIGHTED, "and weighted switches it back")
+	_check(progress.rank.mode == GSStatsRank.MODE_WEIGHTED, "and weighted switches it back")
 	_finished()
 
 
@@ -714,7 +714,7 @@ func _test_ambient_cvars_reach_the_client() -> void:
 	var mirror := Node.new()
 	mirror.name = name
 	side.add_child(mirror)
-	var link := DotClientLink.new()
+	var link := GSClientLink.new()
 	link.name = "Server"
 	link.player_name = "Ambient"
 	link.transport_preference = "udp"
@@ -730,8 +730,8 @@ func _test_ambient_cvars_reach_the_client() -> void:
 	link.connect_to_server("127.0.0.1:%d" % PORT)
 	var rules := WoAmbience.make_rules()
 	var _followed := rules.follow_cvars(link)
-	var director := DotAmbienceDirector.new()
-	director.ambient = DotAmbience.new()
+	var director := GSAmbienceDirector.new()
+	director.ambient = GSAmbience.new()
 	director.follow_settings(null, rules)
 	var joined := false
 	for _i in 1800:
@@ -785,7 +785,7 @@ func _test_no_message_preloads_itself() -> void:
 
 		var source := FileAccess.get_file_as_string("res://game/net/" + file)
 
-		if source.contains("extends DotNetMessage") and source.contains("preload(\"%s\")" % file):
+		if source.contains("extends GSNetMessage") and source.contains("preload(\"%s\")" % file):
 			offenders.append(file)
 
 	_check(offenders.is_empty(), "no message preloads itself", ", ".join(offenders))

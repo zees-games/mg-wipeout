@@ -240,8 +240,8 @@ class _Model:
 	const USE_REACH := 2.2
 	const SHOOT_REACH := 30.0
 
-	var io: DotMapIO
-	var world: DotMapWorld
+	var io: GSMapIO
+	var world: GSMapWorld
 	var info: Dictionary
 	var fired := {}
 	var latched := {}
@@ -253,13 +253,13 @@ class _Model:
 	var reached: Array[Vector3] = []
 	var _movers: Array = []
 
-	func _init(w: DotMapWorld, body_info: Dictionary, s: PhysicsDirectSpaceState3D) -> void:
+	func _init(w: GSMapWorld, body_info: Dictionary, s: PhysicsDirectSpaceState3D) -> void:
 		world = w
 		io = w.io
 		info = body_info
 		space = s
-		for e: DotMapEntity in io.entities:
-			if e is DotMapMoverNode and (e as DotMapMoverNode).mover != null and e.node != null:
+		for e: GSMapEntity in io.entities:
+			if e is GSMapMoverNode and (e as GSMapMoverNode).mover != null and e.node != null:
 				_movers.append(e)
 
 	func _info_at(p: Vector3) -> Dictionary:
@@ -267,15 +267,15 @@ class _Model:
 		i["position"] = p
 		return i
 
-	func _label(e: DotMapEntity) -> String:
+	func _label(e: GSMapEntity) -> String:
 		return "%s%s" % [e.classname, "(" + e.targetname + ")" if e.targetname != "" else "#%d" % e.index]
 
 	## The mover's hit box in the world, now.
-	func _box(m: DotMapMoverNode) -> Transform3D:
+	func _box(m: GSMapMoverNode) -> Transform3D:
 		return m.pose_delta(io.now, io.rate) * m.hit_frame
 
-	func _door_like(m: DotMapMoverNode) -> bool:
-		return m.mover.kind != DotMapMover.KIND_PATH and m.mover.kind != DotMapMover.KIND_SPIN and m.classname.to_lower() in DOOR_CLASSES
+	func _door_like(m: GSMapMoverNode) -> bool:
+		return m.mover.kind != GSMapMover.KIND_PATH and m.mover.kind != GSMapMover.KIND_SPIN and m.classname.to_lower() in DOOR_CLASSES
 
 	## Sets off what a body standing on any of [param cells] can; returns how many things went.
 	func fire(cells: Array[Vector3]) -> int:
@@ -283,7 +283,7 @@ class _Model:
 		var bodies: Array[AABB] = []
 		for p in cells:
 			bodies.append(AABB(p + Vector3(-0.3, 0.0, -0.3), Vector3(0.6, 1.8, 0.6)))
-		for vn: DotMapVolumeNode in world.volumes.nodes:
+		for vn: GSMapVolumeNode in world.volumes.nodes:
 			if fired.has(vn) or not vn.active() or vn.volume.kind not in ["multiple", "once"]:
 				continue
 			var boxes := vn.volume.brush_boxes()
@@ -307,7 +307,7 @@ class _Model:
 			log.append("walk into %s at (%.0f,%.0f,%.0f)" % [_label(vn.entity) if vn.entity != null else vn.volume.targetname, cells[at].x, cells[at].y, cells[at].z])
 			vn._enter(io, _info_at(cells[at]))
 			io._settle()
-		for m: DotMapMoverNode in _movers:
+		for m: GSMapMoverNode in _movers:
 			if fired.has(m) or not (m.mover.use or m.mover.touch) or m.hit_half == Vector3.ZERO or not m.alive:
 				continue
 			var inv := _box(m).affine_inverse()
@@ -328,14 +328,14 @@ class _Model:
 				log.append("%s %s from (%.0f,%.0f,%.0f)" % ["use" if m.mover.use else "touch", _label(m), cells[at].x, cells[at].y, cells[at].z])
 				io._settle()
 		# a shot: a button that fires OnDamaged or is flagged damage-activated, a breakable that has outputs; from any cell that sees it
-		for e: DotMapEntity in io.entities:
+		for e: GSMapEntity in io.entities:
 			if fired.has(e) or not e.alive or e.node == null:
 				continue
 			var shootable := false
-			if e is DotMapMoverNode and (e as DotMapMoverNode).mover != null and (e as DotMapMoverNode).mover.kind.ends_with("button"):
+			if e is GSMapMoverNode and (e as GSMapMoverNode).mover != null and (e as GSMapMoverNode).mover.kind.ends_with("button"):
 				shootable = e.has_spawnflag(512) or e.links.any(func(l: Dictionary) -> bool: return str(l["output"]) == "ondamaged")
-			elif e is DotMapBreakable:
-				shootable = not e.links.is_empty() and (e as DotMapBreakable).health > 0.0 and not (e as DotMapBreakable).broken
+			elif e is GSMapBreakable:
+				shootable = not e.links.is_empty() and (e as GSMapBreakable).health > 0.0 and not (e as GSMapBreakable).broken
 			if not shootable:
 				continue
 			var target := _centre(e)
@@ -353,20 +353,20 @@ class _Model:
 					break
 		return n
 
-	func _centre(e: DotMapEntity) -> Vector3:
-		if e is DotMapMoverNode and (e as DotMapMoverNode).hit_half != Vector3.ZERO:
-			return _box(e as DotMapMoverNode).origin
+	func _centre(e: GSMapEntity) -> Vector3:
+		if e is GSMapMoverNode and (e as GSMapMoverNode).hit_half != Vector3.ZERO:
+			return _box(e as GSMapMoverNode).origin
 		return e.node.global_position
 
 	## The few things nobody reached that lie closest to [param p]: a trigger or a button the walk never got to.
 	func nearest_unfired(p: Vector3) -> Array[String]:
 		var found: Array = []
-		for vn: DotMapVolumeNode in world.volumes.nodes:
+		for vn: GSMapVolumeNode in world.volumes.nodes:
 			if not fired.has(vn) and vn.volume.kind in ["multiple", "once"]:
 				var bs := vn.volume.brush_boxes()
 				if not bs.is_empty() and (bs[0] as AABB).size.is_finite():
 					found.append([(bs[0] as AABB).get_center().distance_to(p), "trigger %s" % (_label(vn.entity) if vn.entity != null else vn.volume.targetname)])
-		for mv: DotMapMoverNode in _movers:
+		for mv: GSMapMoverNode in _movers:
 			if not fired.has(mv) and (mv.mover.use or mv.mover.touch) and mv.hit_half != Vector3.ZERO:
 				found.append([_box(mv).origin.distance_to(p), "%s %s" % ["use" if mv.mover.use else "touch", _label(mv)]])
 		found.sort_custom(func(x: Array, y: Array) -> bool: return x[0] < y[0])
@@ -390,11 +390,11 @@ class _Model:
 				sample()
 
 	func _hold() -> void:
-		for m: DotMapMoverNode in latched:
+		for m: GSMapMoverNode in latched:
 			m.node.transform = latched[m]
 
 	func sample() -> void:
-		for m: DotMapMoverNode in _movers:
+		for m: GSMapMoverNode in _movers:
 			if m.node == null or not m.alive:
 				continue
 			if _door_like(m):

@@ -15,11 +15,11 @@ const WoWorld := preload("../wo_world.gd")
 const WoCourseDoc := preload("../wo_course_doc.gd")
 const WoPlayer := preload("../wo_player.gd")
 
-## Joins an [WoGame] to a [DotNetManager]: the netcode seam, and the only file here that names both.
+## Joins an [WoGame] to a [GSNetManager]: the netcode seam, and the only file here that names both.
 ## The course is not replicated: it arrives once in `STAGE` and every obstacle is a function of the tick. The world
 ## ticks as a whole: [method ensure_game_ticked] runs it on the first behaviour through.
 
-## Bytes of acknowledgement in front of every input packet. [method DotNetManager.encode_ack].
+## Bytes of acknowledgement in front of every input packet. [method GSNetManager.encode_ack].
 const ACK_BYTES := 4
 
 ## Commands per input packet: this tick's and the four before it, so a lost packet costs no
@@ -56,7 +56,7 @@ signal hit_received(point: Vector3, killed: bool, headshot: bool)
 signal notice_received(text: String)
 
 ## Client side: the server moved this client's own camera. [param mode] is
-## [enum DotSpectatorView.Mode]; the view has already been adopted by the world's mirror.
+## [enum GSSpectatorView.Mode]; the view has already been adopted by the world's mirror.
 signal spectate_received(viewer: int, mode: int, target: int)
 
 ## Client side: somebody else used their weapon [param times] times since the last
@@ -81,11 +81,11 @@ signal pickup_received(pickup_id: int, weapon_id: StringName, at: Vector3)
 signal pickup_gone_received(pickup_id: int, by: int)
 
 ## Somebody pressed Enter. Server side. The bridge carries chat and decides nothing about it: who may say what, how
-## often and who hears it are [DotChatRouter]'s.
+## often and who hears it are [GSChatRouter]'s.
 signal say_requested(peer_id: int, channel_id: StringName, text: String)
 
 ## A voice frame arrived. Server side; the payload is unparsed and must not be trusted —
-## [method DotVoiceRouter.relay] is what stamps the speaker, from the peer id below.
+## [method GSVoiceRouter.relay] is what stamps the speaker, from the peer id below.
 signal voice_requested(peer_id: int, payload: PackedByteArray)
 
 ## Client side: one routed line, and one voice frame.
@@ -97,11 +97,11 @@ var game: WoGame = null
 ## Which session this process is. Zero on a server.
 var local_player_id: int = 0
 
-## Where a voice frame goes on the server. Assigned by [DotGameModule] to the services
+## Where a voice frame goes on the server. Assigned by [GSGameModule] to the services
 ## layer's `relay_voice`, because the bridge is the only thing that names both ends.
 var voice_relay_fn: Callable = Callable()
 
-## `func(session_id: int) -> DotAvatar`: what a player looks like, asked once as they are
+## `func(session_id: int) -> GSAvatar`: what a player looks like, asked once as they are
 ## seated. Assigned by the module, which is what has the identity layer; unset, or answering
 ## null, is the stock person, which is what everybody was before there was one.
 var avatar_fn: Callable = Callable()
@@ -129,7 +129,7 @@ var _player_of_peer: Dictionary = {}
 var _peer_of_player: Dictionary = {}
 var _ready_peers: Dictionary = {}
 ## Carries the game's profile runtime over this manager (rows down, for a remote admin's panel).
-var profile_link: DotNetProfileLink = null
+var profile_link: GSNetProfileLink = null
 ## Server: peers whose READY came before their seat ([method add_player]). Over ENet with loss READY can overtake
 ## `loaded` and a dropped READY left the client waiting for a world for ever. Admitted when seated.
 var _ready_unseated: Dictionary = {}
@@ -157,20 +157,20 @@ func _exit_tree() -> void:
 		profile_link = null
 
 
-## [param p_game] and [param p_net], in the shape [DotGameNetcode] calls it.
+## [param p_game] and [param p_net], in the shape [GSGameNetcode] calls it.
 ## The guns on the floor, over the link; a client connects to its `lost_received`.
 var weapon_net := WoWeaponNet.new()
 
 
-func attach(p_game: Object, p_net: DotNetManager) -> DotResult:
+func attach(p_game: Object, p_net: GSNetManager) -> GSResult:
 	var world := p_game as WoGame
 
 	if world == null or p_net == null:
-		return DotResult.fail(DotError.CODE_INVALID, "A bridge needs a world and a manager.")
+		return GSResult.fail(GSError.CODE_INVALID, "A bridge needs a world and a manager.")
 
 	if world.authoritative != p_net.is_server:
-		return DotResult.fail(
-			DotError.CODE_STATE,
+		return GSResult.fail(
+			GSError.CODE_STATE,
 			"The world and the manager disagree about who is authoritative.",
 			"world=%s net.is_server=%s" % [world.authoritative, p_net.is_server]
 		)
@@ -183,11 +183,11 @@ func attach(p_game: Object, p_net: DotNetManager) -> DotResult:
 	add_child(_entities)
 
 	net.send_fn = _send
-	profile_link = DotNetProfileLink.attach(net, world.ensure_runtime())
+	profile_link = GSNetProfileLink.attach(net, world.ensure_runtime())
 
 	var event := net.messages.register(
 		WoEvent.NAME, WoEvent,
-		DotNetMessage.Delivery.RELIABLE, DotNetMessage.Direction.TO_CLIENT
+		GSNetMessage.Delivery.RELIABLE, GSNetMessage.Direction.TO_CLIENT
 	)
 
 	if not event.ok:
@@ -195,7 +195,7 @@ func attach(p_game: Object, p_net: DotNetManager) -> DotResult:
 
 	var request := net.messages.register(
 		WoRequest.NAME, WoRequest,
-		DotNetMessage.Delivery.RELIABLE, DotNetMessage.Direction.TO_SERVER
+		GSNetMessage.Delivery.RELIABLE, GSNetMessage.Direction.TO_SERVER
 	)
 
 	if not request.ok:
@@ -221,7 +221,7 @@ func attach(p_game: Object, p_net: DotNetManager) -> DotResult:
 	if net.is_server:
 		_wire_server()
 
-	return DotResult.success(true)
+	return GSResult.success(true)
 
 
 ## Connects the server's game signals to the events that tell the clients.
@@ -292,7 +292,7 @@ func _wire_lag_compensation() -> void:
 	game.combat.restore_fn = func() -> int:
 		return net.history.restore()
 
-	DotLog.debug(CHANNEL, "lag compensation is wired to the netcode's history", {
+	GSLog.debug(CHANNEL, "lag compensation is wired to the netcode's history", {
 		"max_rewind_ms": game.combat.config.max_rewind_ms if game.combat.config != null else 0.0,
 	})
 
@@ -305,9 +305,9 @@ func open_link(parent: Node) -> void:
 
 	link = WoNetLink.attached_to(parent, self, net != null and net.is_server)
 	# Not parent.add_child: the link sits under the server (RPCs route by path) but must die with this bridge. A bare
-	# add_child left a second link after a module reload and Godot renamed the live one, losing RPCs. DotGameLink
+	# add_child left a second link after a module reload and Godot renamed the live one, losing RPCs. GSGameLink
 	# frees it without remove_child, which errors on a busy parent.
-	DotGameLink.attach(link, parent, self, WoNetLink.NODE_NAME)
+	GSGameLink.attach(link, parent, self, WoNetLink.NODE_NAME)
 
 
 static func player_key(session_id: int) -> StringName:
@@ -326,10 +326,10 @@ func player_for_peer(peer_id: int) -> int:
 	return int(_player_of_peer.get(peer_id, 0))
 
 
-## Puts a connected peer into the game. What [DotGameRoster] calls.
-func add_player(peer_id: int, session_id: int, display_name: String) -> DotResult:
+## Puts a connected peer into the game. What [GSGameRoster] calls.
+func add_player(peer_id: int, session_id: int, display_name: String) -> GSResult:
 	if net == null or not net.is_server:
-		return DotResult.fail(DotError.CODE_FORBIDDEN, "Only the server adds players.")
+		return GSResult.fail(GSError.CODE_FORBIDDEN, "Only the server adds players.")
 
 	if peer_id > 0:
 		# FIRST, because `game.add_player` emits `player_added` and the handler has to be
@@ -342,13 +342,13 @@ func add_player(peer_id: int, session_id: int, display_name: String) -> DotResul
 	if player == null:
 		_player_of_peer.erase(peer_id)
 		_peer_of_player.erase(session_id)
-		return DotResult.fail(DotError.CODE_STATE, "The game refused the player.")
+		return GSResult.fail(GSError.CODE_STATE, "The game refused the player.")
 
 	if _ready_unseated.has(peer_id):
 		_ready_unseated.erase(peer_id)
 		_admit(peer_id)
 
-	return DotResult.success(player)
+	return GSResult.success(player)
 
 
 ## Somebody the world drives itself: a stand-in, or a test's player.
@@ -421,7 +421,7 @@ func _on_player_added(id: StringName) -> void:
 	# under session 0, also dot-net's broadcast address, and a second would silently replace the first. Refused with
 	# a line rather than accepted quietly.
 	if player_key(session_id) != id:
-		DotLog.warn(CHANNEL, "a player whose id is not a session key is not replicated", {
+		GSLog.warn(CHANNEL, "a player whose id is not a session key is not replicated", {
 			"id": String(id), "hint": "use add_bot() or WoNetBridge.player_key()",
 		})
 		return
@@ -435,13 +435,13 @@ func _on_player_added(id: StringName) -> void:
 	var registered := net.registry.register(identity, 0, net.clock.tick, net.config)
 
 	if not registered.ok:
-		DotLog.warn(CHANNEL, "could not replicate a player", {"error": str(registered.error)})
+		GSLog.warn(CHANNEL, "could not replicate a player", {"error": str(registered.error)})
 		return
 
 	# Before the JOIN, so the first thing anybody hears about this person is their face.
 	if player.avatar == null and avatar_fn.is_valid():
 		var avatar: Variant = avatar_fn.call(session_id)
-		player.avatar = avatar as DotAvatar if avatar is DotAvatar else null
+		player.avatar = avatar as GSAvatar if avatar is GSAvatar else null
 
 	_broadcast(WoEvents.Kind.JOIN, _join_body(session_id))
 	roster_changed.emit(session_id)
@@ -457,8 +457,8 @@ func _on_player_removed(id: StringName) -> void:
 		roster_changed.emit(session_id)
 
 
-func _build_entity(player: WoPlayer, peer_id: int) -> DotNetIdentity:
-	# The behaviour is added BEFORE the identity: [DotNetIdentity] collects behaviours in
+func _build_entity(player: WoPlayer, peer_id: int) -> GSNetIdentity:
+	# The behaviour is added BEFORE the identity: [GSNetIdentity] collects behaviours in
 	# `_ready` by walking the subtree, and one added afterwards would never be found.
 	var behaviour := WoPlayerNet.new()
 	behaviour.name = "Net"
@@ -466,13 +466,13 @@ func _build_entity(player: WoPlayer, peer_id: int) -> DotNetIdentity:
 	behaviour.bridge = self
 	player.add_child(behaviour)
 
-	var identity := DotNetIdentity.new()
+	var identity := GSNetIdentity.new()
 	identity.name = "Identity"
 	identity.owner_peer_id = peer_id
 	# SHARED: the server corrects, the owner predicts. SERVER would put a player's own
 	# movement a round trip behind their keys, which on a course is the difference between
 	# clearing an arm and being told it already hit you.
-	identity.authority = DotNetIdentity.Authority.SHARED
+	identity.authority = GSNetIdentity.Authority.SHARED
 	# Always, and the map is why: interest management saves where most players are out of sight, but a course is open
 	# air, so culling would only make a runner vanish in mid-jump.
 	identity.always_relevant = true
@@ -557,7 +557,7 @@ func _pair_pending_toys() -> void:
 		return
 	var box := game.stage.toys if game.stage != null and game.stage.toys != null and game.stage.id() == _toys_stage else null
 	if box != null and box.count() != _toy_nets.size():
-		DotLog.warn(CHANNEL, "the server's stage has a different number of toys", {"server": _toy_nets.size(), "here": box.count()})
+		GSLog.warn(CHANNEL, "the server's stage has a different number of toys", {"server": _toy_nets.size(), "here": box.count()})
 	for i in range(_toy_nets.size()):
 		var behaviour: WoToyNet = _toy_nets[i]
 		if is_instance_valid(behaviour):
@@ -587,7 +587,7 @@ func toy_entities() -> int:
 
 ## Every prop the world puts out becomes a replicated entity, announced reliably (what it IS,
 ## by path so a pack can deliver it) and moved by snapshot.
-func _on_prop_spawned(prop: DotPropInstance) -> void:
+func _on_prop_spawned(prop: GSPropInstance) -> void:
 	if net == null or not net.is_server or prop == null or prop.node == null:
 		return
 
@@ -614,25 +614,25 @@ func _on_prop_spawned(prop: DotPropInstance) -> void:
 	))
 
 
-func _on_prop_removed(prop: DotPropInstance, reason: StringName) -> void:
+func _on_prop_removed(prop: GSPropInstance, reason: StringName) -> void:
 	_forget_body("p%d" % prop.instance_id, reason)
 
 
 ## The half every replicated body does identically.
-func _replicate_body(behaviour: DotNetBehaviour, body: Node3D) -> int:
-	var identity := DotNetIdentity.new()
+func _replicate_body(behaviour: GSNetBehaviour, body: Node3D) -> int:
+	var identity := GSNetIdentity.new()
 	identity.name = "Identity"
 	identity.owner_peer_id = 0
 	# SERVER, not SHARED: nothing about a rigid body is predicted here, so there is no owner
 	# to share with.
-	identity.authority = DotNetIdentity.Authority.SERVER
+	identity.authority = GSNetIdentity.Authority.SERVER
 	identity.always_relevant = true
 	body.add_child(identity)
 
 	var registered := net.registry.register(identity, 0, net.clock.tick, net.config)
 
 	if not registered.ok:
-		DotLog.warn(CHANNEL, "could not replicate a body", {"error": str(registered.error)})
+		GSLog.warn(CHANNEL, "could not replicate a body", {"error": str(registered.error)})
 		return 0
 
 	_bodies[identity.net_id] = behaviour
@@ -784,7 +784,7 @@ func ensure_game_ticked(tick: int) -> void:
 		if not (behaviour as Node).is_inside_tree():
 			continue
 
-		(behaviour as DotNetBehaviour).call(&"pull")
+		(behaviour as GSNetBehaviour).call(&"pull")
 
 	# The toys where the physics left them, before the snapshot.
 	for behaviour: WoToyNet in _toy_nets:
@@ -792,7 +792,7 @@ func ensure_game_ticked(tick: int) -> void:
 			behaviour.pull()
 
 
-func client_tick(tick: int, command: DotFpsCommand, slot: int = 0, grab: bool = false) -> void:
+func client_tick(tick: int, command: GSFpsCommand, slot: int = 0, grab: bool = false) -> void:
 	if net == null or net.is_server or game == null:
 		return
 
@@ -801,7 +801,7 @@ func client_tick(tick: int, command: DotFpsCommand, slot: int = 0, grab: bool = 
 	var packet := WoNetCommand.new()
 	packet.tick = tick
 	packet.delta = net.clock.tick_duration()
-	packet.move = command if command != null else DotFpsCommand.new()
+	packet.move = command if command != null else GSFpsCommand.new()
 	packet.slot = slot
 	packet.grab = grab
 
@@ -823,8 +823,8 @@ func client_tick(tick: int, command: DotFpsCommand, slot: int = 0, grab: bool = 
 
 	if link != null:
 		var payload := net.encode_ack()
-		var writer := DotNetWriter.new()
-		DotNetInput.write_batch(writer, _input_copies(packet))
+		var writer := GSNetWriter.new()
+		GSNetInput.write_batch(writer, _input_copies(packet))
 		payload.append_array(writer.to_bytes())
 		link.send_input(payload)
 
@@ -847,37 +847,37 @@ func client_tick(tick: int, command: DotFpsCommand, slot: int = 0, grab: bool = 
 
 ## [param packet] and the commands before it from the local replay history, oldest first,
 ## for one input packet. See [constant INPUT_COPIES].
-func _input_copies(packet: DotNetInput) -> Array:
+func _input_copies(packet: GSNetInput) -> Array:
 	var batch: Array = Array(net.local_inputs().recent(INPUT_COPIES, packet.tick - 1))
 	batch = batch.slice(maxi(0, batch.size() - (INPUT_COPIES - 1)))
 	batch.append(packet)
 	return batch
 
 
-func receive_input(peer_id: int, payload: PackedByteArray) -> DotResult:
+func receive_input(peer_id: int, payload: PackedByteArray) -> GSResult:
 	if net == null or not net.is_server:
-		return DotResult.fail(DotError.CODE_FORBIDDEN, "Only the server takes input.")
+		return GSResult.fail(GSError.CODE_FORBIDDEN, "Only the server takes input.")
 
 	if not _player_of_peer.has(peer_id):
-		return DotResult.fail(DotError.CODE_FORBIDDEN, "That peer has no player.")
+		return GSResult.fail(GSError.CODE_FORBIDDEN, "That peer has no player.")
 
 	if payload.size() <= ACK_BYTES:
-		return DotResult.fail(DotError.CODE_PARSE, "Input packet is too short.")
+		return GSResult.fail(GSError.CODE_PARSE, "Input packet is too short.")
 
 	net.receive_ack_payload(peer_id, payload.slice(0, ACK_BYTES))
 
 	# A batch: this tick's command and the ones before it (see [constant INPUT_COPIES]).
 	# Copies of ticks already simulated are skipped rather than pushed, or each would count
 	# as a late input; the packet's own tick is always pushed, so a late one still counts.
-	var batch := DotNetInput.read_batch(
-		DotNetReader.new(payload.slice(ACK_BYTES)),
-		func() -> DotNetInput: return WoNetCommand.new()
+	var batch := GSNetInput.read_batch(
+		GSNetReader.new(payload.slice(ACK_BYTES)),
+		func() -> GSNetInput: return WoNetCommand.new()
 	)
 	if batch.is_empty():
-		return DotResult.fail(DotError.CODE_PARSE, "Input packet carries no command.")
+		return GSResult.fail(GSError.CODE_PARSE, "Input packet carries no command.")
 	var buffer := net.input_buffer_for(peer_id)
 	var newest := batch[batch.size() - 1]
-	var pushed := DotResult.success(false)
+	var pushed := GSResult.success(false)
 	for input in batch:
 		if input != newest and input.tick <= buffer.last_consumed_tick():
 			continue
@@ -891,28 +891,28 @@ func notice(peer_id: int, text: String) -> void:
 	_tell(peer_id, WoEvents.Kind.NOTICE, WoEvents.write_notice(text))
 
 
-## One routed line to one peer. What [DotGameServices] sends through, via the link.
+## One routed line to one peer. What [GSGameServices] sends through, via the link.
 func send_chat(peer_id: int, wire: Dictionary) -> void:
 	_tell(peer_id, WoEvents.Kind.CHAT, WoEvents.write_chat(wire))
 
 
 ## A voice frame, in whichever direction. Not a [WoEvent]: voice is fifty packets a second and every event here is
-## reliable. It also skips [DotNetManager], whose sealed message set buys nothing for an opaque blob that has its own
-## header and validation in [DotVoicePacket].
-func receive_voice(peer_id: int, payload: PackedByteArray) -> DotResult:
+## reliable. It also skips [GSNetManager], whose sealed message set buys nothing for an opaque blob that has its own
+## header and validation in [GSVoicePacket].
+func receive_voice(peer_id: int, payload: PackedByteArray) -> GSResult:
 	if payload.is_empty():
-		return DotResult.fail(DotError.CODE_INVALID, "An empty voice frame.")
+		return GSResult.fail(GSError.CODE_INVALID, "An empty voice frame.")
 
 	if net != null and net.is_server:
 		if peer_id <= 0 or player_for_peer(peer_id) == 0:
 			# A peer with nobody in the world. Refused rather than relayed: the router
 			# stamps the speaker from this id, so relaying one that belongs to nobody puts
 			# a voice in the game with no name on it.
-			return DotResult.fail(
-				DotError.CODE_FORBIDDEN, "That peer has nobody in the world."
+			return GSResult.fail(
+				GSError.CODE_FORBIDDEN, "That peer has nobody in the world."
 			)
 
-		# One path or the other, never both: [DotGameModule] assigns `voice_relay_fn` to the services layer, so also
+		# One path or the other, never both: [GSGameModule] assigns `voice_relay_fn` to the services layer, so also
 		# connecting `voice_requested` to the same router relays every frame twice (doubled rate limit, a sequence
 		# the jitter buffer sees go backwards).
 		if voice_relay_fn.is_valid():
@@ -920,13 +920,13 @@ func receive_voice(peer_id: int, payload: PackedByteArray) -> DotResult:
 		else:
 			voice_requested.emit(peer_id, payload)
 
-		return DotResult.success(null)
+		return GSResult.success(null)
 
 	voice_arrived.emit(payload)
-	return DotResult.success(null)
+	return GSResult.success(null)
 
 
-func _on_request(message: DotNetMessage) -> void:
+func _on_request(message: GSNetMessage) -> void:
 	var ask := message as WoRequest
 
 	if ask == null or net == null or not net.is_server:
@@ -945,7 +945,7 @@ func _on_request(message: DotNetMessage) -> void:
 
 			if bool(said["ok"]):
 				# Emitted rather than acted on: everything about what a line means is
-				# [DotChatRouter]'s, and the router is the module's.
+				# [GSChatRouter]'s, and the router is the module's.
 				say_requested.emit(
 					peer_id, StringName(str(said["channel"])), str(said["text"])
 				)
@@ -981,7 +981,7 @@ func _spectate_step(peer_id: int, direction: int) -> void:
 	if session_id == 0 or game.spectate == null:
 		return
 
-	var moved: DotResult = game.spectate.step(player_key(session_id), direction)
+	var moved: GSResult = game.spectate.step(player_key(session_id), direction)
 
 	if not moved.ok:
 		notice(peer_id, moved.error.message)
@@ -995,7 +995,7 @@ func _spectate_roam(peer_id: int) -> void:
 	if session_id == 0 or game.spectate == null:
 		return
 
-	var toggled: DotResult = game.spectate.toggle_roam(player_key(session_id))
+	var toggled: GSResult = game.spectate.toggle_roam(player_key(session_id))
 
 	if not toggled.ok:
 		notice(peer_id, toggled.error.message)
@@ -1120,7 +1120,7 @@ func _join_body(session_id: int) -> PackedByteArray:
 ## Tells everybody who somebody is now (a late profile, a wardrobe change, a rename). Server only.
 ## Through JOIN, which a client already applies and which is idempotent, rather than a second message with a second
 ## arrival order. An empty [param display_name] keeps the current one.
-func refresh_player(session_id: int, display_name: String, avatar: DotAvatar) -> bool:
+func refresh_player(session_id: int, display_name: String, avatar: GSAvatar) -> bool:
 	if net == null or not net.is_server or game == null:
 		return false
 
@@ -1204,7 +1204,7 @@ func _ask(kind: int, body: PackedByteArray) -> void:
 
 
 ## Somebody left: their entity and player go, and the roster says so.
-func _apply_leave(reader: DotNetReader) -> void:
+func _apply_leave(reader: GSNetReader) -> void:
 	var session_id := WoEvents.read_player(reader)
 	_release_entity(session_id)
 	game.remove_player(player_key(session_id))
@@ -1212,7 +1212,7 @@ func _apply_leave(reader: DotNetReader) -> void:
 
 
 ## A weapon lying in the arena, by pickup id.
-func _apply_pickup(reader: DotNetReader) -> void:
+func _apply_pickup(reader: GSNetReader) -> void:
 	var lying := WoEvents.read_pickup(reader)
 
 	if bool(lying["ok"]):
@@ -1221,7 +1221,7 @@ func _apply_pickup(reader: DotNetReader) -> void:
 
 
 ## A lying weapon was taken, or went.
-func _apply_pickup_gone(reader: DotNetReader) -> void:
+func _apply_pickup_gone(reader: GSNetReader) -> void:
 	var gone := WoEvents.read_pickup_gone(reader)
 
 	if bool(gone["ok"]):
@@ -1229,7 +1229,7 @@ func _apply_pickup_gone(reader: DotNetReader) -> void:
 		pickup_gone_received.emit(int(gone["pickup_id"]), int(gone["by"]))
 
 
-func _on_event(message: DotNetMessage) -> void:
+func _on_event(message: GSNetMessage) -> void:
 	var event := message as WoEvent
 
 	if event == null or game == null or net == null or net.is_server:
@@ -1312,7 +1312,7 @@ func _on_event(message: DotNetMessage) -> void:
 			_apply_pickup_gone(reader)
 
 
-func _apply_team(reader: DotNetReader) -> void:
+func _apply_team(reader: GSNetReader) -> void:
 	var side := WoEvents.read_team(reader)
 
 	if bool(side["ok"]):
@@ -1325,7 +1325,7 @@ func _apply_team(reader: DotNetReader) -> void:
 		roster_changed.emit(int(side["player_id"]))
 
 
-func _apply_death(reader: DotNetReader) -> void:
+func _apply_death(reader: GSNetReader) -> void:
 	var death := WoEvents.read_death(reader)
 
 	if bool(death["ok"]):
@@ -1339,7 +1339,7 @@ func _apply_death(reader: DotNetReader) -> void:
 		)
 
 
-func _apply_armed(reader: DotNetReader) -> void:
+func _apply_armed(reader: GSNetReader) -> void:
 	var armed := WoEvents.read_armed(reader)
 
 	if bool(armed["ok"]):
@@ -1350,7 +1350,7 @@ func _apply_armed(reader: DotNetReader) -> void:
 		armed_received.emit(int(armed["player_id"]), armed["weapon_id"])
 
 
-func _apply_round(reader: DotNetReader) -> void:
+func _apply_round(reader: GSNetReader) -> void:
 	var round_info := WoEvents.read_round(reader)
 
 	if bool(round_info["ok"]):
@@ -1368,7 +1368,7 @@ func _apply_round(reader: DotNetReader) -> void:
 		)
 
 
-func _apply_phase(reader: DotNetReader) -> void:
+func _apply_phase(reader: GSNetReader) -> void:
 	var moved := WoEvents.read_phase(reader)
 
 	if bool(moved["ok"]):
@@ -1382,7 +1382,7 @@ func _apply_phase(reader: DotNetReader) -> void:
 		phase_received.emit(int(moved["phase"]))
 
 
-func _apply_spectate(reader: DotNetReader) -> void:
+func _apply_spectate(reader: GSNetReader) -> void:
 	var view := WoEvents.read_spectate(reader)
 
 	if bool(view["ok"]) and game.spectate != null:
@@ -1398,7 +1398,7 @@ func _apply_spectate(reader: DotNetReader) -> void:
 		)
 
 
-func _apply_hello(reader: DotNetReader) -> void:
+func _apply_hello(reader: GSNetReader) -> void:
 	var hello := WoEvents.read_hello(reader)
 
 	if not bool(hello["ok"]):
@@ -1440,23 +1440,23 @@ func _adopt_tick_rate(rate: int) -> void:
 	# The LIVE one, which is built from the config back at `setup()` and is therefore not
 	# updated by writing the config alone.
 	net.clock.tick_rate = game.tick_rate
-	# dot-net API 7 has DotNetClock.adopt_tick_rate(), which also raises the engine's step cap to
+	# dot-net API 7 has GSNetClock.adopt_tick_rate(), which also raises the engine's step cap to
 	# a quarter second of ticks, so a slow-frame client keeps up with the server. A shell built
 	# before it gets the same rule here; remove this branch when the oldest shell is API 7.
-	if DotAddonApi.build_level("dot_net") >= 7:
-		DotNetClock.adopt_tick_rate(game.tick_rate)
+	if GSAddonApi.build_level("dot_net") >= 7:
+		GSNetClock.adopt_tick_rate(game.tick_rate)
 	else:
 		Engine.max_physics_steps_per_frame = maxi(Engine.max_physics_steps_per_frame, ceili(0.25 * float(game.tick_rate)))
 		Engine.physics_ticks_per_second = game.tick_rate
 
-	DotLog.info(CHANNEL, "adopted the server's tick rate", {
+	GSLog.info(CHANNEL, "adopted the server's tick rate", {
 		"was": before, "now": game.tick_rate, "engine": Engine.physics_ticks_per_second,
 	})
 
 
 ## The stage, which on a client is a document it builds exactly as the server did. Refused with a line, never half
 ## built: a client a format behind gets no course and a WARN rather than a course with holes in it.
-func _apply_stage(reader: DotNetReader) -> void:
+func _apply_stage(reader: GSNetReader) -> void:
 	var told := WoEvents.read_stage(reader)
 
 	if not bool(told["ok"]) or game == null:
@@ -1465,7 +1465,7 @@ func _apply_stage(reader: DotNetReader) -> void:
 	var decoded := WoCourseDoc.decode(told["encoded"])
 
 	if not decoded.ok:
-		DotLog.warn(CHANNEL, "the server sent a stage this build cannot build", {
+		GSLog.warn(CHANNEL, "the server sent a stage this build cannot build", {
 			"why": decoded.error.message, "detail": decoded.error.detail,
 		})
 		return
@@ -1476,7 +1476,7 @@ func _apply_stage(reader: DotNetReader) -> void:
 	# A world without its mesh would be predicted on the start pad alone while the server walks the map, so the stage
 	# is held back (the client keeps what it had) rather than built without it.
 	if not still.is_empty():
-		DotLog.warn(CHANNEL, "a stage was refused: its world mesh is not here", {"meshes": ", ".join(still)})
+		GSLog.warn(CHANNEL, "a stage was refused: its world mesh is not here", {"meshes": ", ".join(still)})
 		stage_refused.emit(still)
 		return
 
@@ -1486,7 +1486,7 @@ func _apply_stage(reader: DotNetReader) -> void:
 		stage_received.emit(game.stage.id(), game.stage.is_arena())
 
 
-func _apply_join(reader: DotNetReader) -> void:
+func _apply_join(reader: GSNetReader) -> void:
 	var join := WoEvents.read_join(reader)
 
 	if not bool(join["ok"]):
@@ -1516,7 +1516,7 @@ func _apply_join(reader: DotNetReader) -> void:
 		)
 
 		if not registered.ok:
-			DotLog.warn(CHANNEL, "could not mirror a player", {"error": str(registered.error)})
+			GSLog.warn(CHANNEL, "could not mirror a player", {"error": str(registered.error)})
 			return
 	else:
 		player.display_name = str(join["name"])
@@ -1556,14 +1556,14 @@ func _claim_local_player() -> void:
 	if claimed == 0 or mine.identity.owner_peer_id == claimed:
 		return
 
-	DotLog.debug(CHANNEL, "claimed the local player after HELLO", {
+	GSLog.debug(CHANNEL, "claimed the local player after HELLO", {
 		"session": local_player_id, "net_id": mine.identity.net_id,
 	})
 	var _changed := net.registry.change_owner(mine.identity.net_id, claimed)
 
 
 ## A prop or a chopper the server has put out.
-func _apply_prop(reader: DotNetReader) -> void:
+func _apply_prop(reader: GSNetReader) -> void:
 	var info := WoEvents.read_prop(reader)
 
 	if not bool(info["ok"]):
@@ -1580,13 +1580,13 @@ func _apply_prop(reader: DotNetReader) -> void:
 	if scene_path == "":
 		# Not an error: a server may run a catalogue this build does not have, and the
 		# honest answer is to draw nothing rather than to guess.
-		DotLog.debug(CHANNEL, "something this build does not have", {"id": String(kind_id)})
+		GSLog.debug(CHANNEL, "something this build does not have", {"id": String(kind_id)})
 		return
 
 	var scene: PackedScene = load(scene_path)
 
 	if scene == null:
-		DotLog.warn(CHANNEL, "a scene would not load", {"path": scene_path})
+		GSLog.warn(CHANNEL, "a scene would not load", {"path": scene_path})
 		return
 
 	var body := scene.instantiate() as Node3D
@@ -1610,17 +1610,17 @@ func _apply_prop(reader: DotNetReader) -> void:
 	behaviour.prop = body
 	body.add_child(behaviour)
 
-	var identity := DotNetIdentity.new()
+	var identity := GSNetIdentity.new()
 	identity.name = "Identity"
 	identity.owner_peer_id = 0
-	identity.authority = DotNetIdentity.Authority.SERVER
+	identity.authority = GSNetIdentity.Authority.SERVER
 	identity.always_relevant = true
 	body.add_child(identity)
 
 	var registered := net.registry.register(identity, net_id, net.clock.tick, net.config)
 
 	if not registered.ok:
-		DotLog.warn(CHANNEL, "could not mirror a body", {"error": str(registered.error)})
+		GSLog.warn(CHANNEL, "could not mirror a body", {"error": str(registered.error)})
 		body.queue_free()
 		return
 
@@ -1635,7 +1635,7 @@ func _scene_for(kind_id: StringName, _vehicle: bool) -> String:
 	return prop.scene_path if prop != null else ""
 
 
-func _apply_prop_gone(reader: DotNetReader) -> void:
+func _apply_prop_gone(reader: GSNetReader) -> void:
 	var info := WoEvents.read_prop_gone(reader)
 
 	if not bool(info["ok"]):
@@ -1661,7 +1661,7 @@ func _apply_prop_gone(reader: DotNetReader) -> void:
 		behaviour.prop.queue_free()
 
 
-func _apply_clock(reader: DotNetReader) -> void:
+func _apply_clock(reader: GSNetReader) -> void:
 	var clock := WoEvents.read_clock(reader)
 
 	if not bool(clock["ok"]):

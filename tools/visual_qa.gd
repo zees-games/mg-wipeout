@@ -1,8 +1,8 @@
-extends DotGameVisualQaCapture
+extends GSGameVisualQaCapture
 
 ## Wipeout's visual QA capture (the loop is dot-game's docs/visual-qa.md), frame by frame at --fps in three views
 ## (f first person, t behind-right, o an opponent in front). Items: person_<letter> (one of the six WoFigure people idling, walking, running, crouching, jumping and carrying a prop; f is a rival's eye a few metres ahead), object_* (the course objects, see visual_qa_course.gd), weapon_<id> (f the real ZeeViewModel with its arms, t and o the person holding it through draw, fire and reload).
-## The outside views and frame saving are dot-game's DotGameVisualQaViews, through DotGameVisualQaCapture.
+## The outside views and frame saving are dot-game's GSGameVisualQaViews, through GSGameVisualQaCapture.
 
 const WoFigure := preload("../game/wo_figure.gd")
 const WoCatalogue := preload("../game/wo_catalogue.gd")
@@ -81,7 +81,7 @@ func _build() -> void:
 			_stage_dressing.append(child)
 
 
-func _stage(item: String, clip: String) -> DotResult:
+func _stage(item: String, clip: String) -> GSResult:
 	_clear()
 	views.behind_offset = Vector3(1.6, 1.6, 3.2)
 	views.behind_look_height = 1.0
@@ -100,7 +100,7 @@ func _stage(item: String, clip: String) -> DotResult:
 		if not staged.ok:
 			return staged
 		_stand_person("a")
-		return DotResult.success(clip)
+		return GSResult.success(clip)
 	if item.begins_with("weapon_"):
 		# Straight ahead, a held gun points down the lens and draws as a thin stick; from the gun-hand side it reads in profile.
 		views.behind_offset = Vector3(2.4, 1.5, 2.2)
@@ -109,10 +109,10 @@ func _stage(item: String, clip: String) -> DotResult:
 		var id := StringName(item.trim_prefix("weapon_"))
 		var art: Variant = ZeeWeaponArtTable.table().get(id)
 		if not (art is ZeeWeaponArt):
-			return DotResult.fail(DotError.CODE_INVALID, "no art for %s" % id)
-		var def: DotWeaponDef = _weapon_defs.get(String(id))
+			return GSResult.fail(GSError.CODE_INVALID, "no art for %s" % id)
+		var def: GSWeaponDef = _weapon_defs.get(String(id))
 		if clip == "reload" and (def == null or not def.uses_magazine()):
-			return DotResult.fail(DotError.CODE_UNSUPPORTED, "%s has no magazine" % id)
+			return GSResult.fail(GSError.CODE_UNSUPPORTED, "%s has no magazine" % id)
 		_shown_kind = "weapon"
 		_stand_person("a")
 		_figure.hold(id, false)
@@ -131,7 +131,7 @@ func _stage(item: String, clip: String) -> DotResult:
 		_stand_person(item.trim_prefix("person_"))
 		_figure.carrying = clip == "carry"
 	_shown_id = item
-	return DotResult.success(clip)
+	return GSResult.success(clip)
 
 
 func _set_stage_dressing(shown: bool) -> void:
@@ -221,21 +221,21 @@ func _drive_weapon(clip: String, t: float, step: float) -> void:
 			_model.on_deploy(clampf(t / 0.6, 0.0, 1.0))
 			_figure.hold(id, t < 0.3)
 		"fire":
-			var def: DotWeaponDef = _weapon_defs.get(String(id))
+			var def: GSWeaponDef = _weapon_defs.get(String(id))
 			var every := _fire_interval(def)
 			var due := int(floor((t - 0.2) / every)) + 1 if t >= 0.2 else 0
 			while _shots_done < due:
 				_shots_done += 1
 				_fire(art)
 		"reload":
-			var def2: DotWeaponDef = _weapon_defs.get(String(id))
+			var def2: GSWeaponDef = _weapon_defs.get(String(id))
 			if t < step:
 				_model.on_reload_begin(0, def2.magazine)
 			_model.on_reload(clampf(t / 2.6, 0.0, 1.0))
 	_model.advance(step)
 
 
-func _fire_interval(def: DotWeaponDef) -> float:
+func _fire_interval(def: GSWeaponDef) -> float:
 	if def == null or def.use_interval_ticks <= 0:
 		return FIRE_EVERY
 	var rate := def.authored_tick_rate if def.authored_tick_rate > 0 else ZeeWeaponPack.TICK_RATE
@@ -248,7 +248,7 @@ func _fire(art: ZeeWeaponArt) -> void:
 		_model.on_swing()
 		_figure.fired(1, ZeeWeaponNet.KIND_SWING)
 	elif art.pose == ZeeWeaponArtTable.POSE_THROWN:
-		var outcome := DotWeaponOutcome.of(DotWeaponOutcome.KIND_THROW)
+		var outcome := GSWeaponOutcome.of(GSWeaponOutcome.KIND_THROW)
 		outcome.used = true
 		_model.on_used(outcome)
 		_figure.fired(1, ZeeWeaponNet.KIND_THROW)
@@ -263,7 +263,7 @@ func _grounded(_item: String, clip: String, t: float) -> bool:
 
 func _before_draw(_item: String, _clip: String, _frame: int) -> void:
 	if _figure != null:
-		var _tagged := DotGameVisualQaViews.tag_layers(_figure, BODY_LAYER)
+		var _tagged := GSGameVisualQaViews.tag_layers(_figure, BODY_LAYER)
 
 
 ## Weapons: the real view model's camera at the person's eye. People: a rival's eye 2.5 m in front, looking at the subject.

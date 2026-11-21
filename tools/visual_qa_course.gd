@@ -77,7 +77,7 @@ func seconds(_item: String) -> float:
 
 
 ## Builds [param item]'s course under [param holder].
-func stage(holder: Node3D, item: String, _clip: String) -> DotResult:
+func stage(holder: Node3D, item: String, _clip: String) -> GSResult:
 	_entry = entries[item]
 	course = WoCourse.new()
 	course.draw_world = true
@@ -94,11 +94,11 @@ func stage(holder: Node3D, item: String, _clip: String) -> DotResult:
 				_piece = piece
 				break
 		if _piece.is_empty():
-			return DotResult.fail(DotError.CODE_INVALID, "no built piece for %s" % item)
+			return GSResult.fail(GSError.CODE_INVALID, "no built piece for %s" % item)
 	else:
 		course.gate_closed = true
 	course.pose_at_time(0.0)
-	return DotResult.success(item)
+	return GSResult.success(item)
 
 
 ## Poses the course at [param t] and returns {at, speed, yaw} for the runner (feet position, metres a second, degrees).

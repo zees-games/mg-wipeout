@@ -1,8 +1,8 @@
-extends DotMenuGameSettings
+extends GSMenuGameSettings
 
 const WoBindings := preload("wo_bindings.gd")
 
-## A player's settings and their menu: dot-menu's `DotMenuGameSettings` with this game's spec. Scopes are the family's:
+## A player's settings and their menu: dot-menu's `GSMenuGameSettings` with this game's spec. Scopes are the family's:
 ## `sensitivity` ACCOUNT, `field_of_view` SERVER_CLAMPED, volumes this machine's. Use: `setup()`, `bind_look/camera/audio`, `open()`.
 ## Help and Leave are dot-menu's stock; the keys are [WoBindings], so the help screen lists them.
 
@@ -29,8 +29,8 @@ func _init() -> void:
 
 
 ## The game's settings as data: names, field of view, extra settings, keys and the help screen's goal and rules.
-static func spec_for() -> DotMenuGameSpec:
-	var s := DotMenuGameSpec.new()
+static func spec_for() -> GSMenuGameSpec:
+	var s := GSMenuGameSpec.new()
 	s.schema_version = SCHEMA_VERSION
 	s.brand_name = "Wipeout"
 	s.settings_dir = SETTINGS_DIR
@@ -41,7 +41,7 @@ static func spec_for() -> DotMenuGameSpec:
 	s.not_applied = NOT_APPLIED
 	# The touch Menu button sits top left: the course name, announcer and spectator line own the top right.
 	s.menu_button_corner = &"top_left"
-	s.bindings_maker = func() -> DotMenuBindings: return WoBindings.make()
+	s.bindings_maker = func() -> GSMenuBindings: return WoBindings.make()
 	s.help_about = "Get round the course over the water as fast as you can: arms, hammers, rams and rides are all trying to knock you off. A fall sends you back to your last checkpoint, and a knock costs health."
 	s.help_cards = [
 		["Points", "Finishing earns points by place, and the side that wins the round earns more. Tab shows everybody's."],

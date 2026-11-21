@@ -105,7 +105,7 @@ func path_clear_script(from: Vector3, to: Vector3, tick: int, speed: float, marg
 	return true
 
 
-## Whether a stand-in's asks ([method bot_knock], [method path_clear]) go to dot-sim's `DotSimHazards` when the
+## Whether a stand-in's asks ([method bot_knock], [method path_clear]) go to dot-sim's `GSSimHazards` when the
 ## library has it: the course's hazards written once per build, each ask one call. A player's own knock
 ## ([method knock], in [WoPlayer]'s tick) stays in script. Off: the script for everything.
 static var native_knock := true
@@ -176,10 +176,10 @@ func drop_native_hazards() -> void:
 
 
 func _make_native_hazards() -> Variant:
-	if not DotSim.has(&"hazards"):
+	if not GSSim.has(&"hazards"):
 		return null
 
-	var table: Variant = ClassDB.instantiate(&"DotSimHazards")
+	var table: Variant = ClassDB.instantiate(&"GSSimHazards")
 
 	if table == null:
 		return null

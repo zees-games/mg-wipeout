@@ -1,4 +1,4 @@
-extends DotGameNetIo
+extends GSGameNetIo
 
 ## The stage's toys on the wire: one replicated entity per toy, and letting them all go at once.
 
@@ -31,7 +31,7 @@ func _unregister(net_id: int) -> void:
 ## A toy's behaviour and identity under [param parent], registered under [param net_id] (0 allocates one: the server).
 ## Null when the registry refused it. The behaviour goes before the identity, which collects behaviours in its
 ## `_ready`.
-func _toy_entity(toy: DotPropBody, parent: Node, net_id: int) -> WoToyNet:
+func _toy_entity(toy: GSPropBody, parent: Node, net_id: int) -> WoToyNet:
 	var behaviour := WoToyNet.new()
 	behaviour.name = "Net"
 	behaviour.toy = toy
@@ -43,14 +43,14 @@ func _toy_entity(toy: DotPropBody, parent: Node, net_id: int) -> WoToyNet:
 	at.add_child(behaviour)
 	if net.is_server:
 		behaviour.pull()
-	var identity := DotNetIdentity.new()
+	var identity := GSNetIdentity.new()
 	identity.name = "Identity"
 	identity.owner_peer_id = 0
-	identity.authority = DotNetIdentity.Authority.SERVER
+	identity.authority = GSNetIdentity.Authority.SERVER
 	at.add_child(identity)
 	var registered := net.registry.register(identity, net_id, net.clock.tick, net.config)
 	if not registered.ok:
-		DotLog.warn(CHANNEL, "could not replicate a toy", {"toy": _toy_nets.size(), "error": str(registered.error)})
+		GSLog.warn(CHANNEL, "could not replicate a toy", {"toy": _toy_nets.size(), "error": str(registered.error)})
 		for node: Node in [behaviour, identity]:
 			at.remove_child(node)
 			node.queue_free()

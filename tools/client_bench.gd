@@ -1,8 +1,8 @@
-extends DotGameClientBench
+extends GSGameClientBench
 
 const WoConfig := preload("../game/wo_config.gd")
 
-## Client prediction bench (dot-game's DotGameClientBench): see that class for the flags.
+## Client prediction bench (dot-game's GSGameClientBench): see that class for the flags.
 ## The world is the server scene and module a dedicated server loads, on wo_spin_cycle with no warmup; `--bots` is ignored (the module's stand-ins are off).
 
 
@@ -10,16 +10,16 @@ func _configure() -> void:
 	client_scene = "res://game/wo.tscn"
 
 
-func _boot_server(_bots_wanted: int, data_dir: String) -> DotNetManager:
+func _boot_server(_bots_wanted: int, data_dir: String) -> GSNetManager:
 	var config := make_server_config(data_dir)
 	config.max_players = 16
-	var server := DotServer.new()
+	var server := GSServer.new()
 	server.name = "Server"
 	server.config = config
 	add_child(server)
 	for _i in 60:
 		await get_tree().process_frame
-		if server.state == DotServer.State.RUNNING:
+		if server.state == GSServer.State.RUNNING:
 			break
 	var scene: Node = (load("res://scenes/wo_server.tscn") as PackedScene).instantiate()
 	add_child(scene)
@@ -27,11 +27,11 @@ func _boot_server(_bots_wanted: int, data_dir: String) -> DotNetManager:
 	scene.game.config.warmup_seconds = 0.0
 	scene.game.config.minimum_players = 0
 	await get_tree().process_frame
-	var loaded: DotResult = await server.modules.load_module("res://game/wo_module.gd")
+	var loaded: GSResult = await server.modules.load_module("res://game/wo_module.gd")
 	if not loaded.ok:
 		printerr("client_bench server: ", loaded.error)
 		return null
-	var bots: DotConVar = server.console.find_cvar("wo_bots")
+	var bots: GSConVar = server.console.find_cvar("wo_bots")
 	if bots != null:
 		bots.force_set("0")
 	for n in server.modules.loaded_names():

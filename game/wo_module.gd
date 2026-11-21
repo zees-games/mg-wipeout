@@ -26,34 +26,34 @@ const ALIASES := {
 }
 
 ## This game, as a module a dedicated server loads: the cvars, two console commands and the rule that keeps enough
-## people in a round; [DotGameModule] holds the rest. No `class_name`: [method DotModuleHost.load_module] constructs
+## people in a round; [GSGameModule] holds the rest. No `class_name`: [method GSModuleHost.load_module] constructs
 ## by PATH, and a mounted pack's globals are not registered in the host.
 
-# No `const CHANNEL` here: [DotGameModule] declares one and a subclass may not redeclare it, which is right, since
-# [method DotModule.log_info] stamps the module's name and a second channel would split its records.
+# No `const CHANNEL` here: [GSGameModule] declares one and a subclass may not redeclare it, which is right, since
+# [method GSModule.log_info] stamps the module's name and a second channel would split its records.
 
 ## Seconds between checks of how many people are in the round.
 const ROSTER_INTERVAL := 2.0
 
-## Where the services keep punishments; empty is [DotGameServices]'s default, the real store. Static, because no
+## Where the services keep punishments; empty is [GSGameServices]'s default, the real store. Static, because no
 ## instance exists to set a field on (dot-server constructs from a path); `examples/dedicated.tscn` points it elsewhere.
 static var punishments_file: String = ""
 
 ## dot-workbench over the config and the block rules; null before the module loads.
-var workbench: DotGameWorkbench = null
+var workbench: GSGameWorkbench = null
 
 ## `mp_killcam_time`, which follows `wo_killcam_seconds` and the other way round.
-var _killcam_cvar: DotConVar = null
+var _killcam_cvar: GSConVar = null
 
 ## The `wo_bots` cvar, held so the tick does not look it up sixty times a second.
-var _bots: DotConVar = null
+var _bots: GSConVar = null
 
 ## `mp_forcecamera`, kept so the deprecated `wo_spectate_camera` writes through it.
 var _force_camera_cvar: Object = null
 
 ## How many stand-ins, from how many people: dot-server's one rule for every game. See
 ## [method _keep_the_round_full].
-var _quota: DotBotQuota = null
+var _quota: GSBotQuota = null
 
 var _since_roster_check: float = 0.0
 
@@ -86,8 +86,8 @@ func _game_missing_hint() -> String:
 ## The netcode's numbers, which are the game's and not the addon's. Tick rate from the world, so `sv_tickrate` reaches
 ## it: the world is built after the server and reads the cvar, and a number written here would silently run a rate the
 ## operator did not choose.
-func _net_config() -> DotNetConfig:
-	var config := DotNetConfig.new()
+func _net_config() -> GSNetConfig:
+	var config := GSNetConfig.new()
 	config.tick_rate = (game as WoGame).tick_rate
 	config.snapshot_rate = WoGame.NET_SNAPSHOT_RATE
 	config.world_extent = WoGame.NET_WORLD_EXTENT
@@ -107,8 +107,8 @@ func _make_bridge() -> Node:
 	return WoNetBridge.new()
 
 
-## Chat, voice and moderation, over [DotGameServices]. The bridge is handed over as the link: `send_chat` and
-## `send_voice` use this game's wire, and [DotGameModule] assigns `voice_relay_fn`, checks `check_admission` and makes
+## Chat, voice and moderation, over [GSGameServices]. The bridge is handed over as the link: `send_chat` and
+## `send_voice` use this game's wire, and [GSGameModule] assigns `voice_relay_fn`, checks `check_admission` and makes
 ## the roster follow this layer.
 func _make_services() -> Node:
 	var services := WoServices.new()
@@ -117,21 +117,21 @@ func _make_services() -> Node:
 	return services
 
 
-## Profiles, avatars and admission: dot-platform's [DotPlatformIdentity] over this game's one-slot schema. Not
+## Profiles, avatars and admission: dot-platform's [GSPlatformIdentity] over this game's one-slot schema. Not
 ## authentication: that is the host's `dot_auth_server`; with it off everybody is a guest with a profile of their own.
 func _make_identity() -> Node:
-	var identity_layer := DotPlatformIdentity.new()
+	var identity_layer := GSPlatformIdentity.new()
 	identity_layer.avatar_schema = WoAvatars.schema()
 	identity_layer.stock_avatar_fn = WoAvatars.stock_avatar
 	identity_layer.avatar_translate_fn = WoAvatars.from_site
 	return identity_layer
 
 
-func _game_load() -> DotResult:
+func _game_load() -> GSResult:
 	var world := game as WoGame
 
 	if world == null:
-		return DotResult.fail(DotError.CODE_STATE, "The registered game is not an WoGame.")
+		return GSResult.fail(GSError.CODE_STATE, "The registered game is not an WoGame.")
 
 	add_command("wo_status", _cmd_status, "Show the round, the course and who is where")
 	add_command("wo_net", _cmd_net, "Show what the netcode is doing")
@@ -141,8 +141,8 @@ func _game_load() -> DotResult:
 	for name in world.command_names("wo_reload"):
 		add_command(name, _cmd_reload, "Read the course directory again (next round)")
 	add_command("wo_rotation", _cmd_rotation,
-		"wo_rotation [name]: switch to a rotation in maps.yml, or list them", DotAdminFlags.CHANGEMAP)
-	add_command("wo_maps_reload", _cmd_maps_reload, "Re-read maps.yml", DotAdminFlags.CHANGEMAP)
+		"wo_rotation [name]: switch to a rotation in maps.yml, or list them", GSAdminFlags.CHANGEMAP)
+	add_command("wo_maps_reload", _cmd_maps_reload, "Re-read maps.yml", GSAdminFlags.CHANGEMAP)
 	add_command("wo_say", _cmd_say, "Say something to everybody, as the server")
 
 	_wire_chat()
@@ -152,8 +152,8 @@ func _game_load() -> DotResult:
 	_wire_progress(world)
 	# wo_ambient*: REPLICATED (each client plays its own ambience under it); the directory cvar stays local.
 	var _ambient := world.ambient_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED,
-		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+		add_cvar, GSConVar.FLAG_ARCHIVE | GSConVar.FLAG_NOTIFY | GSConVar.FLAG_REPLICATED,
+		GSConVar.FLAG_ARCHIVE | GSConVar.FLAG_NOTIFY
 	)
 	_add_tunables(world)
 
@@ -174,9 +174,9 @@ func _game_load() -> DotResult:
 		var peer := int((bridge as WoNetBridge).peer_for_player(WoNetBridge.session_of(player_id)))
 		return peer <= 0 or can_peer_be_harmed(peer)
 
-	# dot-server's DotBotQuota: `bot_quota` means the same on every server; the default is this
+	# dot-server's GSBotQuota: `bot_quota` means the same on every server; the default is this
 	# game's `minimum_players` in fill mode, and `wo_bots` stays the switch.
-	_quota = DotBotQuota.install(self, world.config.minimum_players)
+	_quota = GSBotQuota.install(self, world.config.minimum_players)
 
 	# Started here, not in the world's _ready: a start() before the bridge existed built a field
 	# nothing told any client about, invisible floors the server says are fine.
@@ -188,14 +188,14 @@ func _game_load() -> DotResult:
 	world.start()
 
 	log_info("the course is up", world.describe())
-	return DotResult.success(null)
+	return GSResult.success(null)
 
 
-## `wo_rank`: "weighted", "elo", or "weighted:wo.rounds_won=3,wo.falls=-0.1" (dot-stats' DotStatsRank.apply_cvar).
+## `wo_rank`: "weighted", "elo", or "weighted:wo.rounds_won=3,wo.falls=-0.1" (dot-stats' GSStatsRank.apply_cvar).
 func _add_rank_cvar(world: WoGame) -> void:
 	add_cvar("wo_rank", "weighted",
 		"Skill rank formula: weighted, elo, or weighted:<stat>=<weight>,...",
-		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).changed.connect(
+		GSConVar.FLAG_ARCHIVE | GSConVar.FLAG_NOTIFY).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			if world.progress == null or not world.progress.rank.apply_cvar(new_value):
 				log_info("wo_rank refused", {"value": new_value}))
@@ -203,12 +203,12 @@ func _add_rank_cvar(world: WoGame) -> void:
 
 ## The addons' rule sets as cvars; REPLICATED where the client acts under the value.
 func _bind_rule_cvars(world: WoGame) -> void:
-	var replicated := DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	var replicated := GSConVar.FLAG_ARCHIVE | GSConVar.FLAG_NOTIFY | GSConVar.FLAG_REPLICATED
 
 	# `mp_teammate_passthrough`: dot-combat's, live from the next shot; the client predicts its
 	# tracers under it (see the client's _build_netcode).
 	if world.combat != null:
-		var _passthrough := world.combat.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)
+		var _passthrough := world.combat.bind_cvars(add_cvar, GSConVar.FLAG_NOTIFY | GSConVar.FLAG_REPLICATED)
 
 	# Dead bodies (sv_ragdoll*): the server picks each death's reaction, the clients draw it.
 	var _ragdolls := world.ragdoll_rules.bind_cvars(add_cvar, replicated)
@@ -228,13 +228,13 @@ func _bind_rule_cvars(world: WoGame) -> void:
 
 	# REPLICATED: where the clients' killcam camera sits (0 the killer's eye, 1 behind the killer).
 	var _killview := add_cvar("mp_killview_camera", "0",
-		"Killcam camera: 0 the killer's eye, 1 behind the killer (dot-replay DotKillcamFraming)",
+		"Killcam camera: 0 the killer's eye, 1 behind the killer (dot-replay GSKillcamFraming)",
 		replicated)
 
 	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: each client flies its own spectator
 	# camera under them (WoClient.toggle_roam).
 	for made: Object in world.spectate_rules.bind_cvars(add_cvar, replicated):
-		if str(made.get(&"name")) == DotSpectatorRules.CVAR_FORCE_CAMERA:
+		if str(made.get(&"name")) == GSSpectatorRules.CVAR_FORCE_CAMERA:
 			_force_camera_cvar = made
 
 	# sv_weapon_drop*: dot-weapon's drop rules. REPLICATED, because the drop key and the pickup reach follow them.
@@ -270,7 +270,7 @@ func _wire_identity() -> void:
 ## What a session looks like: what dot-platform resolved, or the stock person. Through the platform module's
 ## `player_for`, never the hub by a key made here: the hub keys by a scoped profile key only admission knows, so
 ## `u<session>` finds nobody. Duck-typed (no dot-platform is a configuration).
-func _avatar_for(session_id: int) -> DotAvatar:
+func _avatar_for(session_id: int) -> GSAvatar:
 	var session := server.session_by_userid(session_id) if server != null else null
 	var platform: Object = server.modules.get_module("platform") \
 		if server != null and server.modules != null else null
@@ -278,8 +278,8 @@ func _avatar_for(session_id: int) -> DotAvatar:
 	if session != null and platform != null and platform.has_method("player_for"):
 		var player: Variant = platform.call("player_for", session)
 
-		if player is Object and (player as Object).get("avatar") is DotAvatar:
-			return (player as Object).get("avatar") as DotAvatar
+		if player is Object and (player as Object).get("avatar") is GSAvatar:
+			return (player as Object).get("avatar") as GSAvatar
 
 	if identity != null and identity.has_method("avatar_for"):
 		return identity.call("avatar_for", String(WoNetBridge.player_key(session_id)))
@@ -287,7 +287,7 @@ func _avatar_for(session_id: int) -> DotAvatar:
 	return null
 
 
-func _on_profile(event: DotEvent) -> void:
+func _on_profile(event: GSEvent) -> void:
 	var session_id := event.get_int("userid")
 	var session := server.session_by_userid(session_id) if server != null else null
 	var link := bridge as WoNetBridge
@@ -306,9 +306,9 @@ func _add_tunables(world: WoGame) -> void:
 	# How the stand-ins race and fight is one word: dot-bot's `bot_difficulty` and the `bot_*` settings it bundles,
 	# with this game's racing mistakes as `wo_bot_*` on top ([WoRacer]). On the world as metadata, never the
 	# registry.
-	var _bot_cvars := DotBotSettings.of(world).bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY, add_command)
+	var _bot_cvars := GSBotSettings.of(world).bind_cvars(add_cvar, GSConVar.FLAG_NOTIFY, add_command)
 	if world.racer != null:
-		var _racer_cvars := world.racer.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
+		var _racer_cvars := world.racer.bind_cvars(add_cvar, GSConVar.FLAG_NOTIFY)
 	_bind_config(world)
 
 
@@ -316,12 +316,12 @@ func _add_tunables(world: WoGame) -> void:
 func _bind_config(world: WoGame) -> void:
 	var _fl := world.flashlight_conf()
 	if world.flashlight_binder != null:
-		var _flash_cvars := world.flashlight_binder.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
+		var _flash_cvars := world.flashlight_binder.bind_cvars(add_cvar, GSConVar.FLAG_ARCHIVE, console.has_name)
 		world.flashlight_binder.bind_commands(add_command)
 	var binder := world.config_binder
 	if binder == null:
 		return
-	binder.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
+	binder.bind_cvars(add_cvar, GSConVar.FLAG_ARCHIVE, console.has_name)
 	binder.bind_commands(add_command)
 	for alias: String in ALIASES:
 		_alias(world, alias, ALIASES[alias])
@@ -396,9 +396,9 @@ func _on_config_field(key: String, _value: Variant, _source: String) -> void:
 				vote.refresh_maps()
 
 
-## dot-workbench over the config and the block rules: the F9 panel off a dedicated server, the HTTP page only with `workbench.enabled` in cfg/server.yml. Admission by dot-auth ticket is [DotGameWorkbench]'s own (`admin_uids` / `admin_groups`), beside the server's admins.
+## dot-workbench over the config and the block rules: the F9 panel off a dedicated server, the HTTP page only with `workbench.enabled` in cfg/server.yml. Admission by dot-auth ticket is [GSGameWorkbench]'s own (`admin_uids` / `admin_groups`), beside the server's admins.
 func _start_workbench(world: WoGame) -> void:
-	workbench = DotGameWorkbench.new()
+	workbench = GSGameWorkbench.new()
 	workbench.name = "Workbench"
 	workbench.dedicated = DisplayServer.get_name() == "headless"
 	workbench.listen_host_fn = func() -> bool: return DisplayServer.get_name() != "headless"
@@ -408,12 +408,12 @@ func _start_workbench(world: WoGame) -> void:
 	workbench.permit_fn = func(actor: Variant, flag: String) -> bool:
 		return admin_permit.is_valid() and actor is String and bool(admin_permit.call(actor, flag))
 	workbench.account_permit_fn = workbench.permit_fn
-	for set: DotProfileSet in world.config_binder.profile_sets():
+	for set: GSProfileSet in world.config_binder.profile_sets():
 		workbench.add_set(set, "Game settings: %s" % set.rel_path.trim_prefix("config_"))
 	if world.flashlight_binder != null:
-		for set: DotProfileSet in world.flashlight_binder.profile_sets():
+		for set: GSProfileSet in world.flashlight_binder.profile_sets():
 			workbench.add_set(set, "Flashlight")
-	var ambient_set := DotGameWorkbench.cvar_set(console, WoAmbience.cvar_types(), AMBIENT_KIND)
+	var ambient_set := GSGameWorkbench.cvar_set(console, WoAmbience.cvar_types(), AMBIENT_KIND)
 	if ambient_set != null:
 		workbench.add_set(ambient_set, "Ambience (wo_ambient*)")
 	add_child(workbench)
@@ -425,15 +425,15 @@ func _start_workbench(world: WoGame) -> void:
 		log_info("the workbench did not start", {"why": started.error.message})
 		return
 	if workbench.api != null:
-		var rt := workbench.api.runtime as DotProfileRuntime
+		var rt := workbench.api.runtime as GSProfileRuntime
 		if rt != null:
 			world.config_binder.attach(rt)
 			if world.flashlight_binder != null:
 				world.flashlight_binder.attach(rt)
 			if ambient_set != null:
-				var _applied := DotGameWorkbench.bind_cvar_set(ambient_set, rt, console)
-	add_command("workbench", func(ctx: DotCmdContext) -> void: ctx.reply_lines(_workbench_lines()),
-		"Show the admin workbench's state", DotAdminFlags.CVAR)
+				var _applied := GSGameWorkbench.bind_cvar_set(ambient_set, rt, console)
+	add_command("workbench", func(ctx: GSCmdContext) -> void: ctx.reply_lines(_workbench_lines()),
+		"Show the admin workbench's state", GSAdminFlags.CVAR)
 
 
 ## The workbench's runtime, so the `noblock` kind is listed beside the game settings.
@@ -477,8 +477,8 @@ func _tunable(
 	)
 
 
-## Nothing to undo: the commands are the module's and [DotModule] removes them; netcode, bridge and roster are
-## [DotGameModule]'s. The world is NOT this module's to free, so a module reload does not take the map away.
+## Nothing to undo: the commands are the module's and [GSModule] removes them; netcode, bridge and roster are
+## [GSGameModule]'s. The world is NOT this module's to free, so a module reload does not take the map away.
 func _game_unload() -> void:
 	if workbench != null:
 		workbench.queue_free()
@@ -495,7 +495,7 @@ func _game_unload() -> void:
 		vote = null
 
 
-## The server slept or woke. The vote's director follows it on its own (DotGameModule finds
+## The server slept or woke. The vote's director follows it on its own (GSGameModule finds
 ## it); the course ballot's timer is this game's, so it starts again here on waking.
 func _game_hibernation(hibernating: bool) -> void:
 	if not hibernating and vote != null:
@@ -579,7 +579,7 @@ static func _bot_name(world: WoGame) -> String:
 	var taken: Array = []
 	for id: StringName in world.players:
 		taken.append((world.players[id] as WoPlayer).display_name)
-	return DotBotNames.pick(taken, world.players.size(), WoGame.BOT_NAMES)
+	return GSBotNames.pick(taken, world.players.size(), WoGame.BOT_NAMES)
 
 
 ## Joins the bridge's chat seam to the services layer's router. Here, because this is the only object that holds both:
@@ -614,9 +614,9 @@ func _build_vote(world: WoGame) -> void:
 				out.append([id, str((world.catalogue.courses.get(id, {}) as Dictionary).get("name", id))])
 
 		return out
-	vote.apply_fn = func(id: StringName) -> DotResult:
+	vote.apply_fn = func(id: StringName) -> GSResult:
 		world.next_course_id = id
-		return DotResult.success(id)
+		return GSResult.success(id)
 	# People only: a stand-in is not a voter, and a ballot it could swing is not the players'.
 	vote.voters_fn = func() -> Array:
 		var out: Array = []
@@ -642,7 +642,7 @@ func _build_vote(world: WoGame) -> void:
 			server.broadcast_message(line)
 	vote.is_admin_fn = func(voter: StringName) -> bool:
 		var session := server.session_by_userid(String(voter).to_int()) if server != null else null
-		return session != null and session.has_permission(DotAdminFlags.CHANGEMAP)
+		return session != null and session.has_permission(GSAdminFlags.CHANGEMAP)
 	vote.ballot_fn = func(state: Dictionary) -> void:
 		if server == null:
 			return
@@ -650,7 +650,7 @@ func _build_vote(world: WoGame) -> void:
 		for session in server.playing_sessions():
 			var data := state.duplicate()
 			data["you"] = str(session.userid)
-			server.send_notice(session, DotNotice.make(
+			server.send_notice(session, GSNotice.make(
 				&"", "", float(state.get("seconds", -1.0)), COURSE_BALLOT_TOPIC, data
 			))
 	vote.people_fn = func(voter: StringName) -> Dictionary:
@@ -672,13 +672,13 @@ func _build_vote(world: WoGame) -> void:
 	var ready := vote.setup()
 
 	if not ready.ok:
-		DotLog.result(CHANNEL, "the course vote; the rotation alone chooses", ready)
+		GSLog.result(CHANNEL, "the course vote; the rotation alone chooses", ready)
 		vote.queue_free()
 		vote = null
 		return
 
 	var commanded := vote.install_commands(self)
-	DotLog.result(CHANNEL, "the course vote's commands", commanded)
+	GSLog.result(CHANNEL, "the course vote's commands", commanded)
 
 	# The map menu (M), dot-vote's: a player holding the owner's `sv_map_menu_flag` changes the
 	# course now, not next round, and sees the same rows a solo player does. Read by name,
@@ -710,7 +710,7 @@ func _vote_follows_world(world: WoGame) -> void:
 	)
 
 	if server != null:
-		server.client_disconnected.connect(func(session: DotClientSession, _reason: String) -> void:
+		server.client_disconnected.connect(func(session: GSClientSession, _reason: String) -> void:
 			if vote != null:
 				vote.forget_voter(StringName(str(session.userid)))
 		)

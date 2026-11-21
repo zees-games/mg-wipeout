@@ -20,7 +20,7 @@ func _fall(who: WoPlayer) -> void:
 		# The level is on `world`; a body lands on it and on nothing else.
 		game.ragdoll_rules.collision_mask = game.physics.layer_mask(&"world")
 	var velocity := who.controller.state.velocity if who.controller != null else Vector3.ZERO
-	var _body := ragdolls.spawn(who.figure, who.death if who.death != null else DotPlayerDeath.new(), velocity)
+	var _body := ragdolls.spawn(who.figure, who.death if who.death != null else GSPlayerDeath.new(), velocity)
 
 
 func _on_phase(phase: int) -> void:
@@ -54,7 +54,7 @@ func _on_phase(phase: int) -> void:
 func _cull_world() -> void:
 	platform.detach_visibility()
 	var io: Object = game.stage.io if game.stage != null else null
-	var world: DotMapWorld = io.world if io != null else null
+	var world: GSMapWorld = io.world if io != null else null
 	if world != null and world.visual != null and world.visual.is_inside_tree():
 		var _culled := platform.attach_visibility(world.mesh, world.visual)
 
@@ -160,7 +160,7 @@ func _begin_round_end() -> void:
 	if killcam == null:
 		return
 	if killcam.round_ended():
-		DotLog.debug(CHANNEL, "the reveal waits for the final killcam")
+		GSLog.debug(CHANNEL, "the reveal waits for the final killcam")
 
 
 ## Offline: the world IS the authority, so its own signals are what happened. A connected client hears the same from
@@ -225,7 +225,7 @@ func _hear_the_world() -> void:
 	)
 
 
-func _on_rig_used(outcome: DotWeaponOutcome, armed: WoPlayer) -> void:
+func _on_rig_used(outcome: GSWeaponOutcome, armed: WoPlayer) -> void:
 	if audio != null and is_instance_valid(armed):
 		var _heard := audio.on_weapon(armed.global_position, ZeeWeaponNet.kind_number(outcome.kind))
 
@@ -266,18 +266,18 @@ func _break(who: WoPlayer, why: StringName) -> bool:
 	if who.figure == null or who == player:
 		return false
 
-	var rules := DotPlayerBreakRules.new()
+	var rules := GSPlayerBreakRules.new()
 	rules.criticals_only = false
 	var seed_value := hash(String(who.player_id)) + who.falls * 31 + who.knocks
 	if why == WoGame.DIED_STRUCK or why == WoGame.DIED_BLAST or (seed_value % 3 == 0):
-		rules.mode = DotPlayerBreakRules.Mode.EXPLODE
+		rules.mode = GSPlayerBreakRules.Mode.EXPLODE
 	else:
-		rules.mode = DotPlayerBreakRules.Mode.LIMBS
+		rules.mode = GSPlayerBreakRules.Mode.LIMBS
 		rules.limbs = 1 + seed_value % 3
 	rules.lifetime = 2.5
 
-	var before := DotPlayerBodyBreak.visible_meshes(who.figure)
-	var made := DotPlayerBodyBreak.break_apart(
+	var before := GSPlayerBodyBreak.visible_meshes(who.figure)
+	var made := GSPlayerBodyBreak.break_apart(
 		who.figure, game, rules, who.global_position, Vector3.UP, seed_value
 	)
 	if made == null:
@@ -292,7 +292,7 @@ func _break(who: WoPlayer, why: StringName) -> bool:
 			if is_instance_valid(mesh):
 				mesh.visible = true
 	)
-	return rules.mode == DotPlayerBreakRules.Mode.EXPLODE
+	return rules.mode == GSPlayerBreakRules.Mode.EXPLODE
 
 
 ## Somebody got a weapon. If it was us, the gun comes up in our hands, on its own slot.

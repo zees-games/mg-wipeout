@@ -1,4 +1,4 @@
-extends DotGameCheckSuite
+extends GSGameCheckSuite
 
 const WoMapConfig := preload("../game/wo_map_config.gd")
 
@@ -13,27 +13,27 @@ const DIR := "res://cfg/game/mg-wipeout/dot_map/map/"
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
 func _run() -> void:
 	print("mg-wipeout: per-map cvars from cfg/game/mg-wipeout/dot_map/map")
 	_entered += 1
-	DotAddonConfig.game = "mg-wipeout"
+	GSAddonConfig.game = "mg-wipeout"
 	var fixture := DIR + "wo_mapcfg_fixture_*.yml"
 	DirAccess.make_dir_recursive_absolute(DIR)
 	var file := FileAccess.open(fixture, FileAccess.WRITE)
 	file.store_string("wo_instant_death: 1\nwo_knock_damage: 7\nwo_other: 9\nwo_gravity: 0\n")
 	file.close()
 
-	var console := DotConsole.new()
+	var console := GSConsole.new()
 	add_child(console)
-	console.cvar("wo_instant_death", "0", "", DotConVar.FLAG_ARCHIVE)
-	console.cvar("wo_knock_damage", "2", "", DotConVar.FLAG_ARCHIVE)
-	console.cvar("wo_gravity", "20", "", DotConVar.FLAG_ARCHIVE)
-	console.cvar("wo_other", "5", "", DotConVar.FLAG_ARCHIVE)
-	var cfg := DotGameMapConfig.for_console("mg-wipeout", console, WoMapConfig.KEYS)
+	console.cvar("wo_instant_death", "0", "", GSConVar.FLAG_ARCHIVE)
+	console.cvar("wo_knock_damage", "2", "", GSConVar.FLAG_ARCHIVE)
+	console.cvar("wo_gravity", "20", "", GSConVar.FLAG_ARCHIVE)
+	console.cvar("wo_other", "5", "", GSConVar.FLAG_ARCHIVE)
+	var cfg := GSGameMapConfig.for_console("mg-wipeout", console, WoMapConfig.KEYS)
 
 	var got := cfg.apply("wo_mapcfg_fixture_a")
 	_check(console.find_cvar("wo_instant_death").get_int() == 1, "wo_instant_death is 1 on the course (%s)" % [got])

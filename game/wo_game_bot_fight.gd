@@ -17,7 +17,7 @@ var _bot_wait: Dictionary = {}
 
 ## Bots: player id -> how this stand-in is racing this round: the plan for the route point it
 ## is heading for (fumble, early or late, rash), when a window was seen, a pause after a fall,
-## its own skill factor, and its dot-bot [DotBotAim] for a final death. See [method _racer_of].
+## its own skill factor, and its dot-bot [GSBotAim] for a final death. See [method _racer_of].
 var _bot_racer: Dictionary = {}
 
 ## How the stand-ins race: mistake rates by dot-bot's `bot_difficulty`. See [WoRacer].
@@ -53,7 +53,7 @@ func _racer_of(player: WoPlayer) -> Dictionary:
 		"rash": false,
 		"window": -1,
 		"pause_until": 0,
-		"aim": DotBotAim.new(int(player.entity_id), DotBotSettings.of(self)),
+		"aim": GSBotAim.new(int(player.entity_id), GSBotSettings.of(self)),
 	}
 	_bot_racer[player.player_id] = racing
 	return racing
@@ -66,7 +66,7 @@ func _bot_roll(name: StringName, player: WoPlayer, salt: int) -> float:
 	return random.stream_for(name, subject).next_range_f(0.0, 1.0)
 
 
-func _bot_fight(player: WoPlayer, command: DotFpsCommand) -> void:
+func _bot_fight(player: WoPlayer, command: GSFpsCommand) -> void:
 	var at := player.controller.state.position
 	var enemy := _nearest_enemy(player)
 
@@ -94,7 +94,7 @@ func _bot_fight(player: WoPlayer, command: DotFpsCommand) -> void:
 	if player.grab != null and player.grab.is_carrying() and enemy != null:
 		_aim_bot(player, command, enemy)
 		# Thrown once the aim is on (dot-bot's trigger) and they are near enough to hit.
-		command.set_button(DotFpsCommand.BUTTON_USER_0, command.is_pressed(DotFpsCommand.BUTTON_USER_0)
+		command.set_button(GSFpsCommand.BUTTON_USER_0, command.is_pressed(GSFpsCommand.BUTTON_USER_0)
 			and enemy.controller.state.position.distance_to(at) < 9.0)
 		command.move = Vector2(0.0, 1.0)
 		player.wants_grab = false
@@ -152,10 +152,10 @@ func _nearest_enemy(player: WoPlayer) -> WoPlayer:
 	return best
 
 
-## Aims a stand-in at [param target] and fires when dot-bot's [DotBotAim] says: turn rate,
+## Aims a stand-in at [param target] and fires when dot-bot's [GSBotAim] says: turn rate,
 ## first-shot error and reaction time come from `bot_difficulty`, the same one as for the race.
-func _aim_bot(player: WoPlayer, command: DotFpsCommand, target: WoPlayer) -> void:
-	var aim: DotBotAim = _racer_of(player)["aim"]
+func _aim_bot(player: WoPlayer, command: GSFpsCommand, target: WoPlayer) -> void:
+	var aim: GSBotAim = _racer_of(player)["aim"]
 	var eye := player.eye_position()
 	var point := target.eye_position() - Vector3(0.0, 0.35, 0.0)
 
@@ -172,7 +172,7 @@ func _aim_bot(player: WoPlayer, command: DotFpsCommand, target: WoPlayer) -> voi
 	if fire:
 		aim.note_shot(eye, point, now)
 
-	command.set_button(DotFpsCommand.BUTTON_USER_0, fire)
+	command.set_button(GSFpsCommand.BUTTON_USER_0, fire)
 
 
 ## The game clock in seconds, for the stand-ins' aim.

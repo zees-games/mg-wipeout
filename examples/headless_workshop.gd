@@ -1,6 +1,6 @@
-extends DotGameCheckSuite
+extends GSGameCheckSuite
 
-## What a subscribed map pack does to the course list and vote, against a fixture [DotContentIndex] and never the
+## What a subscribed map pack does to the course list and vote, against a fixture [GSContentIndex] and never the
 ## shared one. Solo lists a pack's map as "Name [Pack]", an online session lists none, a map kind the game does not
 ## accept is left out, and the game's own ids win.
 
@@ -20,7 +20,7 @@ var _completed := 0
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
@@ -54,8 +54,8 @@ func _write(file_name: String, text: String) -> void:
 
 ## A pack with a course, a map of a kind the game does not accept, a map that claims the
 ## built-in's id, and an accepted-kind map whose document is an arena (refused).
-func _index(session: StringName) -> DotContentIndex:
-	var index := DotContentIndex.new()
+func _index(session: StringName) -> GSContentIndex:
+	var index := GSContentIndex.new()
 	index.set_session(session)
 	var added := index.add_pack({
 		"content_id": "fixture/hills", "version": "1.0.0", "prefix": DIR,
@@ -72,7 +72,7 @@ func _index(session: StringName) -> DotContentIndex:
 	return index
 
 
-func _catalogue(index: DotContentIndex) -> WoCatalogue:
+func _catalogue(index: GSContentIndex) -> WoCatalogue:
 	var catalogue := WoCatalogue.new()
 	var _loaded := catalogue.load_from("courses")
 	catalogue.follow_content(index, WoCatalogue.accepted_map_kinds())
@@ -95,7 +95,7 @@ func _test_solo() -> void:
 	_entered += 1
 	print("")
 	print("solo")
-	var catalogue := _catalogue(_index(DotContentIndex.SESSION_SOLO))
+	var catalogue := _catalogue(_index(GSContentIndex.SESSION_SOLO))
 	_check(catalogue.playable_courses(PackedStringArray()).has(MAP), "the accepted map is playable")
 	_check(catalogue.label_of(MAP) == "Fixture Hill [Fixture Pack]", "its label names the pack", catalogue.label_of(MAP))
 	_check(not catalogue.courses.has(&"fixture_run"), "a map kind the game does not accept is filtered out")
@@ -112,16 +112,16 @@ func _test_online() -> void:
 	_entered += 1
 	print("")
 	print("online")
-	var index := _index(DotContentIndex.SESSION_SOLO)
+	var index := _index(GSContentIndex.SESSION_SOLO)
 	var catalogue := _catalogue(index)
 	_check(catalogue.playable_courses(PackedStringArray()).has(MAP), "listed while the index is solo")
-	index.set_session(DotContentIndex.SESSION_ONLINE)
+	index.set_session(GSContentIndex.SESSION_ONLINE)
 	_check(not catalogue.playable_courses(PackedStringArray()).has(MAP), "gone from the same catalogue when the session turns online")
 	_check(not catalogue.courses.has(MAP), "and from its documents")
-	index.set_session(DotContentIndex.SESSION_SOLO)
+	index.set_session(GSContentIndex.SESSION_SOLO)
 	_check(catalogue.playable_courses(PackedStringArray()).has(MAP), "back when it turns solo again")
-	var late := _index(DotContentIndex.SESSION_SOLO)
-	late.set_session(DotContentIndex.SESSION_ONLINE)
+	var late := _index(GSContentIndex.SESSION_SOLO)
+	late.set_session(GSContentIndex.SESSION_ONLINE)
 	_check(not _catalogue(late).playable_courses(PackedStringArray()).has(MAP), "a catalogue built online never lists it")
 	_completed += 1
 
@@ -130,7 +130,7 @@ func _test_ids() -> void:
 	_entered += 1
 	print("")
 	print("the game's own ids win")
-	var catalogue := _catalogue(_index(DotContentIndex.SESSION_SOLO))
+	var catalogue := _catalogue(_index(GSContentIndex.SESSION_SOLO))
 	_check(catalogue.courses[OWN].get("name") == "Practice Run" and not catalogue.is_workshop(OWN),
 		"a pack map claiming wo_practice does not replace the built-in")
 	_completed += 1
@@ -147,7 +147,7 @@ func _test_vote() -> void:
 	_entered += 1
 	print("")
 	print("the ballot")
-	var index := _index(DotContentIndex.SESSION_SOLO)
+	var index := _index(GSContentIndex.SESSION_SOLO)
 	var catalogue := _catalogue(index)
 	var vote := WoVote.new()
 	vote.config_path = ""
@@ -169,7 +169,7 @@ func _test_vote() -> void:
 	_check(labels.has("Fixture Hill [Fixture Pack]"), "the solo ballot lists the pack map as Name [Pack]", str(labels))
 	_check(labels.count("Fixture Hill [Fixture Pack]") == 1, "once")
 	_check(not labels.has("Fixture Run [Fixture Pack]"), "and not a kind the game does not accept")
-	index.set_session(DotContentIndex.SESSION_ONLINE)
+	index.set_session(GSContentIndex.SESSION_ONLINE)
 	labels = _labels(vote)
 	_check(not labels.has("Fixture Hill [Fixture Pack]"), "online the same ballot lists none of it", str(labels))
 	_check(labels.has(own), "and still has the game's own", "%s in %s" % [own, str(labels)])
@@ -195,7 +195,7 @@ func _test_round() -> void:
 	game.register_service = false
 	add_child(game)
 	game.set_physics_process(false)
-	game.catalogue.follow_content(_index(DotContentIndex.SESSION_SOLO), WoCatalogue.accepted_map_kinds())
+	game.catalogue.follow_content(_index(GSContentIndex.SESSION_SOLO), WoCatalogue.accepted_map_kinds())
 	var rows: Array = game.course_rows()
 	_check(rows.any(func(r: Dictionary) -> bool: return str(r["id"]) == String(MAP) and str(r["name"]).contains("[Fixture Pack]")),
 		"the M menu's rows list it as Name [Pack]")
@@ -209,7 +209,7 @@ func _test_round() -> void:
 		await get_tree().physics_frame
 	_check(game.stage.id() == MAP, "the round is built on it", str(game.stage.id()))
 	_check(game.stage.pieces.size() > 0, "with its pieces in the world")
-	game.catalogue.content_index.set_session(DotContentIndex.SESSION_ONLINE)
+	game.catalogue.content_index.set_session(GSContentIndex.SESSION_ONLINE)
 	_check(not game.change_course_now(MAP).ok, "and online the same choice is refused cleanly")
 	game.queue_free()
 	await get_tree().process_frame

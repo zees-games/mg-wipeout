@@ -27,13 +27,13 @@ const BOULDER := &"boulder"
 const WORLD_OWNER := &"world"
 
 
-static func props(_config: WoConfig) -> DotPropCatalogue:
-	var catalogue := DotPropCatalogue.new()
+static func props(_config: WoConfig) -> GSPropCatalogue:
+	var catalogue := GSPropCatalogue.new()
 
-	var crate := DotPropDef.make(CRATE, CRATE_SCENE)
+	var crate := GSPropDef.make(CRATE, CRATE_SCENE)
 	crate.display_name = "Crate"
 	crate.category = &"debris"
-	crate.size = DotPropDef.Size.SMALL
+	crate.size = GSPropDef.Size.SMALL
 	crate.mass = 30.0
 	crate.rideable = true
 	crate.max_health = 60.0
@@ -42,10 +42,10 @@ static func props(_config: WoConfig) -> DotPropCatalogue:
 	crate.break_impact_speed = 18.0
 	catalogue.add(crate)
 
-	var tyre := DotPropDef.make(TYRE, TYRE_SCENE)
+	var tyre := GSPropDef.make(TYRE, TYRE_SCENE)
 	tyre.display_name = "Tyre"
 	tyre.category = &"debris"
-	tyre.size = DotPropDef.Size.SMALL
+	tyre.size = GSPropDef.Size.SMALL
 	tyre.mass = 22.0
 	tyre.rideable = true
 	# Indestructible, and it rolls: a miss keeps going, which on a floor with an edge is a
@@ -53,20 +53,20 @@ static func props(_config: WoConfig) -> DotPropCatalogue:
 	tyre.max_health = 0.0
 	catalogue.add(tyre)
 
-	var cone := DotPropDef.make(CONE, CONE_SCENE)
+	var cone := GSPropDef.make(CONE, CONE_SCENE)
 	cone.display_name = "Cone"
 	cone.category = &"debris"
-	cone.size = DotPropDef.Size.SMALL
+	cone.size = GSPropDef.Size.SMALL
 	cone.mass = 9.0
 	cone.rideable = false
 	cone.max_health = 25.0
 	cone.break_impact_speed = 14.0
 	catalogue.add(cone)
 
-	var barrel := DotPropDef.make(BARREL, BARREL_SCENE)
+	var barrel := GSPropDef.make(BARREL, BARREL_SCENE)
 	barrel.display_name = "Barrel"
 	barrel.category = &"hazard"
-	barrel.size = DotPropDef.Size.SMALL
+	barrel.size = GSPropDef.Size.SMALL
 	barrel.mass = 40.0
 	barrel.rideable = true
 	# Low health and a low break speed: a barrel thrown hard enough to hurt somebody is a
@@ -78,10 +78,10 @@ static func props(_config: WoConfig) -> DotPropCatalogue:
 	barrel.explode_force = 900.0
 	catalogue.add(barrel)
 
-	var boulder := DotPropDef.make(BOULDER, BOULDER_SCENE)
+	var boulder := GSPropDef.make(BOULDER, BOULDER_SCENE)
 	boulder.display_name = "Boulder"
 	boulder.category = &"debris"
-	boulder.size = DotPropDef.Size.MEDIUM
+	boulder.size = GSPropDef.Size.MEDIUM
 	boulder.mass = 60.0
 	boulder.rideable = true
 	boulder.max_health = 0.0

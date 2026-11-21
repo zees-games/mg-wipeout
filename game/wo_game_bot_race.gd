@@ -62,7 +62,7 @@ func _bot_plan(player: WoPlayer, racing: Dictionary, index: int) -> void:
 
 
 ## A stand-in on a course that is a map's own world: along the navigation mesh to the finish ([WoIoBot]).
-func _bot_run_io(player: WoPlayer, command: DotFpsCommand) -> void:
+func _bot_run_io(player: WoPlayer, command: GSFpsCommand) -> void:
 	if stage.io == null or stage.io.world == null:
 		return
 
@@ -73,13 +73,13 @@ func _bot_run_io(player: WoPlayer, command: DotFpsCommand) -> void:
 		_io_bot = WoIoBot.new()
 		stage.io.touch_doors = true
 		# Crouch height, not stand: a stand-height bake drops wo_lego_course's low first leg. Radius 0.35, not the hull's
-		# 0.4064: DotBotNav rounds it up to whole 0.175 m cells (0.525 m, a 1.05 m door), which loses labo's buttons.
+		# 0.4064: GSBotNav rounds it up to whole 0.175 m cells (0.525 m, a 1.05 m door), which loses labo's buttons.
 		_io_bot.setup(stage.io, stage.io.world, stage.finish_box(), {
 			"radius": 0.35,
 			"height": tunables.crouch_height if tunables != null else 1.372, "climb": 0.42}, stage.io.links(),
 			stage.doc.get("io_route", []))
 
-	_io_bot.steer(player.controller.state.position, player.controller.state.mode == DotFpsState.Mode.GROUND,
+	_io_bot.steer(player.controller.state.position, player.controller.state.mode == GSFpsState.Mode.GROUND,
 		_tick, player.player_id, command)
 
 
@@ -112,7 +112,7 @@ func _top_taken(player: WoPlayer, point: Dictionary) -> bool:
 		# Coming down on it: in the air within a jump of it and moving toward it.
 		var velocity := other.controller.state.velocity
 		var toward_top := Vector2(at.x - there.x, at.z - there.z)
-		if other.controller.state.mode != DotFpsState.Mode.GROUND and across < 5.0 \
+		if other.controller.state.mode != GSFpsState.Mode.GROUND and across < 5.0 \
 				and Vector2(velocity.x, velocity.z).dot(toward_top) > 0.0:
 			return true
 
@@ -241,8 +241,8 @@ func _tile_line(at: Vector3) -> Vector3:
 ## Stops behind somebody standing (or nearly) right in front, as people queue at an edge; true
 ## when it stopped. Without it eight stand-ins at one edge pushed each other into the water, and a
 ## walk is no run-up. Only near a jump point and behind somebody nearer it, so a queue is never a ring.
-func _bot_queue(player: WoPlayer, command: DotFpsCommand, jump_at: Vector3) -> bool:
-	if player.controller.state.mode != DotFpsState.Mode.GROUND or command.move == Vector2.ZERO \
+func _bot_queue(player: WoPlayer, command: GSFpsCommand, jump_at: Vector3) -> bool:
+	if player.controller.state.mode != GSFpsState.Mode.GROUND or command.move == Vector2.ZERO \
 			or not body_rules.solid:
 		return false
 
@@ -277,7 +277,7 @@ func _bot_queue(player: WoPlayer, command: DotFpsCommand, jump_at: Vector3) -> b
 ## Steers a bot in the air so it comes down on [param target] rather than past it. A running jump
 ## is long and a top small, so this predicts where the jump comes down at the target's height and
 ## holds BACK (the motor's air control brakes hard against the motion) while that is past it.
-func _bot_land_on(player: WoPlayer, command: DotFpsCommand, target: Vector3, line: Vector3, top: bool = false) -> void:
+func _bot_land_on(player: WoPlayer, command: GSFpsCommand, target: Vector3, line: Vector3, top: bool = false) -> void:
 	var state := player.controller.state
 	var flat := Vector3(target.x - state.position.x, 0.0, target.z - state.position.z)
 
@@ -338,7 +338,7 @@ func _bot_land_on(player: WoPlayer, command: DotFpsCommand, target: Vector3, lin
 ## Brakes a jump that is going to come down off the side of the deck it was taken over: true
 ## when it braked. Only while ground is under the bot and the jump will land on nothing. A hop is
 ## taken the way the bot ran, mostly sideways round a spinner, and carried fields off Spin Cycle.
-func _bot_save_landing(player: WoPlayer, command: DotFpsCommand, target: Vector3, line: Vector3) -> bool:
+func _bot_save_landing(player: WoPlayer, command: GSFpsCommand, target: Vector3, line: Vector3) -> bool:
 	var state := player.controller.state
 	var current := Vector3(state.velocity.x, 0.0, state.velocity.z)
 
@@ -375,7 +375,7 @@ func _bot_save_landing(player: WoPlayer, command: DotFpsCommand, target: Vector3
 
 ## Jumps when the bot has been running for a second and got nowhere. A turning log's steep side
 ## is a treadmill: a bot at exactly the log's speed stayed on the same spot for half a minute.
-func _bot_unstick(player: WoPlayer, command: DotFpsCommand) -> void:
+func _bot_unstick(player: WoPlayer, command: GSFpsCommand) -> void:
 	var at := player.controller.state.position
 	var mark: Array = _bot_stuck.get(player.player_id, [])
 
@@ -392,8 +392,8 @@ func _bot_unstick(player: WoPlayer, command: DotFpsCommand) -> void:
 			and Vector2(at.x - (mark[0] as Vector3).x, at.z - (mark[0] as Vector3).z).length() < 0.4
 		var release := -1
 
-		if stuck and player.controller.state.mode == DotFpsState.Mode.GROUND:
-			command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+		if stuck and player.controller.state.mode == GSFpsState.Mode.GROUND:
+			command.set_button(GSFpsCommand.BUTTON_JUMP, true)
 		elif stuck:
 			# On a face too steep to stand on, the motor has the bot sliding, and a slide is not
 			# ground to jump from. Stop pushing and drop: a restart costs seconds, the treadmill
@@ -406,8 +406,8 @@ func _bot_unstick(player: WoPlayer, command: DotFpsCommand) -> void:
 ## Jumps whatever low thing is about to sweep through where the bot is running, and ducks whatever
 ## high thing is. Waiting for a gap a sweeper never leaves waits for ever, so this asks the course
 ## about the next half second and jumps when an arm is due a fifth to a half second from now.
-func _bot_hop(player: WoPlayer, command: DotFpsCommand, yaw: float = NAN) -> void:
-	if player.controller.state.mode != DotFpsState.Mode.GROUND or command.move == Vector2.ZERO:
+func _bot_hop(player: WoPlayer, command: GSFpsCommand, yaw: float = NAN) -> void:
+	if player.controller.state.mode != GSFpsState.Mode.GROUND or command.move == Vector2.ZERO:
 		return
 
 	var heading_yaw := command.yaw if is_nan(yaw) else yaw
@@ -456,9 +456,9 @@ func _bot_hop(player: WoPlayer, command: DotFpsCommand, yaw: float = NAN) -> voi
 		return
 
 	if duck:
-		command.set_button(DotFpsCommand.BUTTON_CROUCH, true)
+		command.set_button(GSFpsCommand.BUTTON_CROUCH, true)
 	elif jump:
-		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+		command.set_button(GSFpsCommand.BUTTON_JUMP, true)
 
 
 ## Whether [param point] — something to land on — will be under a jump that sets off now: near
@@ -594,7 +594,7 @@ func _bot_next(player: WoPlayer, racing: Dictionary, index: int) -> int:
 ## Whether the runner should stop and let an arm go by: a jump's landing (about 0.7 s on) is in
 ## its way and standing still for half a second is not. Hopping a sweeper's arm landed on it
 ## again, and a stand-in that did so fell on most attempts (First Splash).
-func _bot_hold_for_landing(command: DotFpsCommand, at: Vector3, heading: Vector3, limits: Vector3) -> bool:
+func _bot_hold_for_landing(command: GSFpsCommand, at: Vector3, heading: Vector3, limits: Vector3) -> bool:
 	var lands := false
 	for ahead in [0.72, 0.85]:
 		var where: Vector3 = at + heading * _cfg().run_speed * ahead
@@ -607,14 +607,14 @@ func _bot_hold_for_landing(command: DotFpsCommand, at: Vector3, heading: Vector3
 		if stage.bot_knock(at, false, _tick + int(ahead * _rate()), limits) != Vector3.ZERO:
 			return false
 	command.move = Vector2.ZERO
-	command.set_button(DotFpsCommand.BUTTON_WALK, false)
+	command.set_button(GSFpsCommand.BUTTON_WALK, false)
 	return true
 
 
 ## Fallen onto an earlier leg of the course: the point being run for is overhead, so start
 ## again from the nearest one. Only well back and well below, as a climb's next point is above too.
 func _bot_fell_back(player: WoPlayer, racing: Dictionary, index: int, point: Dictionary) -> bool:
-	if int(_tick + player.entity_id) % 32 != 0 or player.controller.state.mode != DotFpsState.Mode.GROUND:
+	if int(_tick + player.entity_id) % 32 != 0 or player.controller.state.mode != GSFpsState.Mode.GROUND:
 		return false
 	if (point["at"] as Vector3).y - player.controller.state.position.y <= 2.0:
 		return false

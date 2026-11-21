@@ -29,7 +29,7 @@ var _board: bool = false
 var _console_line := ""
 
 ## `--ballot`: the course vote's ballot over the frame, as the client shell draws it — a
-## [DotBallotPanel] down the right-hand side — fed the state this game's own [WoVote] builds,
+## [GSBallotPanel] down the right-hand side — fed the state this game's own [WoVote] builds,
 ## with a few votes cast.
 var _ballot: bool = false
 
@@ -44,7 +44,7 @@ var _grid := 0
 var _look := PackedFloat64Array()
 
 
-## --view=maps: a fixture course pack in the shared [DotContentIndex], as the solo shell leaves
+## --view=maps: a fixture course pack in the shared [GSContentIndex], as the solo shell leaves
 ## one after a subscribed pack mounts, so the M menu shows what a player would see. The pack's
 ## course is the practice course under another name, written to user://.
 func _subscribe_fixture() -> void:
@@ -57,11 +57,11 @@ func _subscribe_fixture() -> void:
 	var file := FileAccess.open(dir + "hill.json", FileAccess.WRITE)
 	file.store_string(WoCourseDoc.to_json(doc))
 	file.close()
-	var index := DotContentIndex.shared()
-	index.set_session(DotContentIndex.SESSION_SOLO)
+	var index := GSContentIndex.shared()
+	index.set_session(GSContentIndex.SESSION_SOLO)
 	var _added := index.add_pack({
 		"content_id": "fixture/hills", "version": "1.0.0", "prefix": dir,
-		"session": DotContentIndex.SESSION_SOLO, "source": &"subscription",
+		"session": GSContentIndex.SESSION_SOLO, "source": &"subscription",
 		"provides": {"schema": 1, "title": "Hilltop Pack", "kinds": ["map"], "entries": [
 			{"kind": "map", "id": "fixture_hill", "name": "Fixture Hill", "scene": "hill.json", "map_kind": "obstacle"},
 			{"kind": "map", "id": "fixture_run", "name": "Fixture Run", "scene": "hill.json", "map_kind": "surf"},
@@ -83,7 +83,7 @@ func _ready() -> void:
 		elif arg.begins_with("--out="):
 			_out = arg.trim_prefix("--out=")
 		elif arg == "--touch":
-			DotPlatform.touch_override = 1
+			GSPlatform.touch_override = 1
 		elif arg == "--board":
 			_board = true
 		elif arg == "--ballot":
@@ -107,11 +107,11 @@ func _ready() -> void:
 	_client.set("force_offline", true)
 	_client.set("third_person", _view == "third" or _view == "action")
 	add_child(_client)
-	# --view=cover: the loading cover dot-game's DotGameClient puts up first, before it lifts.
+	# --view=cover: the loading cover dot-game's GSGameClient puts up first, before it lifts.
 	if _view == "cover":
 		for _i in 2:
 			await RenderingServer.frame_post_draw
-		var platform: DotGameClient = _client.get("platform")
+		var platform: GSGameClient = _client.get("platform")
 		print("cover %s" % ("lifted" if platform.is_shown() else "up"))
 		var cover_path := ProjectSettings.globalize_path(_out)
 		DirAccess.make_dir_recursive_absolute(cover_path.get_base_dir())
@@ -126,12 +126,12 @@ func _run() -> void:
 	game.config.warmup_seconds = 0.0
 	game.config.countdown_seconds = 1.0
 
-	var console: DotConsoleController = _client.get("console")
+	var console: GSConsoleController = _client.get("console")
 	if _console_line != "" and console != null:
 		var _ran := console.submit(_console_line)
 
 	# Every view waits past the load cover (slow on a cold GPU box) before its own timing starts; capped at five minutes (the big imported io courses hold the cover past the default 15 s), so a stuck cover cannot hang the shot.
-	if not await DotShotGate.wait_lifted(get_tree(), _client.get("platform"), 300.0):
+	if not await GSShotGate.wait_lifted(get_tree(), _client.get("platform"), 300.0):
 		printerr("shot: load cover still up after the wait; shooting anyway")
 
 	match _view:
@@ -198,7 +198,7 @@ func _run() -> void:
 	await _frames(3)
 	var saved := _save(_out)
 	print("saved %s (%s): %s" % [_out, _view, error_string(saved)])
-	await DotShotSeq.new().record(get_tree(), ProjectSettings.globalize_path(_out))
+	await GSShotSeq.new().record(get_tree(), ProjectSettings.globalize_path(_out))
 	get_tree().quit(0 if saved == OK else 1)
 
 
@@ -272,9 +272,9 @@ func _view_hazard(game: WoGame) -> void:
 func _view_arena(game: WoGame) -> void:
 	await _frames(4)
 	var doc: Dictionary = game.catalogue.arenas.get(StringName(_arena), {}) if _arena != "" \
-		else game.catalogue.pick_arena(game.config.arena_ids, DotRandomStream.new(3))
+		else game.catalogue.pick_arena(game.config.arena_ids, GSRandomStream.new(3))
 	if doc.is_empty():
-		doc = game.catalogue.pick_arena(PackedStringArray(), DotRandomStream.new(3))
+		doc = game.catalogue.pick_arena(PackedStringArray(), GSRandomStream.new(3))
 	var _built := game.build_stage(doc)
 	await _frames(6)
 	_overview(game, 0.9)
@@ -420,7 +420,7 @@ func _view_killcam(game: WoGame) -> void:
 			standing.append(game.players[id])
 	print("standing: %d" % standing.size())
 	for i in range(1, standing.size()):
-		var hit := DotDamage.make(standing[0].entity_id, standing[i].entity_id, standing[i].health.max_health * 4.0, null)
+		var hit := GSDamage.make(standing[0].entity_id, standing[i].entity_id, standing[i].health.max_health * 4.0, null)
 		hit.context = {"why": &"shot"}
 		hit.weapon_id = &"pistol"
 		var _dealt := game.combat.apply_damage(hit)
@@ -483,7 +483,7 @@ func _view_knockout(game: WoGame) -> void:
 		print("knockout: out=%s death=%s" % [victim.watching, victim.death.describe() if victim.death != null else "none"])
 		await _seconds_of(0.35)
 	var camera := _free_camera()
-	var bodies: Array = (_client.get("ragdolls") as DotPlayerRagdolls).live()
+	var bodies: Array = (_client.get("ragdolls") as GSPlayerRagdolls).live()
 	var focus := hub + Vector3(3.0, 3.0, 0.0)
 	if not bodies.is_empty():
 		# The ragdoll node itself sits at the origin; its parts are the rigid bodies under it.
@@ -507,11 +507,11 @@ func _show_ballot(game: WoGame) -> void:
 	var names := {&"1": "you", &"2": "bo", &"3": "quiet_one", &"4": "ana"}
 	var states: Array = []
 	if _workshop:
-		var index := DotContentIndex.shared()
-		index.set_session(DotContentIndex.SESSION_SOLO)
+		var index := GSContentIndex.shared()
+		index.set_session(GSContentIndex.SESSION_SOLO)
 		var _added := index.add_pack({
 			"content_id": "fixture/hills", "version": "1.0.0", "prefix": "res://fixture/",
-			"session": DotContentIndex.SESSION_SOLO, "source": &"subscription",
+			"session": GSContentIndex.SESSION_SOLO, "source": &"subscription",
 			"provides": {"schema": 1, "title": "Hilltop Pack", "kinds": ["map"], "entries": [
 				{"kind": "map", "id": "fixture_hill", "name": "Fixture Hill", "scene": "hill.tscn", "map_kind": "obstacle"},
 			]},
@@ -530,7 +530,7 @@ func _show_ballot(game: WoGame) -> void:
 	add_child(vote)
 	var _set := vote.setup()
 	vote.note_map(StringName(str(game.course_doc.get("id", ""))))
-	var _opened := vote.director.open_vote(DotVoteClock.REASON_MANUAL)
+	var _opened := vote.director.open_vote(GSVoteClock.REASON_MANUAL)
 	var options := vote.director.ballot.option_ids()
 	var _a := vote.director.cast_one(&"1", options[0])
 	var _b := vote.director.cast_one(&"2", options[1 % options.size()])
@@ -549,8 +549,8 @@ func _show_ballot(game: WoGame) -> void:
 	box.offset_top = 110.0
 	box.offset_bottom = -16.0
 	layer.add_child(box)
-	var panel := DotBallotPanel.new()
-	panel.ui_theme = DotUiTheme.space()
+	var panel := GSBallotPanel.new()
+	panel.ui_theme = GSUiTheme.space()
 	panel.local_voter = "1"
 	box.add_child(panel)
 	panel.show_state(states.back() if not states.is_empty() else {})
@@ -581,10 +581,10 @@ func _stage_action(game: WoGame) -> void:
 		return
 	var figure: Object = _client.call("_avatar_figure", 0)
 	print("action %s/%s: figure=%s third_person=%s" % [_action[0], _action[1], figure != null, _client.get("third_person")])
-	var entry := DotAvatarActions.defaults().find(_action[0], _action[1])
-	var input: Object = (_client.get("platform") as DotGameClient).avatar_actions.input
+	var entry := GSAvatarActions.defaults().find(_action[0], _action[1])
+	var input: Object = (_client.get("platform") as GSGameClient).avatar_actions.input
 	input.emit_signal(&"action_requested", entry)
-	var yaw := deg_to_rad(float((me.get("controller") as DotFpsController).state.yaw))
+	var yaw := deg_to_rad(float((me.get("controller") as GSFpsController).state.yaw))
 	var ahead := Vector3(-sin(yaw), 0.0, -cos(yaw))
 	var feet: Vector3 = me.global_position
 	if figure is Node3D:

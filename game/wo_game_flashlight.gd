@@ -4,17 +4,17 @@ extends "wo_game_state.gd"
 const WoFlashlight := preload("wo_flashlight.gd")
 
 ## The flashlight config and binder, made on first use so a suite that builds a game by hand still has one; the stage the lights were last set for.
-var flashlight_config: DotFlashlightConfig = null
-var flashlight_binder: DotGameConfigBinder = null
+var flashlight_config: GSFlashlightConfig = null
+var flashlight_binder: GSGameConfigBinder = null
 var _flashlight_stage: String = ""
 
 
 ## The flashlight config, made on first use.
-func flashlight_conf() -> DotFlashlightConfig:
+func flashlight_conf() -> GSFlashlightConfig:
 	if flashlight_config == null:
 		flashlight_config = WoFlashlight.make_config()
 		flashlight_binder = WoFlashlight.make_binder(flashlight_config)
-		DotLog.result("wo.game", "flashlight config", flashlight_binder.load_layers())
+		GSLog.result("wo.game", "flashlight config", flashlight_binder.load_layers())
 	return flashlight_config
 
 
@@ -46,7 +46,7 @@ func toggle_flashlight(id: StringName) -> bool:
 	var player: WoPlayer = players.get(id)
 
 	if player == null or not player.is_alive() or player.watching or player.out_for_round \
-			or not DotFlashlightRules.allowed_on(flashlight_conf(), _flashlight_stage_id()):
+			or not GSFlashlightRules.allowed_on(flashlight_conf(), _flashlight_stage_id()):
 		return false
 
 	player.flashlight = not player.flashlight

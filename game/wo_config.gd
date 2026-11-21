@@ -1,6 +1,6 @@
-extends DotConfig
+extends GSConfig
 
-## Every number this game has, layered like every other [DotConfig], in metres and seconds as the course documents are.
+## Every number this game has, layered like every other [GSConfig], in metres and seconds as the course documents are.
 ## Not the courses: where a platform is and how fast an arm turns are the document's ([WoCourseDoc]), content a server
 ## installs and a client is sent. This file is the rules every course is played under.
 
@@ -46,7 +46,7 @@ extends DotConfig
 
 ## How many teams the server plays with. 0 is every player for themselves, because a course is run by one person;
 ## teams change what finishing means (a side is through if anybody is). Any count of two or more (default 0); past
-## six the colours and names are generated ([method DotTeamSet.palette_colour]).
+## six the colours and names are generated ([method GSTeamSet.palette_colour]).
 @export_range(0, 6, 1, "or_greater") var team_count: int = 0
 
 ## Whether players may pick their own side.
@@ -163,9 +163,9 @@ extends DotConfig
 @export var shuffle_courses: bool = true
 
 ## The file that says which courses this server ROTATES: `maps.yml` in `cfg/server/addons/dot_map/` of the `--config`
-## directory (dot-map's `DotMapRotationFile`); the game ships none. Empty rotates every course. A course it leaves out
+## directory (dot-map's `GSMapRotationFile`); the game ships none. Empty rotates every course. A course it leaves out
 ## stays installed but is never drawn, balloted or nominated. Replaces [member shuffle_courses]. `sv_map_rotation_file`.
-@export var map_rotation_file: String = DotMapRotationFile.DEFAULT_STEM
+@export var map_rotation_file: String = GSMapRotationFile.DEFAULT_STEM
 
 ## Where course and arena documents are read from, beside the one built into this game.
 ##
@@ -259,8 +259,8 @@ const CFG_FILES := {
 
 
 ## The binder every entry point uses: [param config] layered, one cfg file per [constant CFG_FILES] entry.
-static func make_binder(config: DotConfig, json_path := "") -> DotGameConfigBinder:
-	var b := DotGameConfigBinder.create(config, "mg-wipeout", "wo", json_path)
+static func make_binder(config: GSConfig, json_path := "") -> GSGameConfigBinder:
+	var b := GSGameConfigBinder.create(config, "mg-wipeout", "wo", json_path)
 	b.grouped = true
 	b.group_files = CFG_FILES
 	return b
@@ -279,42 +279,42 @@ func teams() -> bool:
 	return team_count >= 2
 
 
-func validate() -> DotResult:
+func validate() -> GSResult:
 	if course_seconds <= 0.0 or finale_seconds <= 0.0:
-		return DotResult.fail(
-			DotError.CODE_INVALID, "Both halves of a round have to last some time."
+		return GSResult.fail(
+			GSError.CODE_INVALID, "Both halves of a round have to last some time."
 		)
 
 	# One team is not a mode: it is everybody on the same side with nobody to beat, and the
 	# final death would end on its first tick.
 	if team_count == 1 or team_count < 0:
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"team_count is %d; this game plays solo (0) or with two sides or more." % team_count,
 		)
 
 	if finale_props_per_side < 0 or finale_weapons_per_side < 0 or prop_budget < 0:
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"finale_props_per_side %d, finale_weapons_per_side %d and prop_budget %d are counts: 0 or more."
 				% [finale_props_per_side, finale_weapons_per_side, prop_budget],
 		)
 
 	if knock_max_speed < knock_min_speed:
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"knock_max_speed (%.1f) is below knock_min_speed (%.1f)."
 				% [knock_max_speed, knock_min_speed],
 		)
 
 	if spectate_camera < 0 or spectate_camera > 2:
-		return DotResult.fail(
-			DotError.CODE_INVALID,
+		return GSResult.fail(
+			GSError.CODE_INVALID,
 			"spectate_camera is %d; it is 0 (anybody), 1 (own side) or 2 (nobody)."
 				% spectate_camera,
 		)
 
-	return DotResult.success(null)
+	return GSResult.success(null)
 
 
 func describe() -> Dictionary:

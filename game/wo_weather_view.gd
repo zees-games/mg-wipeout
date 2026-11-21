@@ -1,6 +1,6 @@
 extends Node3D
 
-## What the weather looks like: rain (a DotWeather) round the camera on a stormy course, and each
+## What the weather looks like: rain (a GSWeather) round the camera on a stormy course, and each
 ## lightning strike drawn on the tick it lands. Client side, drawing only; what the weather
 ## DOES is [WoCourse.wind] and [WoCourse.strike], which every machine computes from the tick.
 
@@ -14,7 +14,7 @@ var tick_fn: Callable = Callable()
 
 ## dot-weather draws the rain round the camera; the strikes below stay this view's own, because
 ## they are gameplay (WoCourse.strike_at) and must land on the tick the simulation says.
-var _weather: DotWeather = null
+var _weather: GSWeather = null
 var _stormy: bool = false
 var _last_tick: int = -1
 var _bolts: Array[Dictionary] = []
@@ -25,7 +25,7 @@ var _clear_light: float = -1.0
 
 
 func _ready() -> void:
-	_weather = DotWeather.new()
+	_weather = GSWeather.new()
 	_weather.name = "Rain"
 	add_child(_weather)
 

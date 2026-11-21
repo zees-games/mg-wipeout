@@ -19,11 +19,11 @@ func _test_the_flashlight() -> void:
 	_check(WoFlashlight.starts_on(cfg, "wo_scary_house") and WoFlashlight.starts_on(cfg, "wo_sweet_tooth"),
 		"and the horror house and the night courses start lit")
 
-	cfg.default_state = DotFlashlightConfig.START_ON
+	cfg.default_state = GSFlashlightConfig.START_ON
 	a.flashlight_ready = false
 	await _step(game, 2)
 	_check(a.flashlight, "a config that starts lit lights the player")
-	cfg.default_state = DotFlashlightConfig.START_OFF
+	cfg.default_state = GSFlashlightConfig.START_OFF
 	a.flashlight_ready = false
 	await _step(game, 2)
 	_check(not a.flashlight, "and one that starts dark does not")
@@ -37,5 +37,5 @@ func _test_the_flashlight() -> void:
 	cfg.enabled = false
 	_check(not game.toggle_flashlight(a.player_id) and not a.flashlight, "a disabled config has no light")
 	cfg.enabled = true
-	cfg.default_state = DotFlashlightConfig.START_DARK
+	cfg.default_state = GSFlashlightConfig.START_DARK
 	_finished()

@@ -2,7 +2,7 @@ extends RefCounted
 
 const WoWorld := preload("wo_world.gd")
 
-## A course that runs a map's own entity logic: dot-map's [DotMapWorld] hosted under a stage.
+## A course that runs a map's own entity logic: dot-map's [GSMapWorld] hosted under a stage.
 ## The server steps it once a tick and sends changes through [signal message]; a client builds the same world
 ## without logic and poses every mover for its tick (game tick `T` is logic tick `T - base`).
 
@@ -14,7 +14,7 @@ const NO_BASE := -2147483648
 ## `(peer, message)`: one message for one peer, from the world's state sync. Server only.
 signal message(peer: Variant, msg: Dictionary)
 
-var world: DotMapWorld = null
+var world: GSMapWorld = null
 var stage_id: StringName = &""
 var authoritative: bool = true
 var rate: int = 64
@@ -22,8 +22,8 @@ var base: int = NO_BASE
 
 ## Collider instance id to the mover entity whose model carries it.
 var _movers: Dictionary = {}
-## Touch doors, teleports and kill volumes read from the map ([DotBotLinks]); built on first use.
-var _links: DotBotLinks = null
+## Touch doors, teleports and kill volumes read from the map ([GSBotLinks]); built on first use.
+var _links: GSBotLinks = null
 ## Set while a stand-in plays: it opens touch doors the way a body walking in would (dot-map does it); a person is not helped.
 var touch_doors: bool = false:
 	set(value):
@@ -36,7 +36,7 @@ var _posed: int = NO_BASE
 
 ## Builds the world of the `world` piece [param spec]; null with a line when it would not.
 func build(spec: Dictionary, p_stage_id: StringName, hooks: Dictionary, p_authoritative: bool,
-		draw: bool, p_rate: int) -> DotMapWorld:
+		draw: bool, p_rate: int) -> GSMapWorld:
 	stage_id = p_stage_id
 	authoritative = p_authoritative
 	rate = p_rate
@@ -57,8 +57,8 @@ func build(spec: Dictionary, p_stage_id: StringName, hooks: Dictionary, p_author
 ## Switches the map's brushes to their state again: the world layer put on every body after the map's start
 ## undid the ones it had switched off (a spawn wall that is off until a timer closes it).
 func reseat_brushes() -> void:
-	for e: DotMapEntity in world.io.entities:
-		if e is DotMapToggleBrush and e.node != null:
+	for e: GSMapEntity in world.io.entities:
+		if e is GSMapToggleBrush and e.node != null:
 			e._view_changed("enabled", e.enabled)
 
 
@@ -69,9 +69,9 @@ func index_movers() -> void:
 	if world == null:
 		return
 
-	for e: DotMapEntity in world.io.entities:
-		if e is DotMapMoverNode and (e as DotMapMoverNode).node != null:
-			var node: Node = (e as DotMapMoverNode).node
+	for e: GSMapEntity in world.io.entities:
+		if e is GSMapMoverNode and (e as GSMapMoverNode).node != null:
+			var node: Node = (e as GSMapMoverNode).node
 
 			if node is CollisionObject3D:
 				_movers[node.get_instance_id()] = e
@@ -87,7 +87,7 @@ func begin(tick: int) -> void:
 
 
 ## Server, once a tick after the players moved: advance the logic and the volumes. [param bodies]
-## are [DotMapVolumes] body dictionaries.
+## are [GSMapVolumes] body dictionaries.
 func step(tick: int, bodies: Array) -> void:
 	if world == null or not authoritative or base == NO_BASE:
 		return
@@ -98,9 +98,9 @@ func step(tick: int, bodies: Array) -> void:
 
 
 ## What the map's entities say about where a body can go and what opens by touch.
-func links() -> DotBotLinks:
+func links() -> GSBotLinks:
 	if _links == null:
-		_links = DotBotLinks.read(world, {"nav_export": DotMapNavLinks.read(world)})
+		_links = GSBotLinks.read(world, {"nav_export": GSMapNavLinks.read(world)})
 	return _links
 
 
@@ -127,7 +127,7 @@ func apply(msg: Dictionary) -> void:
 	var applied := world.apply_state(msg)
 
 	if not applied.ok:
-		DotLog.warn(CHANNEL, "a map state message was refused", {"why": applied.error.message})
+		GSLog.warn(CHANNEL, "a map state message was refused", {"why": applied.error.message})
 
 	_posed = NO_BASE
 
@@ -135,7 +135,7 @@ func apply(msg: Dictionary) -> void:
 ## The displacement of whoever stands on [param collider], carried as the mover under it moves
 ## from the pose of `tick` to the next, or zero when it is not a mover's.
 func carry(collider: int, at: Vector3, tick: int) -> Vector3:
-	var mover: DotMapMoverNode = _movers.get(collider)
+	var mover: GSMapMoverNode = _movers.get(collider)
 
 	if mover == null or base == NO_BASE or not mover.alive:
 		return Vector3.ZERO
@@ -146,7 +146,7 @@ func carry(collider: int, at: Vector3, tick: int) -> Vector3:
 
 
 ## The mover whose model carries the body [param collider], or null.
-func mover_of(collider: int) -> DotMapMoverNode:
+func mover_of(collider: int) -> GSMapMoverNode:
 	return _movers.get(collider)
 
 

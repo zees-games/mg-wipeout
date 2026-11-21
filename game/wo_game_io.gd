@@ -23,7 +23,7 @@ var io_teleported: Array = []
 
 var _io_bodies: Array = []
 
-## player id -> `{DotMapHurt: true}`: the hurt volumes a respawned body stands in, which do not hurt it until it
+## player id -> `{GSMapHurt: true}`: the hurt volumes a respawned body stands in, which do not hurt it until it
 ## has left them. A map's anti-camp volume (switched on 30 s in around its spawn) would otherwise kill each
 ## respawn in the same place, forever.
 var _hurt_grace: Dictionary = {}
@@ -113,7 +113,7 @@ func _protect_from_hurts(player: WoPlayer) -> void:
 	var tall := player.controller.tunables.stand_height if player.controller.tunables != null else 1.8
 	var held: Dictionary
 
-	for node: DotMapVolumeNode in stage.io.world.volumes.nodes:
+	for node: GSMapVolumeNode in stage.io.world.volumes.nodes:
 		if node.volume.kind == "hurt" and node.entity != null and node.volume.touches_column(feet, tall):
 			held[node.entity] = true
 
@@ -137,7 +137,7 @@ func _release_hurt_grace() -> void:
 		var tall := player.controller.tunables.stand_height if player.controller.tunables != null else 1.8
 		var held: Dictionary = _hurt_grace[id]
 
-		for node: DotMapVolumeNode in stage.io.world.volumes.nodes:
+		for node: GSMapVolumeNode in stage.io.world.volumes.nodes:
 			if held.has(node.entity) and not node.volume.touches_column(feet, tall):
 				held.erase(node.entity)
 
@@ -192,7 +192,7 @@ func _io_move(body: Variant, motion: Variant) -> void:
 
 		if push.y > 0.1:
 			state.velocity.y = push.y
-			state.mode = DotFpsState.Mode.AIR
+			state.mode = GSFpsState.Mode.AIR
 
 
 func _io_event(kind: String, data: Dictionary) -> void:
@@ -202,9 +202,9 @@ func _io_event(kind: String, data: Dictionary) -> void:
 		io_events.pop_front()
 
 
-## A finale shot against an io course's own breakables, buttons and doors (dot-map's `DotMapWorld.shoot`):
+## A finale shot against an io course's own breakables, buttons and doors (dot-map's `GSMapWorld.shoot`):
 ## each pellet's ray, no further than where the combat stopped it, so a player in front shields the panel.
-func _shoot_io(shooter: WoPlayer, shot: DotShot) -> void:
+func _shoot_io(shooter: WoPlayer, shot: GSShot) -> void:
 	if not authoritative or stage == null or stage.io == null or stage.io.world == null or physics == null or shooter == null:
 		return
 	var space := stage.get_world_3d().direct_space_state
@@ -228,7 +228,7 @@ func _hurt_on_course(player: WoPlayer, amount: float, why: StringName, direction
 			or player.health == null or not player.is_alive() or player.finished:
 		return false
 
-	var hurt := DotDamage.make(0, player.entity_id, amount, null)
+	var hurt := GSDamage.make(0, player.entity_id, amount, null)
 	hurt.point = player.controller.state.position
 	hurt.direction = direction
 	hurt.tick = _tick
@@ -245,7 +245,7 @@ func _fell(player: WoPlayer) -> void:
 			return
 
 		if player.is_alive() and combat != null:
-			var damage := DotDamage.make(0, player.entity_id, player.health.max_health * 4.0, null)
+			var damage := GSDamage.make(0, player.entity_id, player.health.max_health * 4.0, null)
 			damage.point = player.controller.state.position
 			damage.direction = Vector3.DOWN
 			damage.tick = _tick
@@ -266,7 +266,7 @@ func _fell(player: WoPlayer) -> void:
 	if config.instant_death and authoritative and not player.finished and combat != null \
 			and player.health != null and player.is_alive():
 		player.remove_meta(&"air_peak")
-		var lethal := DotDamage.make(0, player.entity_id, player.health.max_health * 4.0, null)
+		var lethal := GSDamage.make(0, player.entity_id, player.health.max_health * 4.0, null)
 		lethal.point = player.controller.state.position
 		lethal.direction = Vector3.DOWN
 		lethal.tick = _tick

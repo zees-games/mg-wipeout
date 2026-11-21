@@ -1,4 +1,4 @@
-extends DotGameCheckSuite
+extends GSGameCheckSuite
 
 ## A stand-in climbs: on a toy level whose platform only a ladder reaches, WoIoBot walks to the foot, climbs without
 ## hopping at it, and steps off at the top. The toy body climbs as the controller's ladder mode does (forward into the
@@ -29,7 +29,7 @@ class FakeWorld extends RefCounted:
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
@@ -51,7 +51,7 @@ func _run() -> void:
 
 	var fake := FakeWorld.new()
 	fake.ladders.append(LADDER)
-	var links := DotBotLinks.read(fake)
+	var links := GSBotLinks.read(fake)
 	_check(links.ladders.size() == 1, "the map's ladder box is read")
 	var bot := WoIoBot.new()
 	var finish := AABB(GOAL - Vector3(1.0, 1.0, 1.0), Vector3(2.0, 2.0, 2.0))
@@ -72,11 +72,11 @@ func _run() -> void:
 	var vy := 0.0
 	var air := false
 	for tick in range(64 * 40):
-		var cmd := DotFpsCommand.new()
+		var cmd := GSFpsCommand.new()
 		cmd.yaw = yaw
 		bot.steer(feet, not air and vy == 0.0, tick, &"bot", cmd)
 		yaw = cmd.yaw
-		var jumped := cmd.buttons & DotFpsCommand.BUTTON_JUMP != 0
+		var jumped := cmd.buttons & GSFpsCommand.BUTTON_JUMP != 0
 		var y := deg_to_rad(yaw)
 		var forward := Vector3(-sin(y), 0.0, -cos(y))
 		var right := Vector3(cos(y), 0.0, -sin(y))

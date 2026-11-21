@@ -12,7 +12,7 @@ const POS_BITS := 20
 signal lost_received(session_id: int, weapon_id: StringName)
 
 var _bridge: Object = null
-var _watched: DotWeaponDrops = null
+var _watched: GSWeaponDrops = null
 
 
 func attach(bridge: Object) -> void:
@@ -21,7 +21,7 @@ func attach(bridge: Object) -> void:
 
 ## Server: follows [param layer]'s drops and the guns that leave and enter hands.
 func watch(layer: Node) -> void:
-	var drops: DotWeaponDrops = layer.drops if layer != null else null
+	var drops: GSWeaponDrops = layer.drops if layer != null else null
 	if drops == null or drops == _watched:
 		return
 	_watched = drops
@@ -44,7 +44,7 @@ func send_snapshot(peer_id: int, layer: Node) -> void:
 
 
 ## Client: whether [param kind] was a weapon-drop event, applied to the layer's mirror.
-func apply(kind: int, reader: DotNetReader, layer: Node) -> bool:
+func apply(kind: int, reader: GSNetReader, layer: Node) -> bool:
 	if kind < WoEvents.Kind.WEAPON_DROP or kind > WoEvents.Kind.WEAPON_LOST:
 		return false
 	if kind == WoEvents.Kind.WEAPON_LOST:
@@ -52,7 +52,7 @@ func apply(kind: int, reader: DotNetReader, layer: Node) -> bool:
 		if bool(lost["ok"]):
 			lost_received.emit(int(lost["player_id"]), lost["weapon_id"])
 		return true
-	var drops: DotWeaponDrops = layer.drops if layer != null else null
+	var drops: GSWeaponDrops = layer.drops if layer != null else null
 	if drops == null:
 		return true
 	match kind:
@@ -82,13 +82,13 @@ func _on_settled(id: int, at: Transform3D) -> void:
 
 
 func _on_removed(id: int, _taker: int) -> void:
-	var w := DotNetWriter.new()
+	var w := GSNetWriter.new()
 	w.write_varint(id)
 	_bridge._broadcast(WoEvents.Kind.WEAPON_GONE, w.to_bytes())
 
 
 func _drop_body(state: Dictionary, id: int, at: Transform3D, velocity: Vector3, seconds: float, rest: bool) -> PackedByteArray:
-	var w := DotNetWriter.new()
+	var w := GSNetWriter.new()
 	w.write_varint(id)
 	w.write_string(String(state["id"]), WoEvents.ID_BYTES)
 	w.write_varint(maxi(0, int(state.get("magazine", 0))))
@@ -101,13 +101,13 @@ func _drop_body(state: Dictionary, id: int, at: Transform3D, velocity: Vector3, 
 
 
 static func write_settled(id: int, at: Transform3D) -> PackedByteArray:
-	var w := DotNetWriter.new()
+	var w := GSNetWriter.new()
 	w.write_varint(id)
 	_write_pose(w, at)
 	return w.to_bytes()
 
 
-static func read_drop(reader: DotNetReader) -> Dictionary:
+static func read_drop(reader: GSNetReader) -> Dictionary:
 	var out := {"id": reader.read_varint(), "weapon": reader.read_string(WoEvents.ID_BYTES),
 		"magazine": reader.read_varint(), "reserve": reader.read_varint()}
 	out["at"] = _read_pose(reader)
@@ -118,23 +118,23 @@ static func read_drop(reader: DotNetReader) -> Dictionary:
 	return out
 
 
-static func read_settled(reader: DotNetReader) -> Dictionary:
+static func read_settled(reader: GSNetReader) -> Dictionary:
 	var out := {"id": reader.read_varint(), "at": _read_pose(reader)}
 	out["ok"] = reader.ok()
 	return out
 
 
-static func read_gone(reader: DotNetReader) -> Dictionary:
+static func read_gone(reader: GSNetReader) -> Dictionary:
 	var out := {"id": reader.read_varint()}
 	out["ok"] = reader.ok()
 	return out
 
 
-static func _write_pose(w: DotNetWriter, at: Transform3D) -> void:
+static func _write_pose(w: GSNetWriter, at: Transform3D) -> void:
 	w.write_vector3_range(at.origin, -EXTENT, EXTENT, POS_BITS)
 	w.write_quaternion(at.basis.get_rotation_quaternion(), 9)
 
 
-static func _read_pose(reader: DotNetReader) -> Transform3D:
+static func _read_pose(reader: GSNetReader) -> Transform3D:
 	var origin := reader.read_vector3_range(-EXTENT, EXTENT, POS_BITS)
 	return Transform3D(Basis(reader.read_quaternion(9)), origin)

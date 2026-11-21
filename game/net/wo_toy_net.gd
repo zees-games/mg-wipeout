@@ -1,10 +1,10 @@
-extends DotNetBehaviour
+extends GSNetBehaviour
 
-## One of the stage's toys on the wire (dot-props' [DotPropBody]): its moving part, whether it is on, and a use count.
+## One of the stage's toys on the wire (dot-props' [GSPropBody]): its moving part, whether it is on, and a use count.
 ## The server's physics, never predicted; the client's toy is frozen and posed from these. Paired by index, and
 ## registered before the stage is built, as a snapshot is read no further than its first unknown entity.
 
-var toy: DotPropBody = null
+var toy: GSPropBody = null
 
 var net_position: Vector3 = Vector3.ZERO
 var net_rotation: Quaternion = Quaternion.IDENTITY
@@ -13,11 +13,11 @@ var net_count: int = 0
 
 
 func _register_net_vars() -> void:
-	replicate(&"net_position", DotNetVar.Type.VECTOR3_POSITION).interpolated()
+	replicate(&"net_position", GSNetVar.Type.VECTOR3_POSITION).interpolated()
 	# Nine bits an element, under a degree: nobody lines a ball up to a degree.
-	replicate(&"net_rotation", DotNetVar.Type.QUATERNION).bits(9).interpolated()
-	replicate(&"net_on", DotNetVar.Type.BOOL)
-	replicate(&"net_count", DotNetVar.Type.UINT).bits(8)
+	replicate(&"net_rotation", GSNetVar.Type.QUATERNION).bits(9).interpolated()
+	replicate(&"net_on", GSNetVar.Type.BOOL)
+	replicate(&"net_count", GSNetVar.Type.UINT).bits(8)
 
 
 ## Authority only: the toy's state into the replicated fields.

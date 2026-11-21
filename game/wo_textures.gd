@@ -153,7 +153,7 @@ static func installed(role: Role) -> Texture2D:
 	# [method ResourceLoader.exists] rather than [method FileAccess.file_exists]: an imported texture in an exported
 	# build is a `.ctex` with no `.png` shipped, so the filesystem answers "no" in exactly the build that matters.
 	if not ResourceLoader.exists(path, "Texture2D"):
-		DotLog.debug(CHANNEL, "no texture installed for a role", {
+		GSLog.debug(CHANNEL, "no texture installed for a role", {
 			"role": Role.keys()[role], "looked_at": path,
 		})
 		_installed[role] = null

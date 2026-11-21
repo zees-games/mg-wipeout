@@ -11,16 +11,16 @@ const DARK_MOODS: PackedStringArray = ["interior_horror", "cave_tunnel", "outdoo
 
 
 ## A config with this game's defaults: F, off on a lit course, on in a dark mood.
-static func make_config() -> DotFlashlightConfig:
-	var cfg := DotFlashlightConfig.new()
+static func make_config() -> GSFlashlightConfig:
+	var cfg := GSFlashlightConfig.new()
 	cfg.key = "F"
 	cfg.dark_moods = DARK_MOODS
 	return cfg
 
 
 ## The binder: `wo_flashlight_<field>` cvars, `cfg/game/mg-wipeout/flashlight/game.yml`, a workbench set.
-static func make_binder(cfg: DotFlashlightConfig) -> DotGameConfigBinder:
-	var b := DotGameConfigBinder.create(cfg, GAME_ID, "wo_flashlight")
+static func make_binder(cfg: GSFlashlightConfig) -> GSGameConfigBinder:
+	var b := GSGameConfigBinder.create(cfg, GAME_ID, "wo_flashlight")
 	b.profile_kind = "flashlight"
 	return b
 
@@ -35,5 +35,5 @@ static func mood_of(stage_id: String) -> String:
 
 
 ## Whether a player starts a course with the light on: the course's mood against the config's dark moods.
-static func starts_on(cfg: DotFlashlightConfig, stage_id: String, mood: String = "") -> bool:
-	return DotFlashlightRules.start_on(cfg, stage_id, 1.0, mood if mood != "" else mood_of(stage_id))
+static func starts_on(cfg: GSFlashlightConfig, stage_id: String, mood: String = "") -> bool:
+	return GSFlashlightRules.start_on(cfg, stage_id, 1.0, mood if mood != "" else mood_of(stage_id))

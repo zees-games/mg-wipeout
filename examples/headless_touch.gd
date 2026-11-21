@@ -1,4 +1,4 @@
-extends DotGameCheckSuite
+extends GSGameCheckSuite
 
 ## The on-screen buttons: the layout fits a phone, the dot-mobile overlay drives the sampler and reaches the handlers, and the
 ## crosshair test holds fire on team-mates and the dead.
@@ -14,7 +14,7 @@ var _finished := 0
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
@@ -32,30 +32,30 @@ func _run() -> void:
 	for id: StringName in [WoTouch.FIRE, WoTouch.ALT, WoTouch.JUMP, WoTouch.CROUCH, WoTouch.GRAB, WoTouch.RELOAD]:
 		_check(ids.has(id), "%s has a button" % id)
 
-	var built := DotGameTouchLayout.build(DotGameTouchLayout.FPS, {DotGameTouchLayout.USE: null, WoTouch.GRAB: &"inner"})
+	var built := GSGameTouchLayout.build(GSGameTouchLayout.FPS, {GSGameTouchLayout.USE: null, WoTouch.GRAB: &"inner"})
 	_check(built.ok and WoTouch.touch_layout().validate().ok, "the layout is the fps preset and validates")
 	var canon := true
 	for id: StringName in WoTouch.touch_layout().ids():
-		canon = canon and DotGameTouchLayout.canonical_id(id) == id
+		canon = canon and GSGameTouchLayout.canonical_id(id) == id
 	_check(canon, "no button keeps a pre-canonical id")
 	_check(not ids.has(&"duck") and not ids.has(&"use") and ids.has(&"crouch"), "duck is crouch, and use is dropped")
 	var homes := WoTouch.touch_layout()
 	_check(homes.row(WoTouch.FIRE)["offset"] == Vector2(80, 84) and homes.row(WoTouch.JUMP)["offset"] == Vector2(80, 172)
 		and homes.row(WoTouch.GRAB)["offset"] == Vector2(190, 150), "fire, jump and grab sit where the player's thumb learnt them")
 
-	var tunables := DotFpsTunables.new()
+	var tunables := GSFpsTunables.new()
 	var kb := WoTouch.make_sampler(tunables, Callable())
-	_check(kb != null and not DotPlatform.has_touch() and not kb is DotFpsTouchSampler, "no touch device gets the keyboard sampler")
+	_check(kb != null and not GSPlatform.has_touch() and not kb is GSFpsTouchSampler, "no touch device gets the keyboard sampler")
 	_overlay()
 	_crosshair()
 
 	for view: Vector2 in [Vector2(844, 390), Vector2(667, 375), Vector2(932, 430)]:
-		# DotGameScreenFit stretches a phone to a canvas with a 720 unit short side, and scales the buttons up to a thumb
+		# GSGameScreenFit stretches a phone to a canvas with a 720 unit short side, and scales the buttons up to a thumb
 		# (44 real px at least, a 9 mm target on a dense screen): the HUD is laid out in that canvas against those buttons.
-		var plan := DotGameScreenFit.plan_for(view, Vector2(1152, 648))
+		var plan := GSGameScreenFit.plan_for(view, Vector2(1152, 648))
 		var canvas := Vector2(plan["size"])
 		for target: float in [44.0, 96.0, 160.0]:
-			var k := DotGameScreenFit.button_scale_for(WoTouch.layout(), float(plan["stretch"]), target, canvas * Vector2(0.45, WoTouch.MAX_HEIGHT))
+			var k := GSGameScreenFit.button_scale_for(WoTouch.layout(), float(plan["stretch"]), target, canvas * Vector2(0.45, WoTouch.MAX_HEIGHT))
 			_check_no_overlap(canvas, k)
 
 	_finished += 1
@@ -132,17 +132,17 @@ class Cfg extends RefCounted:
 
 
 func _overlay() -> void:
-	DotPlatform.touch_override = 1
+	GSPlatform.touch_override = 1
 	# The real parent is the HUD, a CanvasLayer.
 	var host := CanvasLayer.new()
 	add_child(host)
-	var sampler := DotFpsTouchSampler.new(DotFpsTunables.new())
+	var sampler := GSFpsTouchSampler.new(GSFpsTunables.new())
 	var seen := {}
 	var handlers := {}
 	for id: StringName in [WoTouch.ALT, WoTouch.GRAB, WoTouch.RELOAD, WoTouch.PREV, WoTouch.NEXT]:
 		handlers[id] = func(down: bool) -> void: seen[id] = down
 	var touch := WoTouch.new()
-	var controls := touch.build(self, host, sampler, DotMobileRules.new(), handlers)
+	var controls := touch.build(self, host, sampler, GSMobileRules.new(), handlers)
 	_check(controls != null and controls.touch and controls.sampler == sampler, "the overlay drives the client's own sampler", str(touch.describe()))
 	_check(touch.buttons != null and touch.buttons.radius_of(WoTouch.FIRE) > 0.0, "the buttons are built, fire among them")
 	var tap := InputEventScreenTouch.new()
@@ -164,7 +164,7 @@ func _overlay() -> void:
 	_check(touch.active(), "and closing the menu brings it back")
 	_check(not touch.contains_point(Vector2(-9000, -9000)), "a point off every button is not a button's")
 	host.free()
-	DotPlatform.touch_override = -1
+	GSPlatform.touch_override = -1
 
 
 func _crosshair() -> void:
@@ -173,9 +173,9 @@ func _crosshair() -> void:
 	var enemy := _body(game, &"7", 2, Vector3(0, 0, -10))
 	var eye := Vector3(0, 1.6, 0)
 	var ahead := Vector3(0, 0, -1)
-	var foe := DotMobileAutoFire.TARGET_ENEMY
-	var friend := DotMobileAutoFire.TARGET_FRIEND
-	var none := DotMobileAutoFire.TARGET_NONE
+	var foe := GSMobileAutoFire.TARGET_ENEMY
+	var friend := GSMobileAutoFire.TARGET_FRIEND
+	var none := GSMobileAutoFire.TARGET_NONE
 	_check(WoTouch.crosshair_kind(eye, ahead, me, game, null, 0) == foe, "the crosshair on a living opponent is an enemy")
 	_check(WoTouch.crosshair_kind(eye, Vector3(1, 0, 0), me, game, null, 0) == none, "looking away is nothing")
 	var mate := _body(game, &"4", 1, Vector3(0, 0, -5))

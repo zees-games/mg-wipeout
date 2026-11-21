@@ -1,4 +1,4 @@
-extends DotGameCheckSuite
+extends GSGameCheckSuite
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoConfig := preload("../game/wo_config.gd")
@@ -28,8 +28,8 @@ var _sections_finished := 0
 
 var _server_game: WoGame = null
 var _client_game: WoGame = null
-var _server_net: DotNetManager = null
-var _client_net: DotNetManager = null
+var _server_net: GSNetManager = null
+var _client_net: GSNetManager = null
 var _server_bridge: WoNetBridge = null
 var _client_bridge: WoNetBridge = null
 var _stand_in: WoPlayer = null
@@ -95,8 +95,8 @@ func _make_game(server: bool, parent: Node) -> WoGame:
 	return game
 
 
-func _make_manager(server: bool, scope: StringName, peer_id: int, parent: Node, tick_rate: int) -> DotNetManager:
-	var manager := DotNetManager.new()
+func _make_manager(server: bool, scope: StringName, peer_id: int, parent: Node, tick_rate: int) -> GSNetManager:
+	var manager := GSNetManager.new()
 	manager.name = "Server" if server else "Client"
 	manager.is_server = server
 	manager.local_peer_id = peer_id
@@ -104,7 +104,7 @@ func _make_manager(server: bool, scope: StringName, peer_id: int, parent: Node, 
 	manager.auto_tick = false
 	manager.config_file = ""
 
-	var config := DotNetConfig.new()
+	var config := GSNetConfig.new()
 	config.tick_rate = tick_rate
 	config.snapshot_rate = SNAPSHOT_RATE
 	config.enable_prediction = true
@@ -121,7 +121,7 @@ func _make_manager(server: bool, scope: StringName, peer_id: int, parent: Node, 
 func _on_server_send(method: StringName, peer_id: int, payload: PackedByteArray) -> void:
 	# Only while a section listens: a decode on the client's registry counts what it skips.
 	if method == &"event" and _listening:
-		var decoded := _client_net.messages.decode(DotNetReader.new(payload), 1, false)
+		var decoded := _client_net.messages.decode(GSNetReader.new(payload), 1, false)
 		if decoded.ok and decoded.value is WoEvent:
 			_sent_events.append([peer_id, (decoded.value as WoEvent).kind])
 
@@ -155,17 +155,17 @@ func _exchange() -> void:
 
 ## One tick on both ends, with a real physics frame between them: the props are rigid bodies,
 ## and a rigid body moves on the physics frame and nowhere else.
-func _step(command: DotFpsCommand = null) -> void:
+func _step(command: GSFpsCommand = null) -> void:
 	_tick += 1
 	var _ticks := _client_net.clock.advance(1.0 / float(maxi(_client_game.tick_rate, 1)))
 	_server_bridge.server_tick(_tick)
 	_flush()
-	_client_bridge.client_tick(_tick + INPUT_LEAD, command if command != null else DotFpsCommand.new())
+	_client_bridge.client_tick(_tick + INPUT_LEAD, command if command != null else GSFpsCommand.new())
 	_flush()
 	await get_tree().physics_frame
 
 
-func _steps(count: int, command: DotFpsCommand = null) -> void:
+func _steps(count: int, command: GSFpsCommand = null) -> void:
 	for _i in range(count):
 		await _step(command)
 

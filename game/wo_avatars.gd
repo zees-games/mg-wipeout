@@ -15,12 +15,12 @@ const SKINS: Array[StringName] = [
 
 
 ## Built once per game; it is content, not state.
-static func schema() -> DotAvatarSchema:
-	var s := DotAvatarSchema.new()
+static func schema() -> GSAvatarSchema:
+	var s := GSAvatarSchema.new()
 	s.id = SCHEMA_ID
 	s.version = 1
 
-	var skin := DotAvatarSlot.new()
+	var skin := GSAvatarSlot.new()
 	skin.id = SLOT_SKIN
 	skin.display_name = "Person"
 	skin.required = true
@@ -28,7 +28,7 @@ static func schema() -> DotAvatarSchema:
 	s.slots.append(skin)
 
 	for id in SKINS:
-		var part := DotAvatarPart.new()
+		var part := GSAvatarPart.new()
 		part.id = id
 		part.slot = SLOT_SKIN
 		part.display_name = "Person %s" % String(id).trim_prefix("skin_").to_upper()
@@ -42,8 +42,8 @@ static func schema() -> DotAvatarSchema:
 
 ## The avatar a player with none of their own wears: the skin their id hashes to. [param player_id] is the game's own
 ## key (`u<session>`) and the hash is the one `WoPlayer` used before there were documents.
-static func stock_avatar(player_id: StringName) -> DotAvatar:
-	var avatar := DotAvatar.make(SCHEMA_ID)
+static func stock_avatar(player_id: StringName) -> GSAvatar:
+	var avatar := GSAvatar.make(SCHEMA_ID)
 	avatar.set_part(SLOT_SKIN, SKINS[stock_index(player_id)])
 	return avatar
 
@@ -54,7 +54,7 @@ static func stock_index(player_id: StringName) -> int:
 
 ## Which of [constant SKINS] a document asks for, or -1 for none this game has. -1 rather than a guess: another
 ## schema's document, or a skin this build does not ship, falls back to the stock person.
-static func skin_index(avatar: DotAvatar) -> int:
+static func skin_index(avatar: GSAvatar) -> int:
 	if avatar == null or avatar.schema_id != SCHEMA_ID:
 		return -1
 
@@ -62,23 +62,23 @@ static func skin_index(avatar: DotAvatar) -> int:
 
 
 ## A member's site avatar as one of this game's six people: their top's skin, when this game ships it (see
-## `DotPlatformIdentity.avatar_translate_fn`). Null for a skin not drawn or a document that is not the site's; the
+## `GSPlatformIdentity.avatar_translate_fn`). Null for a skin not drawn or a document that is not the site's; the
 ## member is then their stock person.
-static func from_site(foreign: DotAvatar) -> DotAvatar:
+static func from_site(foreign: GSAvatar) -> GSAvatar:
 	var top := _site_skin(foreign, &"top")
 	var skin := StringName("skin_%s" % top)
 
 	if top == "" or not SKINS.has(skin):
 		return null
 
-	var avatar := DotAvatar.make(SCHEMA_ID)
+	var avatar := GSAvatar.make(SCHEMA_ID)
 	avatar.set_part(SLOT_SKIN, skin)
 	return avatar
 
 
 ## The letter of the site's skin in [param slot] of its `builtin` document, or "". The site's avatar is the Kenney
 ## kit's eighteen painted skins, `skin-a` to `skin-r`, chosen per face, top and legs.
-static func _site_skin(foreign: DotAvatar, slot: StringName) -> String:
+static func _site_skin(foreign: GSAvatar, slot: StringName) -> String:
 	if foreign == null or foreign.schema_id != &"builtin":
 		return ""
 

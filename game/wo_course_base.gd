@@ -33,7 +33,7 @@ var io_hooks: Dictionary = {}
 var _pen_boxes: Array = []
 
 ## The collision layout everything is put on. Set by [WoGame] before [method build].
-var physics: DotPhysicsLayout = null
+var physics: GSPhysicsLayout = null
 
 ## The normalised document this was built from. See [WoCourseDoc].
 var doc: Dictionary = {}
@@ -59,12 +59,12 @@ var strikes: Array[Dictionary] = []
 var _gate: StaticBody3D = null
 var _gate_rest: Transform3D = Transform3D.IDENTITY
 
-## The stage's toys (dot-props' [DotPropBodyBox]): loose ones only (beach balls, a finale's balls), simulated where
+## The stage's toys (dot-props' [GSPropBodyBox]): loose ones only (beach balls, a finale's balls), simulated where
 ## [member authoritative] and posed from snapshots elsewhere, under the game's `sv_toys*` [member toy_rules]. A runner
 ## pushes one through (`WoGame._advance_toys`); a fixed toy would be a way past an obstacle. Set before building.
-var toys: DotPropBodyBox = null
+var toys: GSPropBodyBox = null
 var authoritative: bool = true
-var toy_rules: DotPropBodyRules = null
+var toy_rules: GSPropBodyRules = null
 var gravity: float = 20.0
 
 ## The kinds a stage here may place: the rigid ones a person pushes and walks through.
@@ -73,8 +73,8 @@ const TOY_KINDS: Array[StringName] = [&"ball", &"pin", &"barrel", &"tyre"]
 
 ## Builds everything [param p_doc] describes, replacing whatever was here. The old pieces leave the tree now and are
 ## freed at frame end: a round can change course inside the netcode's tick, and freeing a body there frees something
-## [DotNetManager.server_tick] may be walking.
-func build(p_doc: Dictionary) -> DotResult:
+## [GSNetManager.server_tick] may be walking.
+func build(p_doc: Dictionary) -> GSResult:
 	clear()
 
 	var checked := WoCourseDoc.validate(p_doc)
@@ -114,11 +114,11 @@ func build(p_doc: Dictionary) -> DotResult:
 	pose_at_time(0.0)
 	built.emit()
 
-	DotLog.debug(CHANNEL, "built", {
+	GSLog.debug(CHANNEL, "built", {
 		"id": id(), "kind": str(doc.get("kind", "")), "pieces": pieces.size(),
 		"digest": WoCourseDoc.digest(doc),
 	})
-	return DotResult.success(self)
+	return GSResult.success(self)
 
 
 func clear() -> void:
@@ -256,7 +256,7 @@ func _piece_node(kind: String, spec: Dictionary, role: WoTextures.Role) -> Node3
 ## other toys stop and a person never does. A placement of a kind other than [constant TOY_KINDS]
 ## is left out with a line, never refused: the course still plays.
 func _build_toys() -> void:
-	toys = DotPropBodyBox.new()
+	toys = GSPropBodyBox.new()
 	toys.name = "Toys"
 	toys.authoritative = authoritative
 	toys.draw = draw_world
@@ -273,7 +273,7 @@ func _build_toys() -> void:
 		toys.footprint_layer = physics.layer_mask(&"footprint")
 		toys.aim_mask = physics.layer_mask(&"world") | physics.layer_mask(&"toy")
 	add_child(toys)
-	var catalogue := DotPropBodyCatalogue.stock()
+	var catalogue := GSPropBodyCatalogue.stock()
 	toys.catalogue = catalogue
 	var placements: Array = []
 	var refused: PackedStringArray = PackedStringArray()
@@ -284,10 +284,10 @@ func _build_toys() -> void:
 			continue
 		placements.append(placement)
 	if not refused.is_empty():
-		DotLog.warn(CHANNEL, "a stage places toys that are not loose; they are left out", {"stage": String(id()), "toys": ", ".join(refused)})
+		GSLog.warn(CHANNEL, "a stage places toys that are not loose; they are left out", {"stage": String(id()), "toys": ", ".join(refused)})
 	var built := toys.build(placements)
 	if not built.ok:
-		DotLog.warn(CHANNEL, "a stage's toys would not build", {"stage": String(id()), "why": built.error.message})
+		GSLog.warn(CHANNEL, "a stage's toys would not build", {"stage": String(id()), "why": built.error.message})
 
 
 ## What a client was told about a map's state: applied at once for this stage, held until this
@@ -343,7 +343,7 @@ func _put_on_world_layer(body: CollisionObject3D) -> void:
 	var applied := physics.apply_to(body, &"world")
 
 	if not applied.ok:
-		DotLog.warn(CHANNEL, "a piece could not be put on its collision layer", {
+		GSLog.warn(CHANNEL, "a piece could not be put on its collision layer", {
 			"why": applied.error.message,
 		})
 
@@ -429,7 +429,7 @@ func _add_box(parent: Node3D, size: Vector3, role: WoTextures.Role, moving: bool
 	return mesh
 
 
-## Marks a drawing as meant to be walked through, for dot-core's [DotCollisionAudit]: hazards (measured by [method
+## Marks a drawing as meant to be walked through, for dot-core's [GSCollisionAudit]: hazards (measured by [method
 ## _knock_pusher] and kin, never collided), the water plane and the markers. A SOLID piece is never marked.
 static func _not_collided(node: Node) -> void:
 	node.set_meta(&"dot_no_collision", true)
@@ -856,7 +856,7 @@ func finish_arch() -> Node3D:
 	return get_node_or_null("FinishArch") as Node3D
 
 
-## The ladders' boxes in world space, for [DotFpsLadderMode].
+## The ladders' boxes in world space, for [GSFpsLadderMode].
 func ladder_boxes() -> Array[AABB]:
 	if io != null and io.world != null:
 		var all: Array[AABB] = _ladders.duplicate()
@@ -964,7 +964,7 @@ func _build_gallery() -> void:
 ## ([method WoCourseLight.light_document]). Contact shade (API 4, the Compatibility renderer has no AO) only on still boxes, bouncers
 ## and the start pen: moving pieces would leave it behind. By path, so an older shell draws without it.
 func _add_contact_shade() -> void:
-	if DotAddonApi.build_level("dot_lighting") < 4 or not ResourceLoader.exists(CONTACT_SHADE_SCRIPT):
+	if GSAddonApi.build_level("dot_lighting") < 4 or not ResourceLoader.exists(CONTACT_SHADE_SCRIPT):
 		return
 	var boxes: Array = _pen_boxes.duplicate()
 	for piece: Dictionary in pieces:
@@ -989,7 +989,7 @@ func _build_world() -> void:
 	lighting.name = "Lighting"
 	add_child(lighting)
 	var light := WoCourseLight.light_document(theme)
-	var sun := DotLightRig.apply(lighting, DotLightDocument.from_dictionary(light), WoCourseLight.light_profile())
+	var sun := GSLightRig.apply(lighting, GSLightDocument.from_dictionary(light), WoCourseLight.light_profile())
 	if sun != null:
 		sun.shadow_blur = 1.5
 

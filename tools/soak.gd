@@ -5,8 +5,8 @@ const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
 const WoPlayer := preload("../game/wo_player.gd")
 
-## Bot soak on the real game: N stand-ins race one course for M simulated minutes through dot-bot's DotBotSoak,
-## fed by dot-spawn's DotSpawnWatch. Run `./game.sh soak [course] [minutes]`; also takes DotBotSoakConfig's flags.
+## Bot soak on the real game: N stand-ins race one course for M simulated minutes through dot-bot's GSBotSoak,
+## fed by dot-spawn's GSSpawnWatch. Run `./game.sh soak [course] [minutes]`; also takes GSBotSoakConfig's flags.
 ## Writes .godot/test-logs/soak-<course>.json, prints the SOAK line, exits 1 on failure. No warm-up; kills are off.
 
 const DEFAULT_MAP := &"wo_first_splash"
@@ -26,7 +26,7 @@ var _lost := 0
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
@@ -40,7 +40,7 @@ func _arg(name: String, fallback: String) -> String:
 
 func _run() -> void:
 	var map_id := StringName(_arg("map", String(DEFAULT_MAP)))
-	var cfg := DotBotSoakConfig.new()
+	var cfg := GSBotSoakConfig.new()
 	cfg.minutes = DEFAULT_MINUTES
 	cfg.bots = DEFAULT_BOTS
 	cfg.apply_cli()
@@ -75,7 +75,7 @@ func _run() -> void:
 
 	var taken: Array = []
 	for i in range(cfg.bots):
-		var bot_name := DotBotNames.pick(taken, i, WoGame.BOT_NAMES)
+		var bot_name := GSBotNames.pick(taken, i, WoGame.BOT_NAMES)
 		taken.append(bot_name)
 		var bot := _game.add_player(StringName("u%d" % (900100 + i)), bot_name)
 		bot.is_bot = not _wander
@@ -83,11 +83,11 @@ func _run() -> void:
 	await get_tree().physics_frame
 	_game.start()
 
-	var watch := DotSpawnWatch.new()
+	var watch := GSSpawnWatch.new()
 	watch.rules.enabled = true
 	watch.rules.kill_y = -5000.0
 
-	var soak := DotBotSoak.new(cfg)
+	var soak := GSBotSoak.new(cfg)
 	soak.watch = watch
 	soak.movers_fn = _movers
 	soak.object_count_fn = func() -> int: return int(Performance.get_monitor(Performance.OBJECT_COUNT))
@@ -104,7 +104,7 @@ func _run() -> void:
 
 
 ## Writes the soak report and quits with its verdict.
-func _finish(soak: DotBotSoak, map_id: StringName) -> void:
+func _finish(soak: GSBotSoak, map_id: StringName) -> void:
 	var report := soak.finish()
 	report["map"] = String(map_id)
 	var falls := 0
@@ -120,8 +120,8 @@ func _finish(soak: DotBotSoak, map_id: StringName) -> void:
 		report["ok"] = false
 		(report["reasons"] as Array).append("%d runner-ticks outside the world" % _lost)
 	report["rounds"] = _game.course_number()
-	print(DotBotSoak.summary(report))
-	print(DotBotSoak.report_line(report))
+	print(GSBotSoak.summary(report))
+	print(GSBotSoak.report_line(report))
 	var path := ProjectSettings.globalize_path("res://.godot/test-logs/soak-%s.json" % map_id)
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	if soak.write_report(report, path) != OK:
@@ -175,11 +175,11 @@ func _wander_step() -> void:
 			held = {"until": _tick + _rng.randi_range(64, 192), "yaw": _rng.randf_range(-180.0, 180.0)}
 			_heading[id] = held
 
-		var command := DotFpsCommand.new()
+		var command := GSFpsCommand.new()
 		command.yaw = float(held["yaw"])
 		command.pitch = -10.0
 		command.move = Vector2(0.0, 1.0)
-		command.set_button(DotFpsCommand.BUTTON_JUMP, _tick % 48 < 3)
+		command.set_button(GSFpsCommand.BUTTON_JUMP, _tick % 48 < 3)
 		body.wants_grab = _tick % 40 < 2
 		body.controller.apply_command(command)
 

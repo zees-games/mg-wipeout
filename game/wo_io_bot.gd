@@ -1,7 +1,7 @@
 extends RefCounted
 
 ## How a stand-in runs a course that is a map's own world (see [WoCourseIo]): it walks dot-bot's navigation mesh,
-## baked from static colliders, to the finish; teleports are edges and kill volumes are cut out ([DotBotLinks]).
+## baked from static colliders, to the finish; teleports are edges and kill volumes are cut out ([GSBotLinks]).
 ## Movers are left out of the bake, so where the way on needs one the path ends short; [method reaches_finish] says.
 
 const CHANNEL := "wo.io_bot"
@@ -42,11 +42,11 @@ const WANDER_TICKS := 64 * 12
 const ROUTE_REACH := 0.8
 const ROUTE_PATIENCE := 64 * 25
 
-var nav: DotBotNav = DotBotNav.new()
+var nav: GSBotNav = GSBotNav.new()
 ## The io instance this was baked for: a new one means a new course.
 var source: Object = null
 ## The map's teleports (joined once the mesh is ready) and kill volumes (cut out of it).
-var links: DotBotLinks = null
+var links: GSBotLinks = null
 var _joined := false
 ## Buttons and triggers already gone to (entity index to true), and the one being walked to now.
 var _done := {}
@@ -70,14 +70,14 @@ var _avoided := 0
 var _edge := 0
 var _wander := Vector3.INF
 var _wander_until := 0
-var _wander_rng := DotRandomStream.new(900).stream(&"wo_io_bot_wander")
+var _wander_rng := GSRandomStream.new(900).stream(&"wo_io_bot_wander")
 
-## The platform leg being ridden (a link of [member DotBotLinks.platform_links]) and the ticks spent on it.
+## The platform leg being ridden (a link of [member GSBotLinks.platform_links]) and the ticks spent on it.
 var _clock := 0
 var _hops: Array[Dictionary] = []
 var _ladder_rides: Array[Dictionary] = []
 ## The ladder being climbed (dot-bot's step function), or null.
-var _climb: DotBotClimb = null
+var _climb: GSBotClimb = null
 var _hops_for: NavigationMesh = null
 var _ride := {}
 var _ride_ticks := 0
@@ -96,7 +96,7 @@ var _last_feet := Vector3.INF
 
 
 ## Bakes the static (never the moving) colliders of [param world] and aims at [param finish].
-func setup(p_source: Object, world: Node3D, finish: AABB, agent: Dictionary, p_links: DotBotLinks, p_route: Array = []) -> void:
+func setup(p_source: Object, world: Node3D, finish: AABB, agent: Dictionary, p_links: GSBotLinks, p_route: Array = []) -> void:
 	source = p_source
 	_route = p_route
 	_route_at = 0
@@ -123,7 +123,7 @@ func _bake() -> void:
 	links.free_stop_bodies(copies)
 	links.restore(undo)
 	if not baked.ok:
-		DotLog.warn(CHANNEL, "no mesh baked", {"why": baked.error.message})
+		GSLog.warn(CHANNEL, "no mesh baked", {"why": baked.error.message})
 
 
 func is_ready() -> bool:
@@ -144,7 +144,7 @@ func path_to(from: Vector3) -> PackedVector3Array:
 
 
 ## Sets [param command]'s heading, movement and jump for a stand-in at [param feet] on [param tick].
-func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, command: DotFpsCommand) -> void:
+func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, command: GSFpsCommand) -> void:
 	_clock = tick
 	if not _rebakes.is_empty() and tick >= _rebakes[0] and nav.is_ready():
 		_rebakes.pop_front()
@@ -200,7 +200,7 @@ func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, comm
 	var mark: Dictionary = _mark.get(player_id, {"tick": tick, "at": feet})
 	if tick - int(mark["tick"]) >= STUCK_TICKS:
 		if grounded and (mark["at"] as Vector3).distance_to(feet) < STUCK_METRES:
-			command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+			command.set_button(GSFpsCommand.BUTTON_JUMP, true)
 			_stuck += 1
 		else:
 			_stuck = 0
@@ -208,13 +208,13 @@ func steer(feet: Vector3, grounded: bool, tick: int, player_id: StringName, comm
 	_mark[player_id] = mark
 
 	if grounded and _at_hop(feet):
-		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+		command.set_button(GSFpsCommand.BUTTON_JUMP, true)
 	if grounded and target.y - feet.y > JUMP_RISE:
-		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+		command.set_button(GSFpsCommand.BUTTON_JUMP, true)
 
 
 ## Walks the scripted route; returns whether it set the command. A step is done when reached, used or waited out.
-func _route_step(feet: Vector3, grounded: bool, command: DotFpsCommand) -> bool:
+func _route_step(feet: Vector3, grounded: bool, command: GSFpsCommand) -> bool:
 	if _route_at >= _route.size():
 		return false
 	var step: Dictionary = _route[_route_at]
@@ -242,7 +242,7 @@ func _route_step(feet: Vector3, grounded: bool, command: DotFpsCommand) -> bool:
 	command.yaw = rad_to_deg(atan2(-toward.x, -toward.z))
 	command.move = Vector2(0.0, clampf(float(step.get("speed", 1.0)), 0.1, 1.0))
 	if grounded and (bool(step.get("jump", false)) or to.y - feet.y > JUMP_RISE):
-		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+		command.set_button(GSFpsCommand.BUTTON_JUMP, true)
 	_path_tick = -REPATH_TICKS
 	return true
 
@@ -258,7 +258,7 @@ func _finish_step(reached: bool) -> void:
 
 ## Waits at a dock for the platform, steps aboard when it is there, stays on it until it lies at the far stop, then
 ## steps off. Returns whether it has set the command (the caller then steers nothing).
-func _on_platform(feet: Vector3, tick: int, command: DotFpsCommand) -> bool:
+func _on_platform(feet: Vector3, tick: int, command: GSFpsCommand) -> bool:
 	var world: Object = source.get("world") if source != null else null
 	var io: Object = world.get("io") if world != null else null
 	if links == null or io == null or links.platform_links.is_empty():
@@ -332,9 +332,9 @@ func _kill_ahead(feet: Vector3, toward: Vector3) -> bool:
 	return false
 
 
-## Climbs a ladder edge the path crosses: begins at its foot, then follows dot-bot's [DotBotClimb] to the top.
+## Climbs a ladder edge the path crosses: begins at its foot, then follows dot-bot's [GSBotClimb] to the top.
 ## Returns whether it set the command. A ladder is no hop: a jump at its foot only bounces off it.
-func _climb_step(feet: Vector3, tick: int, command: DotFpsCommand) -> bool:
+func _climb_step(feet: Vector3, tick: int, command: GSFpsCommand) -> bool:
 	var now := float(tick) / 64.0
 	if _climb == null:
 		if links == null or not _path_has_ladder():
@@ -344,7 +344,7 @@ func _climb_step(feet: Vector3, tick: int, command: DotFpsCommand) -> bool:
 			if Vector2(from.x - feet.x, from.z - feet.z).length() < LADDER_REACH and absf(from.y - feet.y) < 1.0 and _path_uses(ride):
 				var ladder := links.ladder_of(int(ride["id"]))
 				if not ladder.is_empty():
-					_climb = DotBotClimb.begin(ladder, now)
+					_climb = GSBotClimb.begin(ladder, now)
 					break
 		if _climb == null:
 			return false
@@ -357,7 +357,7 @@ func _climb_step(feet: Vector3, tick: int, command: DotFpsCommand) -> bool:
 		command.yaw = float(r["yaw"])
 	command.move = r["move"]
 	if bool(r["jump"]):
-		command.set_button(DotFpsCommand.BUTTON_JUMP, true)
+		command.set_button(GSFpsCommand.BUTTON_JUMP, true)
 	_edge = 0
 	return true
 
@@ -385,11 +385,11 @@ func _index_rides() -> void:
 	_ladder_rides.clear()
 	for ride in nav.rides():
 		var id := int(ride["id"])
-		if id >= DotBotLinks.STITCH_ID:
+		if id >= GSBotLinks.STITCH_ID:
 			_hops.append(ride)
-		elif id >= DotBotLinks.LADDER_ID:
+		elif id >= GSBotLinks.LADDER_ID:
 			_ladder_rides.append(ride)
-		elif id >= DotBotLinks.HOP_ID:
+		elif id >= GSBotLinks.HOP_ID:
 			_hops.append(ride)
 
 

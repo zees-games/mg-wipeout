@@ -12,7 +12,7 @@ func _test_the_client_settings() -> void:
 
 	# The course must not be drawn or steered while it is built: the cover is up at the start,
 	# blocks input, and lifts once the player is in.
-	var platform: DotGameClient = client.get("platform")
+	var platform: GSGameClient = client.get("platform")
 	var covered := platform != null and platform.gate != null and not platform.is_shown() \
 		and platform.is_input_blocked()
 	for i in 400:
@@ -46,7 +46,7 @@ func _test_the_client_settings() -> void:
 	tab.physical_keycode = KEY_TAB
 	tab.pressed = true
 	settings.menu.handle_event(tab)
-	var board: DotMenuScoreboard = client.get("board")
+	var board: GSMenuScoreboard = client.get("board")
 	_check(board != null and board.is_open() and board.rows().size() >= 1
 		and board.rows().any(func(r: Dictionary) -> bool: return bool(r.get("you", false))),
 		"Tab holds the scoreboard up, with this player on it and picked out",
@@ -81,17 +81,17 @@ func _test_a_carrier_is_drawn_carrying() -> void:
 	carrier.carrying = true
 	var _shown := carrier.present_body(false, carrier.global_position, Color.WHITE)
 	# The figure is one of the family's people: carrying is the held-gun arms, out in front.
-	var person: DotHumanoidFigure = carrier.figure.person if carrier.figure != null else null
+	var person: GSHumanoidFigure = carrier.figure.person if carrier.figure != null else null
 	_check(
 		carrier.figure != null and carrier.figure.carrying and person != null
-			and person.hold == DotHumanoidFigure.Hold.GUN,
+			and person.hold == GSHumanoidFigure.Hold.GUN,
 		"both arms are out under the prop",
 		str(carrier.figure.describe()) if carrier.figure != null else "no figure"
 	)
 	carrier.carrying = false
 	_shown = carrier.present_body(false, carrier.global_position, Color.WHITE)
 	_check(carrier.figure != null and not carrier.figure.carrying and person != null
-			and person.hold == DotHumanoidFigure.Hold.NONE,
+			and person.hold == GSHumanoidFigure.Hold.NONE,
 		"and down again when it is let go")
 	# The figure steps its clip by game time (frame_delta), which stamps the frame it ran in.
 	carrier.figure.pose(carrier.global_position, 0.0, 3.0)
@@ -116,7 +116,7 @@ func _test_the_hud() -> void:
 	hud.bind(game, me)
 	hud._process(0.0)
 	_check(
-		game.phase == WoGame.Phase.COURSE and hud.strip.clock == DotScoreStrip.clock_text(game.seconds_left())
+		game.phase == WoGame.Phase.COURSE and hud.strip.clock == GSScoreStrip.clock_text(game.seconds_left())
 		and hud.strip.under_text() == hud._phase_line(),
 		"on a course the strip shows the clock with the phase line under it",
 		"%s / %s" % [hud.strip.clock, hud.strip.under_text()]
@@ -132,13 +132,13 @@ func _test_the_hud() -> void:
 	hud._process(0.0)
 	_check(
 		hud.vitals.visible and hud.vitals.number_text() == "18" and hud.vitals.is_low(),
-		"in a final death DotVitals shows health, red at a quarter",
+		"in a final death GSVitals shows health, red at a quarter",
 		"%s low=%s" % [hud.vitals.number_text(), str(hud.vitals.is_low())]
 	)
 
 	var chat := WoClient.new_chat()
 	add_child(chat)
-	var w: DotChatWindow = chat.window
+	var w: GSChatWindow = chat.window
 	var log_top := w.margin_bottom + w.entry_height + float(w.max_lines) * (w.line_height + w.line_gap)
 	var plate_bottom := -(hud.vitals.offset_top + hud.vitals.footprint().end.y)
 	_check(
@@ -151,12 +151,12 @@ func _test_the_hud() -> void:
 	# Christian's first play test: a darker HUD by default, restyled live by the menu's theme.
 	var settings := WoSettings.new()
 	add_child(settings)
-	var _built: DotResult = settings.setup(DotSettingsStoreMemory.new())
+	var _built: GSResult = settings.setup(GSSettingsStoreMemory.new())
 	hud.follow_menu(settings.menu)
 	var plate := hud.vitals.colour(&"plate")
 	_check(plate.get_luminance() < 0.1 and plate.a >= 0.7, "the HUD is dark by default, in the menu's theme", str(plate))
 	var _t := settings.settings.set_value(&"ui_theme", &"contrast")
-	var contrast: DotMenuPalette = settings.menu.palette()
+	var contrast: GSMenuPalette = settings.menu.palette()
 	_check(contrast.id == &"contrast" and hud.vitals.colour(&"plate") == contrast.hud_plate and hud.strip.colour(&"text") == contrast.hud_text,
 		"a theme picked in the menu reaches every piece at once")
 	_check(hud.vitals.colour(&"highlight") == WoHud.AMBER and hud._field.get_theme_color(&"font_color") == contrast.hud_text,
@@ -166,9 +166,9 @@ func _test_the_hud() -> void:
 
 	# A pack naming these classes does not parse on a shell whose dot-ui predates them, so
 	# the requires.json dot-ci derives must ask for dot-ui 4, and nothing may lower it.
-	var asks := DotAddonApi.derive()
+	var asks := GSAddonApi.derive()
 	_check(
-		int(asks.get("dot_ui", 0)) >= 13 and FileAccess.file_exists("res://" + DotAddonApi.FLOOR_FILE),
+		int(asks.get("dot_ui", 0)) >= 13 and FileAccess.file_exists("res://" + GSAddonApi.FLOOR_FILE),
 		"the pack asks a shell for dot-ui level 13, the weapon icons (requires.floor.json)",
 		str(asks.get("dot_ui"))
 	)
@@ -182,9 +182,9 @@ func _test_help_and_menu() -> void:
 	_section("H opens help, and the Escape menu has Help and Leave")
 	var settings := WoSettings.new()
 	add_child(settings)
-	var built: DotResult = settings.setup(DotSettingsStoreMemory.new())
-	var keys: DotMenuBindings = settings.bindings
-	_check(built.ok and keys != null and keys.key_for(DotMenuBindings.HELP_ACTION) == "H", "help is on H")
+	var built: GSResult = settings.setup(GSSettingsStoreMemory.new())
+	var keys: GSMenuBindings = settings.bindings
+	_check(built.ok and keys != null and keys.key_for(GSMenuBindings.HELP_ACTION) == "H", "help is on H")
 	_check(keys.defaults_on("H").size() == 1, "and nothing else in the table defaults to H",
 		str(keys.defaults_on("H").map(func(r: Dictionary) -> String: return str(r["label"]))))
 	_check(keys.key_for(&"dot_menu_weapon_next") == "Wheel down"
@@ -223,7 +223,7 @@ func _test_offline_trigger() -> void:
 	client._adopt(me)
 	client._firing = true
 	me.simulate(game.current_tick() + 1, 1.0 / float(TICK_RATE))
-	var pressed := game.weapon_command_for(me).is_pressed(DotWeaponCommand.BUTTON_ATTACK)
+	var pressed := game.weapon_command_for(me).is_pressed(GSWeaponCommand.BUTTON_ATTACK)
 	_check(me.sampler != null and pressed, "the world's weapon command has the trigger the client holds")
 	client.free()
 	_finished()
@@ -239,9 +239,9 @@ func _test_the_map_menu() -> void:
 	var round_before := game.match_node.round_number
 	var settings := WoSettings.new()
 	add_child(settings)
-	var _built: DotResult = settings.setup(DotSettingsStoreMemory.new())
-	var keys: DotMenuBindings = settings.bindings
-	_check(keys.key_for(DotMenuBindings.MAPS_ACTION) == "M" and keys.defaults_on("M").size() == 1,
+	var _built: GSResult = settings.setup(GSSettingsStoreMemory.new())
+	var keys: GSMenuBindings = settings.bindings
+	_check(keys.key_for(GSMenuBindings.MAPS_ACTION) == "M" and keys.defaults_on("M").size() == 1,
 		"the map menu is on M, and nothing else in the table defaults to M",
 		str(keys.defaults_on("M").map(func(r: Dictionary) -> String: return str(r["label"]))))
 	var rows := game.course_rows()
@@ -256,7 +256,7 @@ func _test_the_map_menu() -> void:
 	# The first row that is not the course being played, by its number on its page.
 	var wanted: StringName = &""
 	var key := KEY_NONE
-	for row in range(1, DotMenuPicker.PAGE_SIZE + 1):
+	for row in range(1, GSMenuPicker.PAGE_SIZE + 1):
 		var it: Variant = settings.menu.picker.at_row(row)
 		if it is Dictionary and not bool((it as Dictionary)["current"]):
 			wanted = StringName(str((it as Dictionary)["id"]))
@@ -269,7 +269,7 @@ func _test_the_map_menu() -> void:
 	var _k := settings.menu.handle_event(digit)
 	await _step(game, 2)
 	_check(wanted != &"" and game.stage.id() == wanted and game.match_node.round_number == round_before + 1,
-		"choosing one builds it now and starts a round on it", "%s, playing %s, phase %s, match %s" % [wanted, game.stage.id(), WoGame.Phase.keys()[game.phase], DotMatch.State.keys()[game.match_node.state]])
+		"choosing one builds it now and starts a round on it", "%s, playing %s, phase %s, match %s" % [wanted, game.stage.id(), WoGame.Phase.keys()[game.phase], GSMatch.State.keys()[game.match_node.state]])
 	_check(not settings.menu.picker.is_open(), "and the picker is closed")
 	settings.queue_free()
 	await get_tree().process_frame
@@ -375,7 +375,7 @@ func _test_the_drawn_gun() -> void:
 		"the drawn gun takes the server's count once quiet, and not before",
 		"after 10 ticks %d, after 70 %d, server %d" % [early, drawn.arsenal.current().magazine, world_count])
 
-	var marker: DotHitMarker = hud.get("hit_marker")
+	var marker: GSHitMarker = hud.get("hit_marker")
 	world.hit_landed.emit(&"local", Vector3(0.0, 1.0, -4.0), true, false)
 	_check(marker != null and marker.alpha() > 0.9 and marker.kill, "a hit the world confirms flashes the marker, a kill's")
 
@@ -388,18 +388,18 @@ func _test_the_drawn_gun() -> void:
 
 
 ## The HUD counts the drawn gun and draws its sprite above the plate, bottom right. Returns the counter.
-func _test_the_drawn_hud(hud: Node, drawn: ZeeWeaponRig) -> DotAmmoCounter:
+func _test_the_drawn_hud(hud: Node, drawn: ZeeWeaponRig) -> GSAmmoCounter:
 	hud.call("_process", 0.0)
-	var counter: DotAmmoCounter = hud.get("ammo")
+	var counter: GSAmmoCounter = hud.get("ammo")
 	var def := drawn.current_def() if drawn != null else null
 	var expected := "%d | %d" % [drawn.arsenal.current().magazine, drawn.arsenal.ammo().count(def.ammo_type)] if def != null else "?"
 	_check(counter != null and counter.visible and def != null and counter.weapon_name == def.display_name
 		and counter.count_text() == expected,
-		"the HUD has DotAmmoCounter, counting the drawn gun",
+		"the HUD has GSAmmoCounter, counting the drawn gun",
 		"%s %s, want %s" % [counter.weapon_name if counter else "-", counter.count_text() if counter else "-", expected])
 	var icon_script: Script = load("res://game/wo_weapon_icons.gd")
-	var icons: DotWeaponIconStyle = icon_script.get("shared")
-	var icon_rect: DotWeaponIconPlate = hud.get("weapon_icon")
+	var icons: GSWeaponIconStyle = icon_script.get("shared")
+	var icon_rect: GSWeaponIconPlate = hud.get("weapon_icon")
 	var unmapped := PackedStringArray()
 	for weapon in icon_script.get("TAGS"):
 		if not icons.icon_set().has_icon(weapon):
@@ -420,7 +420,7 @@ func _test_the_drawn_hud(hud: Node, drawn: ZeeWeaponRig) -> DotAmmoCounter:
 	return counter
 
 
-## The client's DotWeaponWheel steps a real slot on the weapon-next action, and not with the pointer free.
+## The client's GSWeaponWheel steps a real slot on the weapon-next action, and not with the pointer free.
 func _test_wheel(client: Node, drawn: ZeeWeaponRig) -> void:
 	var step := InputEventAction.new()
 	step.action = &"dot_menu_weapon_next"
@@ -428,11 +428,11 @@ func _test_wheel(client: Node, drawn: ZeeWeaponRig) -> void:
 	var _given := drawn.arsenal.give(ZeeWeaponIds.PISTOL)
 	var ring: Array = drawn.arsenal.slots()
 	client.call("_wheel_pressed", InputEventAction.new())
-	var wheel: DotWeaponWheel = client.get(&"_wheel")
+	var wheel: GSWeaponWheel = client.get(&"_wheel")
 	client.set(&"_slot", 0)
 	var free_took: bool = client.call("_wheel_pressed", step)
 	_check(wheel != null and not free_took and ring.size() >= 2 and int(client.get(&"_slot")) == 0,
-		"the client's DotWeaponWheel leaves a wheel step alone with the pointer free", str(ring))
+		"the client's GSWeaponWheel leaves a wheel step alone with the pointer free", str(ring))
 	# The pointer is never captured headless, so only that one clause of the block is lifted.
 	wheel.blocked = func() -> bool: return false
 	var took: bool = client.call("_wheel_pressed", step)

@@ -1,6 +1,6 @@
 extends RefCounted
 
-## Wipeout's weapon pictures: zee weapon id to sprite tag; the rest is dot-ui's [DotWeaponIconStyle].
+## Wipeout's weapon pictures: zee weapon id to sprite tag; the rest is dot-ui's [GSWeaponIconStyle].
 
 const TAGS := {
 	&"battle_rifle": &"battle_rifle", &"beamer": &"energy_rifle", &"bullpup": &"bullpup",
@@ -14,10 +14,10 @@ const TAGS := {
 }
 
 ## The one instance the HUD, the client console and the tests share.
-static var shared: DotWeaponIconStyle = _make()
+static var shared: GSWeaponIconStyle = _make()
 
 
-static func _make() -> DotWeaponIconStyle:
-	var s := DotWeaponIconStyle.new()
+static func _make() -> GSWeaponIconStyle:
+	var s := GSWeaponIconStyle.new()
 	s.tags = TAGS
 	return s

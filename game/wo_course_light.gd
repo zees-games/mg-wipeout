@@ -31,7 +31,7 @@ static func light_document(theme: Dictionary) -> Dictionary:
 ## What this machine draws of a course's light: dot-lighting's `painted()` profile (API 3), matched to the
 ## Compatibility renderer, which has no headroom above white. Shadows stay on in the browser, unlike `web()`: a mover's
 ## shadow on the deck is how a player sees where it is.
-static func light_profile() -> DotLightProfile:
-	var p := DotLightProfile.painted()
+static func light_profile() -> GSLightProfile:
+	var p := GSLightProfile.painted()
 	p.sun_shadows = true
 	return p

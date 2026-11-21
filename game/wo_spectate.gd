@@ -1,8 +1,8 @@
-extends DotSpectatorHost
+extends GSSpectatorHost
 
 const WoPlayer := preload("wo_player.gd")
 
-## Where somebody knocked out of the final death looks: [DotSpectatorHost] with this game's numbers. The server runs it
+## Where somebody knocked out of the final death looks: [GSSpectatorHost] with this game's numbers. The server runs it
 ## authoritatively, a client a MIRROR told each change in a `SPECTATE` event. No delay: every client already has every
 ## live position.
 
@@ -52,7 +52,7 @@ func _channel() -> String:
 	return CHANNEL
 
 
-func _tune_rules(r: DotSpectatorRules) -> DotSpectatorRules:
+func _tune_rules(r: GSSpectatorRules) -> GSSpectatorRules:
 	# Dead players stay dead until the next round, so a list with them would be bodies at the kill height.
 	r.cycle_includes_dead = false
 	r.delay_ticks = 0
@@ -80,7 +80,7 @@ func on_died(
 
 	death(String(player_id), where, String(by), tick)
 
-	DotLog.debug(CHANNEL, "somebody who is out is watching", {
+	GSLog.debug(CHANNEL, "somebody who is out is watching", {
 		"player": String(player_id), "by": String(by), "fell": fell,
 	})
 

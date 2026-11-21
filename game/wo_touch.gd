@@ -1,9 +1,9 @@
 extends RefCounted
 
 ## The phone's controls: dot-mobile's stick, drag-look and buttons (fire, alt-fire (throw), jump, duck, grab, reload,
-## the weapon arrows, the held board and the chat box) over the HUD, driving the client's own [DotFpsTouchSampler].
+## the weapon arrows, the held board and the chat box) over the HUD, driving the client's own [GSFpsTouchSampler].
 ## Fire is read through [method is_held], so a thumb and auto-fire (the server's `sv_autofire`, off unless it says so)
-## take one path. Built only where [method DotPlatform.has_touch] is true.
+## take one path. Built only where [method GSPlatform.has_touch] is true.
 
 const WoPlayer := preload("wo_player.gd")
 
@@ -13,20 +13,20 @@ const MAX_HEIGHT := 0.8
 ## A body's width for the crosshair test, metres.
 const BODY_RADIUS := 0.45
 
-const FIRE := DotGameTouchLayout.FIRE
-const ALT := DotGameTouchLayout.ALT
-const JUMP := DotGameTouchLayout.JUMP
-const CROUCH := DotGameTouchLayout.CROUCH
+const FIRE := GSGameTouchLayout.FIRE
+const ALT := GSGameTouchLayout.ALT
+const JUMP := GSGameTouchLayout.JUMP
+const CROUCH := GSGameTouchLayout.CROUCH
 const GRAB := &"grab"
-const RELOAD := DotGameTouchLayout.RELOAD
-const PREV := DotGameTouchLayout.PREV
-const NEXT := DotGameTouchLayout.NEXT
-const BOARD := DotGameTouchLayout.BOARD
-const CHAT := DotGameTouchLayout.CHAT
+const RELOAD := GSGameTouchLayout.RELOAD
+const PREV := GSGameTouchLayout.PREV
+const NEXT := GSGameTouchLayout.NEXT
+const BOARD := GSGameTouchLayout.BOARD
+const CHAT := GSGameTouchLayout.CHAT
 
-var controls: DotMobileControls = null
+var controls: GSMobileControls = null
 ## dot-ui's buttons inside the overlay, for the shell's DPI fit and the HUD's clearance.
-var buttons: DotTouchButtons:
+var buttons: GSTouchButtons:
 	get:
 		return controls.buttons if controls != null else null
 
@@ -34,12 +34,12 @@ var _client: Node = null
 
 
 ## The fps preset with grab where use sits; a refused layout is a programmer error, so it logs and returns none.
-static func touch_layout() -> DotGameTouchLayout:
-	var res := DotGameTouchLayout.build(DotGameTouchLayout.FPS, {DotGameTouchLayout.USE: null, GRAB: &"inner"})
+static func touch_layout() -> GSGameTouchLayout:
+	var res := GSGameTouchLayout.build(GSGameTouchLayout.FPS, {GSGameTouchLayout.USE: null, GRAB: &"inner"})
 	if not res.ok:
-		DotLog.error(CHANNEL, "touch layout refused", {"error": str(res.error)})
-		return DotGameTouchLayout.custom()
-	return res.value as DotGameTouchLayout
+		GSLog.error(CHANNEL, "touch layout refused", {"error": str(res.error)})
+		return GSGameTouchLayout.custom()
+	return res.value as GSGameTouchLayout
 
 
 ## The preset's rows, jump and duck carrying the sampler bit the overlay holds for them.
@@ -47,18 +47,18 @@ static func layout() -> Array[Dictionary]:
 	var rows := touch_layout().buttons()
 	for row: Dictionary in rows:
 		if row["id"] == JUMP:
-			row["hold"] = DotFpsCommand.BUTTON_JUMP
+			row["hold"] = GSFpsCommand.BUTTON_JUMP
 		elif row["id"] == CROUCH:
-			row["hold"] = DotFpsCommand.BUTTON_CROUCH
+			row["hold"] = GSFpsCommand.BUTTON_CROUCH
 	return rows
 
 
 ## Builds the overlay under [param parent] (the HUD), following [param rules] (the server's). [param handlers] maps a
 ## button id (not fire, jump or duck: the overlay's own) to a Callable taking `down: bool`. The sampler's own
 ## `ignore_fn` (a finger on the Menu button) moves to the overlay.
-func build(client: Node, parent: Node, sampler: DotFpsSampler, rules: DotMobileRules, handlers: Dictionary) -> DotMobileControls:
+func build(client: Node, parent: Node, sampler: GSFpsSampler, rules: GSMobileRules, handlers: Dictionary) -> GSMobileControls:
 	_client = client
-	controls = DotMobileControls.new()
+	controls = GSMobileControls.new()
 	controls.name = "TouchControls"
 	controls.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if rules != null:
@@ -97,7 +97,7 @@ func active() -> bool:
 
 ## Called every frame by the client: the overlay hides and lets go while [param busy] (a menu, the chat box, a cover),
 ## and auto-fire matches the gun in hand.
-func sync(busy: bool, gun: DotWeaponDef) -> void:
+func sync(busy: bool, gun: GSWeaponDef) -> void:
 	if controls == null:
 		return
 	controls.paused = busy
@@ -140,12 +140,12 @@ func _live() -> bool:
 
 func _crosshair() -> int:
 	if not is_instance_valid(_client) or not _client.is_inside_tree():
-		return DotMobileAutoFire.TARGET_NONE
+		return GSMobileAutoFire.TARGET_NONE
 	var cam: Camera3D = _client.get(&"camera")
 	var me: Node = _client.get(&"player")
 	var game: Object = _client.get(&"game")
 	if cam == null or me == null or game == null:
-		return DotMobileAutoFire.TARGET_NONE
+		return GSMobileAutoFire.TARGET_NONE
 	var mask := 0
 	var physics: Object = game.get(&"physics")
 	if physics != null:
@@ -174,12 +174,12 @@ static func crosshair_kind(eye: Vector3, forward: Vector3, me: Node, game: Objec
 		best = p
 		best_aim = p.global_position + Vector3(0.0, height * 0.6, 0.0)
 	if best == null:
-		return DotMobileAutoFire.TARGET_NONE
+		return GSMobileAutoFire.TARGET_NONE
 	if not _is_enemy(game, me, best):
-		return DotMobileAutoFire.TARGET_FRIEND
+		return GSMobileAutoFire.TARGET_FRIEND
 	if space != null and mask != 0 and not space.intersect_ray(PhysicsRayQueryParameters3D.create(eye, best_aim, mask)).is_empty():
-		return DotMobileAutoFire.TARGET_NONE
-	return DotMobileAutoFire.TARGET_ENEMY
+		return GSMobileAutoFire.TARGET_NONE
+	return GSMobileAutoFire.TARGET_ENEMY
 
 
 ## Whether the ray from [param from] along [param dir] (unit) passes within [param radius] of the upright body whose
@@ -215,13 +215,13 @@ static func _is_enemy(game: Object, me: Node, other: Node3D) -> bool:
 
 
 ## A touch sampler where a phone is, the keyboard one otherwise. [param ignore_fn] keeps a finger off the stick.
-static func make_sampler(tunables: DotFpsTunables, ignore_fn: Callable) -> DotFpsSampler:
-	var sampler: DotFpsSampler
-	if DotPlatform.has_touch():
-		var touch := DotFpsTouchSampler.new(tunables)
+static func make_sampler(tunables: GSFpsTunables, ignore_fn: Callable) -> GSFpsSampler:
+	var sampler: GSFpsSampler
+	if GSPlatform.has_touch():
+		var touch := GSFpsTouchSampler.new(tunables)
 		touch.ignore_fn = ignore_fn
 		sampler = touch
 	else:
-		sampler = DotFpsSampler.new(tunables)
+		sampler = GSFpsSampler.new(tunables)
 	WoPlayer.register_actions(sampler)
 	return sampler

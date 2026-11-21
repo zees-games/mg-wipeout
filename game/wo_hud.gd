@@ -14,23 +14,23 @@ var game: WoGame = null
 var player: WoPlayer = null
 
 ## Bottom right while armed: the weapon in hand and `magazine | reserve`. See [method _draw_ammo].
-var ammo: DotAmmoCounter = null
+var ammo: GSAmmoCounter = null
 ## The held weapon's sprite over [member ammo]; hidden when it has none.
-var weapon_icon: DotWeaponIconPlate = null
+var weapon_icon: GSWeaponIconPlate = null
 
 ## The rig the counter reads: the gun this client draws (`WoClient.weapons`), which
 ## `WoClient.correct_drawn` brings to the server's count once quiet.
 var weapons_fn: Callable = Callable()
 
 ## Four ticks round the crosshair for a hit the server confirmed. See [method confirm_hit].
-var hit_fx: DotHitFeedback = null
-var hit_marker: DotHitMarker = null
+var hit_fx: GSHitFeedback = null
+var hit_marker: GSHitMarker = null
 
-## The clock with the phase line under it: dot-ui's [DotScoreStrip], clock alone.
-var strip: DotScoreStrip = null
-## Health in a final death: dot-ui's [DotVitals], bar and number on one plate, red at a
+## The clock with the phase line under it: dot-ui's [GSScoreStrip], clock alone.
+var strip: GSScoreStrip = null
+## Health in a final death: dot-ui's [GSVitals], bar and number on one plate, red at a
 ## quarter. Hidden on a course; see the class note.
-var vitals: DotVitals = null
+var vitals: GSVitals = null
 var _field: Label = null
 var _touch_room := false
 var _touch_buttons: Control = null
@@ -90,7 +90,7 @@ const AMBER := Color(0.98, 0.78, 0.33)
 ## can use it.
 static func piece_theme() -> Theme:
 	var t := Theme.new()
-	var type := DotHudPiece.THEME_TYPE
+	var type := GSHudPiece.THEME_TYPE
 	t.set_color(&"plate_edge", type, Color(AMBER, 0.3))
 	t.set_color(&"highlight", type, AMBER)
 	return t
@@ -217,7 +217,7 @@ func _build() -> void:
 
 	var size := 22
 
-	# The glance pieces read their colours from the theme on the type DotHudPiece; set on
+	# The glance pieces read their colours from the theme on the type GSHudPiece; set on
 	# the root, every piece under it inherits them. See [method piece_theme].
 	_root.theme = piece_theme()
 	_follow()
@@ -287,7 +287,7 @@ func _build_root_and_blind() -> void:
 func _build_top_lines(size: int) -> void:
 	# The clock, and the phase line under it. Full width, because the strip centres itself
 	# on its own middle; the course name sits under it.
-	strip = DotScoreStrip.new()
+	strip = GSScoreStrip.new()
 	strip.name = "Clock"
 	strip.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	strip.offset_top = 16.0
@@ -326,7 +326,7 @@ func _build_vitals() -> void:
 	# Above the chat box, which also draws bottom-left: the health number and the first chat line overlapped, which a
 	# headless suite cannot see (its viewport is 64 x 64). The plate ends 206 pixels off the bottom, above the FULL
 	# eight-row log, which reaches 202 (checked in headless_run).
-	vitals = DotVitals.new()
+	vitals = GSVitals.new()
 	vitals.name = "Vitals"
 	vitals.bar_end = 220.0
 	vitals.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
@@ -346,8 +346,8 @@ func _build_vitals() -> void:
 ## The bottom-right widgets: ammo, weapon icon, hit marker and the field line.
 func _build_gun(size: int) -> void:
 	# Bottom right, above the field line: what is in hand and how much is in it. The play test
-	# found a gun with no counter anywhere; dot-ui's DotAmmoCounter is the family's one.
-	ammo = DotAmmoCounter.new()
+	# found a gun with no counter anywhere; dot-ui's GSAmmoCounter is the family's one.
+	ammo = GSAmmoCounter.new()
 	ammo.name = "Ammo"
 	ammo.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	ammo.offset_left = -420.0
@@ -357,11 +357,11 @@ func _build_gun(size: int) -> void:
 	ammo.visible = false
 	_root.add_child(ammo)
 
-	weapon_icon = DotWeaponIconPlate.new()
+	weapon_icon = GSWeaponIconPlate.new()
 	weapon_icon.name = "WeaponIcon"
 	weapon_icon.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	weapon_icon.offset_left = -204.0
-	# DotAmmoCounter draws its plate 14 px past its right edge and 4 above its top: line the sprite's plate up with it
+	# GSAmmoCounter draws its plate 14 px past its right edge and 4 above its top: line the sprite's plate up with it
 	# and leave a gap rather than touching it.
 	weapon_icon.offset_right = -10.0
 	weapon_icon.offset_top = -252.0
@@ -369,7 +369,7 @@ func _build_gun(size: int) -> void:
 	weapon_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(weapon_icon)
 
-	hit_fx = DotHitFeedback.mount(_root)
+	hit_fx = GSHitFeedback.mount(_root)
 	hit_marker = hit_fx.marker
 
 	_field = _label(size)
@@ -381,10 +381,10 @@ func _build_gun(size: int) -> void:
 	_field.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 
-## dot-ui's DotCrosshair as a plain dot (no arms, no spread) where the host has it (API 14), else the old square.
+## dot-ui's GSCrosshair as a plain dot (no arms, no spread) where the host has it (API 14), else the old square.
 func _make_crosshair() -> Control:
-	if DotAddonApi.build_level("dot_ui") >= 14:
-		var shape: Variant = DotCrosshair
+	if GSAddonApi.build_level("dot_ui") >= 14:
+		var shape: Variant = GSCrosshair
 		var cross := (shape as GDScript).new() as Control
 		cross.name = "Crosshair"
 		cross.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -502,7 +502,7 @@ func _process(delta: float) -> void:
 	# says the same thing twice. Red for the last ten seconds.
 	var running := game.phase != WoGame.Phase.IDLE and game.sides_are_playable()
 	strip.show_clock(
-		DotScoreStrip.clock_text(left) if running else "", left <= LOW_CLOCK_SEC, _phase_line()
+		GSScoreStrip.clock_text(left) if running else "", left <= LOW_CLOCK_SEC, _phase_line()
 	)
 	_special.text = str((game.stage.doc if game.stage != null else {}).get("name", ""))
 
@@ -609,10 +609,10 @@ func _phase_line() -> String:
 			if player != null and player.watching:
 				return "watching the final death"
 			if player != null and player.grab != null and player.grab.is_carrying():
-				if DotPlatform.has_touch():
+				if GSPlatform.has_touch():
 					return "carrying — FIRE to throw, GRAB to drop"
 				return "carrying — click to throw, E to drop"
-			if DotPlatform.has_touch():
+			if GSPlatform.has_touch():
 				return "last one standing — GRAB picks things up"
 			return "last one standing — E picks things up"
 		_:

@@ -27,7 +27,7 @@ const COL_FIRST_PRESET := 3
 const COL_HELP := 7
 
 ## The dot-bot preset the values below are for; follows [member settings].
-var preset: String = DotBotProfile.DEFAULT_PRESET
+var preset: String = GSBotProfile.DEFAULT_PRESET
 
 ## Fields set by hand, field -> float. They survive a preset change.
 var overrides: Dictionary = {}
@@ -36,10 +36,10 @@ var overrides: Dictionary = {}
 var mistakes: float = 1.0
 
 ## The world's dot-bot settings, read for the preset and for `reaction`.
-var settings: DotBotSettings = null
+var settings: GSBotSettings = null
 
 
-func _init(p_settings: DotBotSettings = null) -> void:
+func _init(p_settings: GSBotSettings = null) -> void:
 	settings = p_settings
 	if settings != null:
 		preset = settings.difficulty()
@@ -76,9 +76,9 @@ static func factor(variety: float, draw: float) -> float:
 
 
 static func preset_value(preset_name: String, field: String) -> float:
-	var column := DotBotProfile.PRESETS.find(preset_name)
+	var column := GSBotProfile.PRESETS.find(preset_name)
 	if column < 0:
-		column = DotBotProfile.PRESETS.find(DotBotProfile.DEFAULT_PRESET)
+		column = GSBotProfile.PRESETS.find(GSBotProfile.DEFAULT_PRESET)
 
 	for row: Array in SPEC:
 		if String(row[COL_FIELD]) == field:
@@ -95,20 +95,20 @@ static func fields() -> PackedStringArray:
 
 
 ## Overrides one field from text. Refused outside the row's range.
-func set_value(field: String, text: String) -> DotResult:
+func set_value(field: String, text: String) -> GSResult:
 	for row: Array in SPEC:
 		if String(row[COL_FIELD]) != field:
 			continue
 		if not text.strip_edges().is_valid_float():
-			return DotResult.fail(DotError.CODE_INVALID, "wo_bot_%s is a number." % field)
+			return GSResult.fail(GSError.CODE_INVALID, "wo_bot_%s is a number." % field)
 		var number := text.strip_edges().to_float()
 		if number < float(row[COL_MIN]) or number > float(row[COL_MAX]):
 			var upper := "at least %s" % row[COL_MIN] if is_inf(float(row[COL_MAX])) else "%s to %s" % [row[COL_MIN], row[COL_MAX]]
-			return DotResult.fail(DotError.CODE_INVALID, "wo_bot_%s is %s (got %s)." % [field, upper, text.strip_edges()])
+			return GSResult.fail(GSError.CODE_INVALID, "wo_bot_%s is %s (got %s)." % [field, upper, text.strip_edges()])
 		overrides[field] = number
-		return DotResult.success(number)
+		return GSResult.success(number)
 
-	return DotResult.fail(DotError.CODE_INVALID, "There is no wo_bot_%s." % field)
+	return GSResult.fail(GSError.CODE_INVALID, "There is no wo_bot_%s." % field)
 
 
 ## The value a field's cvar shows: the override, else the preset's, unscaled.
@@ -125,7 +125,7 @@ var _writing: bool = false
 
 
 ## Registers `wo_bot_<field>` for every row through [param add] (dot-server's
-## [code]DotModule.add_cvar(name, default, help, flags)[/code]). A value a config left waiting
+## [code]GSModule.add_cvar(name, default, help, flags)[/code]). A value a config left waiting
 ## is read back as an override. Each cvar follows a preset change unless it was set by hand.
 func bind_cvars(add: Callable, flags: int = 0) -> Array:
 	var made: Array = []
@@ -160,7 +160,7 @@ func _on_cvar(_old: String, new_value: String, field: String) -> void:
 		return
 	var res := set_value(field, new_value)
 	if not res.ok:
-		DotLog.warn(CHANNEL, "a stand-in setting was refused", {"field": field, "why": res.error.message})
+		GSLog.warn(CHANNEL, "a stand-in setting was refused", {"field": field, "why": res.error.message})
 
 
 ## After `bot_difficulty` changed: every cvar not set by hand shows the new preset's value.

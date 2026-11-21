@@ -34,7 +34,7 @@ var _debug := ""
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
@@ -173,7 +173,7 @@ func _setup(doc: Dictionary) -> Dictionary:
 	var runner := game.add_player(&"u1", "Runner")
 	game.start()
 	await _until(game, WoGame.Phase.COURSE)
-	var world: DotMapWorld = game.stage.io.world
+	var world: GSMapWorld = game.stage.io.world
 
 	# A start-line teleport moves everybody on the first ticks: the start is where the runner is after them.
 	await _steps(game, TICK_RATE)
@@ -198,7 +198,7 @@ func _setup(doc: Dictionary) -> Dictionary:
 
 	var tps: Array = []
 	var hurts: Array = []
-	for node: DotMapVolumeNode in world.volumes.nodes:
+	for node: GSMapVolumeNode in world.volumes.nodes:
 		var v := node.volume
 		var dest: Variant = world.io.destinations.get(v.target) if v.kind == "teleport" else null
 		if v.kind == "teleport" and dest is Dictionary and (dest as Dictionary).has("at"):
@@ -218,7 +218,7 @@ func _setup(doc: Dictionary) -> Dictionary:
 func _model(ctx: Dictionary, avoid_hurts: bool) -> Dictionary:
 	var tree := get_tree()
 	var walker: _Walker = ctx["walker"]
-	var world: DotMapWorld = ctx["world"]
+	var world: GSMapWorld = ctx["world"]
 	var start: Vector3 = ctx["start"]
 	var tps: Array = ctx["tps"]
 	var finish: AABB = ctx["finish"]
@@ -376,13 +376,13 @@ func _unreached_spots(walker: _Walker, reached: Array[Vector3], frontier: Vector
 
 
 ## Debug: the buttons, doors and triggers nearest the start.
-func _debug_ents(world: DotMapWorld, start: Vector3, finish: AABB) -> void:
+func _debug_ents(world: GSMapWorld, start: Vector3, finish: AABB) -> void:
 	var list: Array = []
-	for e: DotMapEntity in world.io.entities:
-		if e.classname in ["func_button", "func_door", "func_movelinear", "func_tracktrain", "func_plat", "trigger_teleport", "func_rotating", "func_door_rotating", "prop_door_rotating"] or e is DotMapTrigger:
+	for e: GSMapEntity in world.io.entities:
+		if e.classname in ["func_button", "func_door", "func_movelinear", "func_tracktrain", "func_plat", "trigger_teleport", "func_rotating", "func_door_rotating", "prop_door_rotating"] or e is GSMapTrigger:
 			var o := e.origin(world.io)
-			if e is DotMapMoverNode and (e as DotMapMoverNode).hit_half != Vector3.ZERO:
-				o = (e as DotMapMoverNode).hit_frame.origin
+			if e is GSMapMoverNode and (e as GSMapMoverNode).hit_half != Vector3.ZERO:
+				o = (e as GSMapMoverNode).hit_frame.origin
 			var outs := PackedStringArray()
 			for l: Dictionary in e.links:
 				outs.append("%s>%s.%s" % [l["output"], l["target"], l["input"]])
@@ -394,7 +394,7 @@ func _debug_ents(world: DotMapWorld, start: Vector3, finish: AABB) -> void:
 
 
 ## Debug: the full route, the frontier, a map picture and the extras `_debug` names.
-func _debug_full(walker: _Walker, world: DotMapWorld, m: _Model, res: Dictionary, start: Vector3, finish: AABB) -> void:
+func _debug_full(walker: _Walker, world: GSMapWorld, m: _Model, res: Dictionary, start: Vector3, finish: AABB) -> void:
 	print("    DEBUG full route: %s" % [m.log])
 	var f := finish.get_center()
 	var q: Array[Vector3] = res["queue"]
@@ -434,8 +434,8 @@ func _debug_full(walker: _Walker, world: DotMapWorld, m: _Model, res: Dictionary
 	if _debug.begins_with("ray:"):
 		_ray(walker, _debug.substr(4).split(","))
 	if _debug == "toggles":
-		for e: DotMapEntity in world.io.entities:
-			if e is DotMapToggleBrush and e.node != null:
+		for e: GSMapEntity in world.io.entities:
+			if e is GSMapToggleBrush and e.node != null:
 				var lo2 := Vector3(INF, INF, INF)
 				var hi2 := -lo2
 				for cs in e.node.find_children("*", "CollisionShape3D", true, false):
@@ -444,7 +444,7 @@ func _debug_full(walker: _Walker, world: DotMapWorld, m: _Model, res: Dictionary
 						var bb := (cs as CollisionShape3D).global_transform * sh.get_debug_mesh().get_aabb()
 						lo2 = lo2.min(bb.position)
 						hi2 = hi2.max(bb.end)
-				print("    DEBUG toggle %s#%d enabled %s solid %s box %s..%s" % [e.targetname, e.index, e.enabled, (e as DotMapToggleBrush).is_solid(), lo2.snappedf(0.1), hi2.snappedf(0.1)])
+				print("    DEBUG toggle %s#%d enabled %s solid %s box %s..%s" % [e.targetname, e.index, e.enabled, (e as GSMapToggleBrush).is_solid(), lo2.snappedf(0.1), hi2.snappedf(0.1)])
 
 
 ## Debug: every collider along a segment, `x1,y1,z1,x2,y2,z2`: its path, class and the entry point.

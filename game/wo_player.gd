@@ -23,7 +23,7 @@ signal died(by: StringName)
 @export var display_name: String = "Player"
 
 ## What this player looks like, as a dot-user-avatar document; null is the stock person.
-var avatar: DotAvatar = null
+var avatar: GSAvatar = null
 
 ## Whether a command is sampled from the input devices each tick. The person at the keyboard.
 @export var samples_input: bool = false
@@ -43,14 +43,14 @@ signal bot_changed
 var config: WoConfig = null
 
 var controller: WoController = null
-var sampler: DotFpsSampler = null
-var health: DotHealth = null
+var sampler: GSFpsSampler = null
+var health: GSHealth = null
 
 ## The weapons, once the final death has handed some out or this player picked one up.
 var weapons: ZeeWeaponRig = null
 
 ## What they are carrying in the final death, if anything. See [WoGame._advance_grabs].
-var grab: DotGravGun = null
+var grab: GSGravGun = null
 
 ## Whether a watcher sees them carrying a prop: written from the snapshot on a mirror
 ## (`WoPlayerNet.net_carrying`); a player this process simulates is asked of [member grab].
@@ -128,7 +128,7 @@ var blinded: bool = false
 ## An administrator's `beacon`: a ring, a column and a ping every client draws.
 var beacon: bool = false
 
-var beacon_marker: DotFxBeacon = null
+var beacon_marker: GSFxBeacon = null
 
 ## The flashlight is on (server-owned, replicated); `flashlight_ready` is cleared on a new course so the next tick sets its start state.
 var flashlight: bool = false
@@ -139,7 +139,7 @@ var figure: WoFigure = null
 
 ## How this player's body falls on their death: the server's pick ([method WoGame.decide_death]),
 ## carried on DEATH and set here before anybody hears of it. Null before a first death.
-var death: DotPlayerDeath = null
+var death: GSPlayerDeath = null
 
 # A player this process SIMULATES is read off their own rig. One it only MIRRORS has no rig, so it is drawn from the
 # weapons the server ANNOUNCED (`WoEvents.Kind.ARMED`) and the slot the snapshot says is in hand: a slot alone names
@@ -164,11 +164,11 @@ var mirror_fire_kind: int = 0
 ## The rig's own counter as the figure last saw it, for a simulated player.
 var _seen_fire_seq: int = -1
 
-static var _weapon_catalogue: DotWeaponCatalogue = null
+static var _weapon_catalogue: GSWeaponCatalogue = null
 
 
 ## The weapon table, built once; every rig shares it so its behaviour scripts load once.
-static func weapon_catalogue() -> DotWeaponCatalogue:
+static func weapon_catalogue() -> GSWeaponCatalogue:
 	if _weapon_catalogue == null:
 		_weapon_catalogue = ZeeWeaponPack.catalogue()
 		# Built under the loading cover; the first spawn then loads no script.
@@ -187,7 +187,7 @@ var tick_rate: int = 64:
 			controller.tick_rate = value
 
 
-## The key [DotWeaponPlayerBridge] identifies this carrier by. Duck-typed: see mg-smash-
+## The key [GSWeaponPlayerBridge] identifies this carrier by. Duck-typed: see mg-smash-
 ## copter's note, where a misspelling made every shot come from entity zero.
 var player_key: String:
 	get:
@@ -195,7 +195,7 @@ var player_key: String:
 
 
 ## Climbing, on the course's `ladder` pieces.
-var ladder := DotFpsLadderMode.new()
+var ladder := GSFpsLadderMode.new()
 
 
 func _ready() -> void:
@@ -204,7 +204,7 @@ func _ready() -> void:
 	controller.tick_rate = tick_rate
 	# EXTERNAL even offline: the world owns the tick, so "pose the course, move, then let the
 	# course act on the player" is explicit, and it is the shape a dedicated server needs.
-	controller.drive = DotFpsController.Drive.EXTERNAL
+	controller.drive = GSFpsController.Drive.EXTERNAL
 	controller.tunables = tunables_for(config)
 	controller.admin_abilities = true
 	controller.before_fn = _before_tick
@@ -216,15 +216,15 @@ func _ready() -> void:
 		knock_limits = Vector3(config.knock_min_speed, config.knock_max_speed, config.knock_lift)
 
 	if samples_input:
-		sampler = DotFpsSampler.new(controller.tunables)
+		sampler = GSFpsSampler.new(controller.tunables)
 		register_actions(sampler)
 
 
 ## How a player moves. Static, and it takes the config: a connected client builds a sampler before it has a player,
 ## and one built from different tunables than its controller would clamp input differently from the simulation
 ## consuming it.
-static func tunables_for(config: WoConfig) -> DotFpsTunables:
-	var t := DotFpsTunables.with_profile("legacy")    # the courses are tuned against it
+static func tunables_for(config: WoConfig) -> GSFpsTunables:
+	var t := GSFpsTunables.with_profile("legacy")    # the courses are tuned against it
 	t.max_speed = config.run_speed if config != null else 7.0
 	t.gravity = config.gravity if config != null else 20.0
 	t.jump_height = config.jump_height if config != null else 1.25
@@ -265,8 +265,8 @@ static func tunables_for(config: WoConfig) -> DotFpsTunables:
 
 
 ## Registers the movement actions, and binds the slow walk to shift. See mg-smash-copter.
-static func register_actions(p_sampler: DotFpsSampler = null) -> void:
-	var _added := DotFpsSampler.register_default_actions(p_sampler)
+static func register_actions(p_sampler: GSFpsSampler = null) -> void:
+	var _added := GSFpsSampler.register_default_actions(p_sampler)
 	var walk := &"dot_fps_walk"
 
 	if not InputMap.has_action(walk):
@@ -305,8 +305,8 @@ func simulate(tick: int, delta: float) -> void:
 		# While the gate settles the body under its cover the keys are off but the body still
 		# falls and lands (a neutral command), and the sampler is left unread so a mouse turn
 		# does not pile up behind the cover.
-		if has_meta(DotLoadGate.SETTLING_META):
-			controller.apply_command(DotFpsCommand.new())
+		if has_meta(GSLoadGate.SETTLING_META):
+			controller.apply_command(GSFpsCommand.new())
 			controller.simulate_tick(tick, delta)
 			return
 
@@ -329,7 +329,7 @@ func _before_tick(tick: int) -> void:
 ## After the motor: what the course does to whoever is on it or in its way, in this order: carry, bounce (a bouncer is
 ## ground), knock last (measured where they ended up). Each writes the STATE and the node together: the next tick
 ## starts from `state.position`, so a node-only displacement is undone.
-func _after_tick(tick: int, state: DotFpsState) -> void:
+func _after_tick(tick: int, state: GSFpsState) -> void:
 	global_position = state.position
 
 	if stage == null or not is_instance_valid(stage) or watching:
@@ -337,14 +337,14 @@ func _after_tick(tick: int, state: DotFpsState) -> void:
 
 	# Settling under the load cover: the body lands, nothing on the course acts on it. Connected
 	# the server did not wait for our cover, so the next snapshot corrects whatever it did.
-	if has_meta(DotLoadGate.SETTLING_META):
+	if has_meta(GSLoadGate.SETTLING_META):
 		return
 
 	ladder.volumes = stage.ladder_boxes()
 	if not ladder.volumes.is_empty():
 		var cmd := controller.current_command
 		if cmd != null:
-			var view := DotFpsMotor._view_basis(state.yaw, 0.0)
+			var view := GSFpsMotor._view_basis(state.yaw, 0.0)
 			var intent: Vector3 = view.right * cmd.move.x + view.forward * cmd.move.y
 			ladder.wish = Vector3(intent.x, 0.0, intent.z).normalized()
 		ladder.update(controller.motor, state)
@@ -356,7 +356,7 @@ func _after_tick(tick: int, state: DotFpsState) -> void:
 		state.velocity.x = 0.0
 		state.velocity.z = 0.0
 
-	if state.mode == DotFpsState.Mode.GROUND and state.ground_id != 0:
+	if state.mode == GSFpsState.Mode.GROUND and state.ground_id != 0:
 		var moved := stage.carry(state.ground_id, state.position, tick)
 
 		if moved != Vector3.ZERO:
@@ -366,13 +366,13 @@ func _after_tick(tick: int, state: DotFpsState) -> void:
 
 		if up > 0.0:
 			state.velocity.y = up
-			state.mode = DotFpsState.Mode.AIR
+			state.mode = GSFpsState.Mode.AIR
 
 	# The wind, a push every tick it blows; half as hard on somebody standing, because the
 	# ground holds them. In the state, so it is predicted like everything else here.
 	var gust := stage.wind(tick)
 	if gust != Vector3.ZERO:
-		var hold := 0.5 if state.mode == DotFpsState.Mode.GROUND else 1.0
+		var hold := 0.5 if state.mode == GSFpsState.Mode.GROUND else 1.0
 		state.velocity += gust * hold * delta_for_tick()
 
 	var bolt := stage.strike(state.position, tick)
@@ -383,7 +383,7 @@ func _after_tick(tick: int, state: DotFpsState) -> void:
 		last_knock_struck = true
 		last_knock_direction = Vector3(bolt.x, 0.0, bolt.z).normalized()
 		state.velocity = bolt
-		state.mode = DotFpsState.Mode.AIR
+		state.mode = GSFpsState.Mode.AIR
 		state.position.y += 0.05
 
 	if tick - _knocked_tick > 6:
@@ -396,7 +396,7 @@ func _after_tick(tick: int, state: DotFpsState) -> void:
 			last_knock_struck = false
 			last_knock_direction = Vector3(thrown.x, 0.0, thrown.z).normalized()
 			state.velocity = thrown
-			state.mode = DotFpsState.Mode.AIR
+			state.mode = GSFpsState.Mode.AIR
 			# Lifted clear of the ground this tick, or the motor's ground snap takes the throw
 			# straight back on the next one and the knock reads as a stumble.
 			state.position.y += 0.05
@@ -417,9 +417,9 @@ func eye_position() -> Vector3:
 ## leaves the player's feet pointing north; see mg-smash-copter.
 func component(type_name: StringName) -> Object:
 	match String(type_name):
-		"DotPlayerController", "DotFpsController":
+		"GSPlayerController", "GSFpsController":
 			return controller
-		"DotHealth":
+		"GSHealth":
 			return health
 		"ZeeWeaponRig":
 			return weapons
@@ -440,7 +440,7 @@ func aim_direction() -> Vector3:
 ## the map) and the command (the motor taking the yaw back from one that still said north).
 func place_at(at: Vector3, yaw_degrees: float) -> void:
 	warps += 1
-	DotLog.debug(CHANNEL, "placed", {"player": String(player_id), "at": at, "warps": warps})
+	GSLog.debug(CHANNEL, "placed", {"player": String(player_id), "at": at, "warps": warps})
 	global_position = at
 	# Put somewhere new, the next knock is a new one: [WoGame] charges a knock at most once a
 	# second, which is about a ram pinning somebody, not about the next obstacle.
@@ -454,7 +454,7 @@ func place_at(at: Vector3, yaw_degrees: float) -> void:
 	if sampler != null:
 		sampler.look_at_angles(yaw_degrees, 0.0)
 
-	var facing := DotFpsCommand.new()
+	var facing := GSFpsCommand.new()
 	facing.yaw = yaw_degrees
 	facing.pitch = 0.0
 	controller.apply_command(facing)
@@ -495,7 +495,7 @@ func present_beacon(delta: float, at: Vector3, local_view: bool) -> bool:
 		return false
 
 	if beacon_marker == null:
-		beacon_marker = DotFxBeacon.new()
+		beacon_marker = GSFxBeacon.new()
 		beacon_marker.name = "Beacon"
 		add_child(beacon_marker)
 
@@ -534,7 +534,7 @@ func present_body(own_view: bool, at: Vector3, team_colour: Color) -> bool:
 		var velocity := controller.state.velocity
 		# In the air, rising or falling, ducked: the people jump and duck as the runner does.
 		figure.set_motion({
-			"on_floor": controller.state.mode == DotFpsState.Mode.GROUND,
+			"on_floor": controller.state.mode == GSFpsState.Mode.GROUND,
 			"vertical": velocity.y,
 			# Ducked past halfway, as the view model and every other game read it:
 			# `is_crouched()` is any crouch at all, which drew the first frame of a duck as one.

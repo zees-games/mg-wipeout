@@ -1,4 +1,4 @@
-extends DotGameCheckSuite
+extends GSGameCheckSuite
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoConfig := preload("../game/wo_config.gd")
@@ -19,7 +19,7 @@ var _world: WoGame = null
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
@@ -200,7 +200,7 @@ func _run_course(doc: Dictionary, risk: float = -1.0) -> void:
 	var started := false
 
 	for i in range(ticks):
-		idle.controller.apply_command(DotFpsCommand.new())
+		idle.controller.apply_command(GSFpsCommand.new())
 		game.simulate(TICK)
 
 		# Not a physics frame per tick: every moving piece writes its transform straight into
@@ -244,7 +244,7 @@ func _race_by_difficulty(doc: Dictionary) -> void:
 		var game := await _fresh_world(doc)
 		game.config.bot_mistakes = 1.0
 		game.config.knock_damage_per_speed = 1.0
-		var _set := DotBotSettings.of(game).set_difficulty(difficulty)
+		var _set := GSBotSettings.of(game).set_difficulty(difficulty)
 		var field: Array[WoPlayer] = []
 		for i in range(6):
 			var bot := game.add_player(StringName("u%d" % (900200 + i)), "R%d" % i)
@@ -358,17 +358,17 @@ func _floor_under(space: PhysicsDirectSpaceState3D, at: Vector3) -> bool:
 	return not space.intersect_ray(query).is_empty()
 
 
-## dot-core's [DotCollisionAudit] over the stage as a client draws it: visible geometry nothing
+## dot-core's [GSCollisionAudit] over the stage as a client draws it: visible geometry nothing
 ## collides with, which a runner walks through. Pieces are static bodies the course moves, and
 ## their drawing sits beside their shape, so the lenient audit is used.
 func _audit_collision(doc: Dictionary) -> void:
 	_section("%s: nothing drawn is walked through" % doc["id"])
 	var game := await _fresh_world(doc, true)
-	var res := DotCollisionAudit.audit(game.stage, true)
+	var res := GSCollisionAudit.audit(game.stage, true)
 	var found := 0
 
 	if res.ok:
-		var report: DotCollisionAudit = res.value
+		var report: GSCollisionAudit = res.value
 		found = report.count()
 		print("  %s collision audit: %d of %d" % [doc["id"], found, report.examined])
 

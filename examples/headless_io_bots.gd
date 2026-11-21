@@ -4,7 +4,7 @@ const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoPlayer := preload("../game/wo_player.gd")
 
 ## Do stand-ins finish the courses that are a map's own world? One stand-in walks a navigation mesh baked from the
-## map's static colliders (WoIoBot, DotBotNav); each course states what it must reach (`floor`, `finish`, `limit`, `fired`, `taken`).
+## map's static colliders (WoIoBot, GSBotNav); each course states what it must reach (`floor`, `finish`, `limit`, `fired`, `taken`).
 ## A course whose way on is the map's own logic is not finishable from the floor: `route` scripts the steps and `why` records the diagnosis.
 
 const COURSES := {
@@ -28,7 +28,7 @@ var _finished_count := 0
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
@@ -75,7 +75,7 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> void:
 	while game._io_bot != null and not game._io_bot.is_ready() and waited < BAKE_WAIT:
 		await get_tree().process_frame
 		waited += get_process_delta_time()
-	var nav: DotBotNav = game._io_bot.nav if game._io_bot != null else null
+	var nav: GSBotNav = game._io_bot.nav if game._io_bot != null else null
 	_check(nav != null and nav.is_ready(), "the mesh bakes", "%.1f s" % [(Time.get_ticks_msec() - started) / 1000.0])
 	if nav == null or not nav.is_ready():
 		for i in CHECKS_PER_COURSE - 1:
@@ -143,7 +143,7 @@ func _verdict(game: WoGame, bot: WoPlayer, plan: Dictionary, finish: AABB, trave
 	var fired := 0
 	var taken := 0
 	for key in game._io_bot.describe()["done"]:
-		if int(key) >= DotBotLinks.TELEPORT_ID:
+		if int(key) >= GSBotLinks.TELEPORT_ID:
 			taken += 1
 		else:
 			fired += 1
@@ -160,13 +160,13 @@ func _verdict(game: WoGame, bot: WoPlayer, plan: Dictionary, finish: AABB, trave
 func _dump_start(game: WoGame, start: Vector3, finish: AABB) -> void:
 	print("  links %s" % [game._io_bot.links.describe()])
 	if OS.get_cmdline_user_args().has("--export"):
-		var ex := DotMapNavLinks.read(game.stage.io.world)
+		var ex := GSMapNavLinks.read(game.stage.io.world)
 		for d: Dictionary in ex["doors"]:
 			print("    door %s %s %s %s opens=%s by=%s" % [d["entity"], d["classname"], d["name"], d["box"], d["opens"], (d["opened_by"] as Array).map(func(o: Dictionary) -> String: return "%s#%d/%s/%dh" % [o["kind"], o["index"], o["name"], o["hops"]])])
 		for t: Dictionary in ex["teleports"]:
 			print("    teleport %s %s enabled=%s to %s by=%s" % [t["entity"], t["name"], t["enabled"], t["to"], (t["opened_by"] as Array).map(func(o: Dictionary) -> String: return "%s#%d/%s/%dh" % [o["kind"], o["index"], o["name"], o["hops"]])])
 	if OS.get_cmdline_user_args().has("--dump"):
-		var lk: DotBotLinks = game._io_bot.links
+		var lk: GSBotLinks = game._io_bot.links
 		for o in lk.off_mesh:
 			print("    off_mesh %s" % [o])
 		for g in lk.gadgets:
@@ -184,7 +184,7 @@ func _dump_start(game: WoGame, start: Vector3, finish: AABB) -> void:
 			if node.volume.kind == "hurt" and vb.grow(5.0).intersects(finish):
 				print("    hurt near finish %s %s box %s dmg %s outputs %s" % [node.volume.classname, node.volume.targetname, vb, node.volume.record.get("damage"), node.volume.outputs])
 	if OS.get_cmdline_user_args().has("--graph"):
-		var gnav: DotBotNav = game._io_bot.nav
+		var gnav: GSBotNav = game._io_bot.nav
 		var goal: Vector3 = Vector3(finish.get_center().x, finish.position.y + 0.5, finish.get_center().z)
 		print("  GRAPH islands %d; start island %d at %s, goal island %d (closest %s); start joined goal: %s" % [gnav.islands().size(), gnav.island_at(start), start, gnav.island_at(gnav.closest(goal)), gnav.closest(goal), gnav.joined(start, goal)])
 		for t in game._io_bot.links.teleports:
@@ -214,7 +214,7 @@ func _dump_start(game: WoGame, start: Vector3, finish: AABB) -> void:
 ## The diagnostics printed where the stand-in stopped.
 func _dump_end(game: WoGame, bot: WoPlayer) -> void:
 	if OS.get_cmdline_user_args().has("--dump"):
-		var lk2: DotBotLinks = game._io_bot.links
+		var lk2: GSBotLinks = game._io_bot.links
 		print("  END links %s" % [lk2.describe()])
 		for o in lk2.off_mesh:
 			print("    off_mesh %s" % [o])
@@ -250,7 +250,7 @@ func _dump_end(game: WoGame, bot: WoPlayer) -> void:
 						if wb.grow(3.0).has_point(here) or n.collision_layer == 0:
 							print("    BODY %s %s layer %d aabb %s path %s meta %s" % [n.get_class(), n.name, n.collision_layer, wb, str(n.get_path()).trim_prefix(str(game.stage.io.world.get_path())), n.get_meta_list()])
 	if OS.get_cmdline_user_args().has("--graph-end"):
-		var en: DotBotNav = game._io_bot.nav
+		var en: GSBotNav = game._io_bot.nav
 		var here := bot.controller.state.position
 		print("  GRAPH-END islands %d, here island %d" % [en.islands().size(), en.island_at(here)])
 		for isl in en.islands().slice(0, 14 if not OS.get_cmdline_user_args().has("--all-islands") else 400):

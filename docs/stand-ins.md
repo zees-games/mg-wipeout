@@ -1,10 +1,10 @@
 # Stand-ins
 
-Stand-ins run the document's route (`route` in mg-wipeout-maps) and make the mistakes a person makes. How many there are follows dot-server's `DotBotQuota`: a person replaces a bot, and leaving brings it back. Solo starts with eight (`offline_bots`, `-- --bots N` at launch); a server's default is `bot_quota 9` in fill mode, a person and eight (`minimum_players`, `game.yml`).
+Stand-ins run the document's route (`route` in mg-wipeout-maps) and make the mistakes a person makes. How many there are follows dot-server's `GSBotQuota`: a person replaces a bot, and leaving brings it back. Solo starts with eight (`offline_bots`, `-- --bots N` at launch); a server's default is `bot_quota 9` in fill mode, a person and eight (`minimum_players`, `game.yml`).
 
 ## How a stand-in races
 
-**The difficulty is dot-bot's `bot_difficulty`** (easy, medium, hard, nightmare; medium by default), the same word that sets how a stand-in aims in a final death (dot-bot's `DotBotAim`: `bot_turn_rate`, `bot_reaction`, `bot_aim_error`). The race is decided by mistakes, never by a slower run: everybody runs at the same speed. `WoRacer` holds one column of racing settings per preset, each a cvar (`wo_bot_<field>`, at the solo console too) that outlives a preset change once set by hand, the way dot-bot's own do:
+**The difficulty is dot-bot's `bot_difficulty`** (easy, medium, hard, nightmare; medium by default), the same word that sets how a stand-in aims in a final death (dot-bot's `GSBotAim`: `bot_turn_rate`, `bot_reaction`, `bot_aim_error`). The race is decided by mistakes, never by a slower run: everybody runs at the same speed. `WoRacer` holds one column of racing settings per preset, each a cvar (`wo_bot_<field>`, at the solo console too) that outlives a preset change once set by hand, the way dot-bot's own do:
 
 | Setting | easy | medium | hard | nightmare | What |
 | --- | --- | --- | --- | --- | --- |
@@ -46,7 +46,7 @@ Each was earned by watching a bot fail in `tools/trace_course` (one runner) or `
 
 ## Courses that are a map's own world
 
-An io course has no `route`, so a stand-in walks a navigation mesh to the finish (`game/wo_io_bot.gd`: dot-bot's `DotBotNav` baked from the map's static colliders, movers left out). That gets it as far as the floor goes; what lies beyond (buttons, doors, teleports, rides) is the map's own logic and needs a human's route, which nothing records yet. `examples/headless_io_bots` pins per course whether the floor reaches the finish and whether a stand-in finishes: none finishes now (2026-10-27: hop edges are denser and drops start at 0.6 m, which joins Waytobar's start room to eight islands; the end of the floor is dived off toward a finish within 80 m); each stops at the end of the floor, and Scary, Lego, Dc, Waytobar and Labo keep walking into a kill volume there. A ladder edge (id from `DotBotLinks.LADDER_ID`) is not a hop: `WoIoBot` walks to its foot and follows dot-bot's `DotBotClimb` (face it, push forward, hop off at the top); `examples/headless_ladder_bot` proves it on a toy level, since no shipped course's goal needs one.
+An io course has no `route`, so a stand-in walks a navigation mesh to the finish (`game/wo_io_bot.gd`: dot-bot's `GSBotNav` baked from the map's static colliders, movers left out). That gets it as far as the floor goes; what lies beyond (buttons, doors, teleports, rides) is the map's own logic and needs a human's route, which nothing records yet. `examples/headless_io_bots` pins per course whether the floor reaches the finish and whether a stand-in finishes: none finishes now (2026-10-27: hop edges are denser and drops start at 0.6 m, which joins Waytobar's start room to eight islands; the end of the floor is dived off toward a finish within 80 m); each stops at the end of the floor, and Scary, Lego, Dc, Waytobar and Labo keep walking into a kill volume there. A ladder edge (id from `GSBotLinks.LADDER_ID`) is not a hop: `WoIoBot` walks to its foot and follows dot-bot's `GSBotClimb` (face it, push forward, hop off at the top); `examples/headless_ladder_bot` proves it on a toy level, since no shipped course's goal needs one.
 
 ## A field of them
 

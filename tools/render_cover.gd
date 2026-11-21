@@ -13,7 +13,7 @@ var _server_pid := -1
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	if "server" in OS.get_cmdline_user_args():
 		_serve.call_deferred()
 	else:
@@ -34,7 +34,7 @@ func _serve() -> void:
 	game.tick_rate = 60
 	add_child(game)
 
-	var server_config := DotServerConfig.new()
+	var server_config := GSServerConfig.new()
 	server_config.hostname = "render cover"
 	server_config.port = PORT
 	server_config.bind_address = "127.0.0.1"
@@ -50,18 +50,18 @@ func _serve() -> void:
 	server_config.enet_share_udp_port = false
 	server_config.stdin_console_enabled = false
 	server_config.log_level = "error"
-	var server := DotServer.new()
+	var server := GSServer.new()
 	server.name = "Server"
 	server.config = server_config
 	server.config_file = ""
 	server.auto_boot = false
 	add_child(server)
-	var booted: DotResult = await server.boot()
+	var booted: GSResult = await server.boot()
 	if not booted.ok:
 		printerr("render_cover server: ", booted.error)
 		get_tree().quit(1)
 		return
-	var loaded: DotResult = await server.modules.load_module("res://game/wo_module.gd")
+	var loaded: GSResult = await server.modules.load_module("res://game/wo_module.gd")
 	if not loaded.ok:
 		printerr("render_cover server: ", loaded.error)
 		get_tree().quit(1)
@@ -83,7 +83,7 @@ func _run() -> void:
 		"res://tools/render_cover.tscn", "--", "server"]))
 	await get_tree().create_timer(8.0).timeout
 
-	var link := DotClientLink.new()
+	var link := GSClientLink.new()
 	link.name = "Server"
 	link.player_name = "Cover"
 	link.transport_preference = "udp"
@@ -100,7 +100,7 @@ func _run() -> void:
 	add_child(client)
 	for i in 3:
 		await get_tree().process_frame
-	var gate: DotLoadGate = client.get("gate")
+	var gate: GSLoadGate = client.get("gate")
 	print("render_cover: gate open at the first shot: ", gate.is_open() if gate != null else "no gate")
 	await _shot("cover_up")
 

@@ -5,7 +5,7 @@ const WoCourseIo := preload("../game/wo_course_io.gd")
 const WoWorld := preload("../game/wo_world.gd")
 const WoEvents := preload("../game/net/wo_events.gd")
 
-## A course that runs its map's own entities (dot-map's DotMapWorld), played on the server's step.
+## A course that runs its map's own entities (dot-map's GSMapWorld), played on the server's step.
 ## A bot cannot finish such a course (its buttons and doors are the puzzle), so this checks the machinery on the real
 ## map: nothing unhandled, spawns, every kind of entity fires, movers move and carry, state crosses the wire.
 
@@ -30,7 +30,7 @@ var _expect_checks := 7
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	_run.call_deferred()
 
 
@@ -123,9 +123,9 @@ func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 	var movers := 0
 	var moving := 0
 
-	for e: DotMapEntity in world.io.entities:
-		if e is DotMapMoverNode and (e as DotMapMoverNode).node != null:
-			var mover := e as DotMapMoverNode
+	for e: GSMapEntity in world.io.entities:
+		if e is GSMapMoverNode and (e as GSMapMoverNode).node != null:
+			var mover := e as GSMapMoverNode
 			movers += 1
 			if not mover.pose_delta(0, TICK_RATE).is_equal_approx(mover.pose_delta(300, TICK_RATE)):
 				moving += 1
@@ -161,7 +161,7 @@ func _play(catalogue: WoCatalogue, id: StringName, plan: Dictionary) -> void:
 
 
 ## The map loads: its arch, spawns, entity coverage, team filters and a shot.
-func _world_section(game: WoGame, world: DotMapWorld, runner: WoPlayer, plan: Dictionary) -> void:
+func _world_section(game: WoGame, world: GSMapWorld, runner: WoPlayer, plan: Dictionary) -> void:
 	var manifest: Dictionary = world.mesh.manifest
 
 	_section("the world loads")
@@ -186,8 +186,8 @@ func _world_section(game: WoGame, world: DotMapWorld, runner: WoPlayer, plan: Di
 	_check(shot_at != -2, "a shot along a ray reaches a breakable, button or door the map has (strict when it has one)", "nothing answered")
 	var hit := world.io.entity_of(shot_at) if shot_at >= 0 else null
 	var changed := true
-	if hit is DotMapBreakable and _shot_could_hurt:
-		changed = (hit as DotMapBreakable).health < (hit as DotMapBreakable).max_health or (hit as DotMapBreakable).broken
+	if hit is GSMapBreakable and _shot_could_hurt:
+		changed = (hit as GSMapBreakable).health < (hit as GSMapBreakable).max_health or (hit as GSMapBreakable).broken
 	_check(changed, "and a shot breakable lost health", "%s #%d" % [hit.classname if hit != null else "-", shot_at])
 	print("    shoot: entity %d (-1 none shootable, -2 none answered)" % shot_at)
 	_finished()
@@ -224,7 +224,7 @@ func _spawn_section(game: WoGame, runner: WoPlayer, plan: Dictionary) -> void:
 
 
 ## A push moves a body and a hurt volume strikes one.
-func _volume_section(game: WoGame, world: DotMapWorld, doc: Dictionary, runner: WoPlayer, plan: Dictionary) -> void:
+func _volume_section(game: WoGame, world: GSMapWorld, doc: Dictionary, runner: WoPlayer, plan: Dictionary) -> void:
 	var wants_push: bool = plan.get("push", true)
 	# What the course's own cfg turns on when it loads (headless_mapcfg checks that it does).
 	game.config.instant_death = true
@@ -250,8 +250,8 @@ func _volume_section(game: WoGame, world: DotMapWorld, doc: Dictionary, runner: 
 			pusher.place_at(pushed["centre"], 0.0)
 			await _steps(game, 1)
 
-			var inside := (pushed["node"] as DotMapVolumeNode).inside.has(String(pusher.player_id))
-			tried_pushes += " [%s at %s inside %s pushes %d->%d, body now %s, volume on %s]" % [(pushed["node"] as DotMapVolumeNode).volume.targetname, pushed["centre"], inside, pushes_before, int(game.io_log["pushes"]), pusher.controller.state.position, (pushed["node"] as DotMapVolumeNode).active()]
+			var inside := (pushed["node"] as GSMapVolumeNode).inside.has(String(pusher.player_id))
+			tried_pushes += " [%s at %s inside %s pushes %d->%d, body now %s, volume on %s]" % [(pushed["node"] as GSMapVolumeNode).volume.targetname, pushed["centre"], inside, pushes_before, int(game.io_log["pushes"]), pusher.controller.state.position, (pushed["node"] as GSMapVolumeNode).active()]
 
 			if inside and int(game.io_log["pushes"]) > pushes_before:
 				moved = true
@@ -276,7 +276,7 @@ func _volume_section(game: WoGame, world: DotMapWorld, doc: Dictionary, runner: 
 			var hurts_before := int(game.io_log["hurts"])
 			other.place_at(hurt["centre"], 0.0)
 			await _steps(game, 1)
-			var node: DotMapVolumeNode = hurt["node"]
+			var node: GSMapVolumeNode = hurt["node"]
 			var here := _inside_of(world, "hurt", String(other.player_id))
 
 			if int(game.io_log["hurts"]) > hurts_before and here == [node]:
@@ -316,7 +316,7 @@ func _client_section(game: WoGame, io: WoCourseIo, doc: Dictionary, id: StringNa
 	_check(client_world != null, "a client builds the same world without its logic")
 
 	for entry: Array in inbox:
-		var back := WoEvents.read_world_io(DotNetReader.new(WoEvents.write_world_io(entry[1])))
+		var back := WoEvents.read_world_io(GSNetReader.new(WoEvents.write_world_io(entry[1])))
 		wired = wired and bool(back["ok"]) and str((back["msg"] as Dictionary).get("stage")) == String(id)
 		client.apply(back["msg"])
 		tick = maxi(tick, int((back["msg"] as Dictionary).get("tick", 0)))
@@ -332,7 +332,7 @@ func _client_section(game: WoGame, io: WoCourseIo, doc: Dictionary, id: StringNa
 
 ## Last, because a button may do what the map means by it, which can end the course for everybody (a teleport to
 ## the winners' room).
-func _button_section(game: WoGame, world: DotMapWorld, wants_button: bool) -> void:
+func _button_section(game: WoGame, world: GSMapWorld, wants_button: bool) -> void:
 	_section("a button")
 	var buttons := _buttons(world)
 	if wants_button:
@@ -395,7 +395,7 @@ func _button_section(game: WoGame, world: DotMapWorld, wants_button: bool) -> vo
 
 
 ## Presses `button` from each side at three heights, until a use is counted; returns the delivered count it started from.
-func _press_from_sides(game: WoGame, world: DotMapWorld, presser: WoPlayer, button: DotMapMoverNode, box: Vector3, seen: int, baseline: int) -> int:
+func _press_from_sides(game: WoGame, world: GSMapWorld, presser: WoPlayer, button: GSMapMoverNode, box: Vector3, seen: int, baseline: int) -> int:
 	for side in [Vector2(0, 1), Vector2(1, 0), Vector2(0, -1), Vector2(-1, 0)]:
 		# At the height the button's own eyes would be, and at floor level with the head tipped down
 		# to it (a button low on a wall is pressed looking down).
@@ -408,7 +408,7 @@ func _press_from_sides(game: WoGame, world: DotMapWorld, presser: WoPlayer, butt
 			presser.place_at(feet, yaw)
 			var to := box - presser.eye_position()
 			var pitch := rad_to_deg(atan2(to.y, Vector2(to.x, to.z).length()))
-			var look := DotFpsCommand.new()
+			var look := GSFpsCommand.new()
 			look.yaw = yaw
 			look.pitch = pitch
 			presser.controller.apply_command(look)
@@ -433,7 +433,7 @@ func _press_from_sides(game: WoGame, world: DotMapWorld, presser: WoPlayer, butt
 
 ## The hurt that a trigger enables three seconds after somebody steps in (the lava room's own links): quiet
 ## at two seconds, striking at three and a half.
-func _lava_room(game: WoGame, world: DotMapWorld) -> void:
+func _lava_room(game: WoGame, world: GSMapWorld) -> void:
 	_section("the lava room heats up three seconds after entry")
 	var room := _named_volume(world, "hurt", "Obstacle2_Hurt")
 	_check(not room.is_empty(), "the map has the room's hurt volume, disabled until triggered")
@@ -455,7 +455,7 @@ func _lava_room(game: WoGame, world: DotMapWorld) -> void:
 ## The ways the map itself ends a course, each tried with a fresh body the way a runner would meet it: a score
 ## volume or a teleport that lands in the finish box fires for a body of no team and the course ends there; a
 ## kill slab beside the finish is walked into from the course side and the finish arrives first.
-func _map_end(game: WoGame, world: DotMapWorld, doc: Dictionary) -> void:
+func _map_end(game: WoGame, world: GSMapWorld, doc: Dictionary) -> void:
 	_section("the map's own end")
 	var ends := _ends(world, doc)
 	_check(not ends.is_empty(), "the map has an end of its own (a score, an arrival in the finish or a kill slab)")
@@ -466,7 +466,7 @@ func _map_end(game: WoGame, world: DotMapWorld, doc: Dictionary) -> void:
 	var index := 0
 
 	for end: Dictionary in ends:
-		var node: DotMapVolumeNode = end["node"]
+		var node: GSMapVolumeNode = end["node"]
 		var walker := game.add_player(StringName("e%d" % index), "End%d" % index)
 		index += 1
 		await _steps(game, 2)
@@ -516,12 +516,12 @@ func _map_end(game: WoGame, world: DotMapWorld, doc: Dictionary) -> void:
 
 ## The map's ends within eight metres of the finish box: volumes with an ApplyScore output, teleports that land
 ## inside it, and kill slabs of 1000 damage or more (which may score too). At most six.
-func _ends(world: DotMapWorld, doc: Dictionary) -> Array:
+func _ends(world: GSMapWorld, doc: Dictionary) -> Array:
 	var finish := _finish_box(doc)
 	var out: Array = []
 	var slabs: Array = []
 
-	for node: DotMapVolumeNode in world.volumes.nodes:
+	for node: GSMapVolumeNode in world.volumes.nodes:
 		var v := node.volume
 		var box := _widest(v)
 
@@ -615,7 +615,7 @@ func _walk_into(game: WoGame, doc: Dictionary, who: WoPlayer, slab: AABB) -> Dic
 			if who.finished or who.out_for_round or not who.is_alive():
 				break
 
-			var command := DotFpsCommand.new()
+			var command := GSFpsCommand.new()
 			command.move = Vector2(0.0, 1.0)
 			command.yaw = yaw
 			who.controller.apply_command(command)
@@ -632,7 +632,7 @@ func _walk_into(game: WoGame, doc: Dictionary, who: WoPlayer, slab: AABB) -> Dic
 
 
 ## Walks into the first ladder box looking up, from each side in turn: a ladder is climbed when any side gains height.
-func _ladder(game: WoGame, world: DotMapWorld) -> void:
+func _ladder(game: WoGame, world: GSMapWorld) -> void:
 	_section("a ladder climbs")
 	var boxes := world.ladder_boxes()
 	_check(not boxes.is_empty(), "the map has ladders", str(boxes.size()))
@@ -657,7 +657,7 @@ func _ladder(game: WoGame, world: DotMapWorld) -> void:
 				var half := (box.size.x if normal_x else box.size.z) * 0.5
 				var yaw := 0.0
 				for candidate in [0.0, 90.0, 180.0, 270.0]:
-					if DotFpsMotor._view_basis(candidate, 0.0).forward.dot(-face) > 0.9:
+					if GSFpsMotor._view_basis(candidate, 0.0).forward.dot(-face) > 0.9:
 						yaw = candidate
 				climber.place_at(Vector3(centre.x, centre.y - 0.5, centre.z) + face * (half + 0.3), yaw)
 				await _steps(game, 3)
@@ -665,7 +665,7 @@ func _ladder(game: WoGame, world: DotMapWorld) -> void:
 				var top := start_y
 
 				for _i in range(60):
-					var command := DotFpsCommand.new()
+					var command := GSFpsCommand.new()
 					command.move = Vector2(0.0, 1.0)
 					command.yaw = yaw
 					command.pitch = 50.0
@@ -681,8 +681,8 @@ func _ladder(game: WoGame, world: DotMapWorld) -> void:
 	_finished()
 
 
-func _named_volume(world: DotMapWorld, kind: String, target: String) -> Dictionary:
-	for node: DotMapVolumeNode in world.volumes.nodes:
+func _named_volume(world: GSMapWorld, kind: String, target: String) -> Dictionary:
+	for node: GSMapVolumeNode in world.volumes.nodes:
 		if node.volume.kind == kind and node.volume.targetname == target:
 			var box := _widest(node.volume)
 			return {"centre": box.get_center(), "floor": box.position.y}
@@ -690,8 +690,8 @@ func _named_volume(world: DotMapWorld, kind: String, target: String) -> Dictiona
 
 
 ## The sidearm every runner carries on an io course: its bullets reach the map's own shoot-buttons and breakables
-## through the game's `_shoot_io` (DotMapIO.hurt), and hurt nobody.
-func _gun_section(game: WoGame, world: DotMapWorld, wants: String) -> void:
+## through the game's `_shoot_io` (GSMapIO.hurt), and hurt nobody.
+func _gun_section(game: WoGame, world: GSMapWorld, wants: String) -> void:
 	_section("the sidearm: a shot breaks a breakable and fires a shoot-button")
 	# A fall or a hurt volume on the way must not put the shooter out of the round.
 	game.config.instant_death = false
@@ -702,18 +702,18 @@ func _gun_section(game: WoGame, world: DotMapWorld, wants: String) -> void:
 	_check(shooter.weapons != null and game.phase == WoGame.Phase.COURSE, "a runner on an io course carries a weapon", str(shooter.weapons))
 	var bystander_health := bystander.health.health if bystander.health != null else 0.0
 
-	var breakable: DotMapBreakable = null
-	var button: DotMapMoverNode = null
+	var breakable: GSMapBreakable = null
+	var button: GSMapMoverNode = null
 	var before_shots := int(game.io_log.get("shots", 0))
 	var tried_breakables := 0
 	var tried_buttons := 0
 	var shoot_buttons := 0
 
-	for e: DotMapEntity in world.io.entities:
+	for e: GSMapEntity in world.io.entities:
 		if e.node == null or (breakable != null and button != null) or not _entity_centre(e).is_finite():
 			continue
 
-		if e is DotMapBreakable:
+		if e is GSMapBreakable:
 			tried_breakables += 1
 		elif _shoots(e):
 			shoot_buttons += 1
@@ -722,12 +722,12 @@ func _gun_section(game: WoGame, world: DotMapWorld, wants: String) -> void:
 		if tried_breakables > 12 or tried_buttons > 12:
 			continue
 
-		if breakable == null and e is DotMapBreakable and (e as DotMapBreakable).is_breakable() and e.key("model").begins_with("*"):
+		if breakable == null and e is GSMapBreakable and (e as GSMapBreakable).is_breakable() and e.key("model").begins_with("*"):
 			if await _shoot_at(game, shooter, e):
-				breakable = e as DotMapBreakable
+				breakable = e as GSMapBreakable
 		elif button == null and _shoots(e) and e.key("model").begins_with("*"):
 			if await _shoot_at(game, shooter, e):
-				button = e as DotMapMoverNode
+				button = e as GSMapMoverNode
 
 	print("    gun: %d shoot-buttons; breakable %s, shoot-button %s, %d bullets reached the map" % [
 		shoot_buttons,
@@ -744,13 +744,13 @@ func _gun_section(game: WoGame, world: DotMapWorld, wants: String) -> void:
 
 ## Whether bullets fired at [param e]'s middle from four sides reached it: a breakable lost health, a button pressed
 ## or reported itself shot.
-func _shoot_at(game: WoGame, shooter: WoPlayer, e: DotMapEntity) -> bool:
+func _shoot_at(game: WoGame, shooter: WoPlayer, e: GSMapEntity) -> bool:
 	var centre := _entity_centre(e)
 
 	if not centre.is_finite():
 		return false
 
-	var health_before := (e as DotMapBreakable).health if e is DotMapBreakable else 0.0
+	var health_before := (e as GSMapBreakable).health if e is GSMapBreakable else 0.0
 	var sent_before := int(game.stage.io.world.io.delivered_from.get(e.index, 0))
 
 	for side in [Vector2(0, 1), Vector2(1, 0), Vector2(0, -1), Vector2(-1, 0)]:
@@ -759,25 +759,25 @@ func _shoot_at(game: WoGame, shooter: WoPlayer, e: DotMapEntity) -> bool:
 			var yaw := rad_to_deg(atan2(side.x, side.y))
 			shooter.place_at(feet, yaw)
 			var to := centre - shooter.eye_position()
-			var look := DotFpsCommand.new()
+			var look := GSFpsCommand.new()
 			look.yaw = yaw
 			look.pitch = rad_to_deg(atan2(to.y, Vector2(to.x, to.z).length()))
-			look.set_button(DotFpsCommand.BUTTON_USER_0, true)
+			look.set_button(GSFpsCommand.BUTTON_USER_0, true)
 
 			# The pistol is semi-automatic: a press, then the trigger let go, until it has fired.
 			for _try in 3:
 				shooter.controller.apply_command(look)
 				await _steps(game, 1)
-				var released := DotFpsCommand.new()
+				var released := GSFpsCommand.new()
 				released.yaw = look.yaw
 				released.pitch = look.pitch
 				shooter.controller.apply_command(released)
 				await _steps(game, 3)
 
-			if e is DotMapBreakable:
-				if (e as DotMapBreakable).broken or (e as DotMapBreakable).health < health_before:
+			if e is GSMapBreakable:
+				if (e as GSMapBreakable).broken or (e as GSMapBreakable).health < health_before:
 					return true
-			elif int(game.stage.io.world.io.delivered_from.get(e.index, 0)) > sent_before or (e as DotMapMoverNode)._in:
+			elif int(game.stage.io.world.io.delivered_from.get(e.index, 0)) > sent_before or (e as GSMapMoverNode)._in:
 				return true
 
 			if game.phase != WoGame.Phase.COURSE:
@@ -786,7 +786,7 @@ func _shoot_at(game: WoGame, shooter: WoPlayer, e: DotMapEntity) -> bool:
 
 
 ## A button a bullet works: the map flags it damage-activated, or it fires something on being damaged.
-func _shoots(e: DotMapEntity) -> bool:
-	if not e is DotMapMoverNode or (e as DotMapMoverNode).mover == null or not (e as DotMapMoverNode).mover.kind.ends_with("button"):
+func _shoots(e: GSMapEntity) -> bool:
+	if not e is GSMapMoverNode or (e as GSMapMoverNode).mover == null or not (e as GSMapMoverNode).mover.kind.ends_with("button"):
 		return false
 	return e.has_spawnflag(512) or e.links.any(func(l: Dictionary) -> bool: return str(l["output"]).to_lower() == "ondamaged")

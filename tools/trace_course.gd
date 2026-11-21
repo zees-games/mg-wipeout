@@ -9,7 +9,7 @@ const WoGame := preload("../game/wo_game.gd")
 
 
 func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
+	GSLog.set_level(GSLog.Level.ERROR)
 	var course := "wo_practice"
 	var seconds := 120.0
 	var every := 0.0
@@ -56,10 +56,10 @@ func _ready() -> void:
 	game.start()
 
 	for i in range(int((seconds + 2.0) * 64)):
-		idle.controller.apply_command(DotFpsCommand.new())
+		idle.controller.apply_command(GSFpsCommand.new())
 		game.simulate(1.0 / 64.0)
 
-		if bot.controller.state.mode == DotFpsState.Mode.GROUND:
+		if bot.controller.state.mode == GSFpsState.Mode.GROUND:
 			seen["ground"] = bot.controller.state.position.snapped(Vector3(0.01, 0.01, 0.01))
 
 		seen["route"] = int(game._bot_route.get(bot.player_id, 0))
