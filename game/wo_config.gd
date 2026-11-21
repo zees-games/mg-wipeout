@@ -188,6 +188,10 @@ extends DotConfig
 ## How many weapons are laid out in an arena, per side that made it (default 2, any value).
 @export_range(0, 20, 1, "or_greater") var finale_weapons_per_side: int = 2
 
+## Whether every runner of an io course (a converted map with shoot-buttons and breakables) is handed the sidearm. Off:
+## the race has no weapons, so nobody carries one, sees a view model or an ammo counter; only the final death arms people.
+@export var io_sidearm: bool = false
+
 ## The most props an arena holds at once, whatever the count above asks for. 0 is no limit.
 @export_range(0, 200, 1, "or_greater") var prop_budget: int = 60
 
