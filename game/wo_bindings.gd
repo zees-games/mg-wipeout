@@ -1,7 +1,7 @@
 extends RefCounted
 
-## Every key this game reads, as one dot-menu [GSMenuBindings] table that the client, the settings document, the
-## Controls page and the help screen all read. Walk is Shift, dot-player-controller's own walk action; H is help in
+## Every key this game reads, as one gs-menu [GSMenuBindings] table that the client, the settings document, the
+## Controls page and the help screen all read. Walk is Shift, gs-player-controller's own walk action; H is help in
 ## every game of the family, so nothing may default to it.
 
 const GRAB := &"wo_grab"
@@ -13,7 +13,7 @@ const DROP_WEAPON := &"wo_drop_weapon"
 const SCOREBOARD := &"wo_scoreboard"
 ## The flashlight, on and off, for everybody still racing or fighting.
 const FLASHLIGHT := &"wo_flashlight"
-## dot-ui's chat window's actions, which dot-game's chat client leaves at their defaults.
+## gs-ui's chat window's actions, which gs-game's chat client leaves at their defaults.
 const CHAT := &"chat_open"
 const CHAT_TEAM := &"chat_open_team"
 ## Slots 1 to 5, the weapon pack's.
@@ -24,8 +24,8 @@ static func make() -> GSMenuBindings:
 	var keys := GSMenuBindings.new()
 	keys.add_movement("Movement", "Ctrl", "Crouch, under a high arm")
 	# Ctrl+W closes a browser tab: forward with Ctrl held is the web build's most common chord.
-	keys.add_extra(&"dot_fps_crouch", &"bind_duck_c", "Crouch, second key", "C", "Movement")
-	keys.add(&"dot_fps_walk", &"bind_walk", "Walk, for beams and the tops of balls", "Shift", "Movement")
+	keys.add_extra(&"gs_fps_crouch", &"bind_duck_c", "Crouch, second key", "C", "Movement")
+	keys.add(&"gs_fps_walk", &"bind_walk", "Walk, for beams and the tops of balls", "Shift", "Movement")
 	keys.add(GRAB, &"bind_grab", "Pick up or put down a prop (hold)", "E", "Hands")
 	keys.add(RELOAD, &"bind_reload", "Reload", "R", "Hands")
 	for i in range(SLOTS.size()):

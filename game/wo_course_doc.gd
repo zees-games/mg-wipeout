@@ -21,7 +21,7 @@ const WIRE_LIMIT := 65536
 ## The most pieces one document may hold.
 const MAX_PIECES := 600
 
-## The most toys a course or an arena may place (dot-props' loose ones: [WoCourse] `_build_toys`).
+## The most toys a course or an arena may place (gs-props' loose ones: [WoCourse] `_build_toys`).
 const MAX_TOYS := 32
 
 ## Every piece kind, and the fields each one must have. A table rather than a branch per kind, so the mapper's README,
@@ -40,7 +40,7 @@ const PIECES := {
 	"tiles": ["at", "cols", "rows", "tile", "period", "down"],
 	"conveyor": ["at", "size", "speed"],
 	"bouncer": ["at", "size", "power"],
-	# A ladder: a thin box against a wall (`at` its middle), climbed through dot-player-controller's
+	# A ladder: a thin box against a wall (`at` its middle), climbed through gs-player-controller's
 	# GSFpsLadderMode. Not solid.
 	"ladder": ["at", "size"],
 	# A pad that moves whoever steps on it to `to` (their feet), facing `heading` degrees. Solid,
@@ -53,7 +53,7 @@ const PIECES := {
 	# A curtain of water (or slime, by `tint`) across the way, falling for `duty` of every
 	# `period` and pushing whoever is in it off the side (`push`, along the piece's own +X).
 	"fall": ["at", "size", "period"],
-	# Imported geometry: dot-map's mesh `mesh` (see [WoWorld]), its brush models in `skip` left out.
+	# Imported geometry: gs-map's mesh `mesh` (see [WoWorld]), its brush models in `skip` left out.
 	"world": ["mesh"],
 	# A volume that drowns whoever is in it, as the water does: a pit's floor in imported geometry.
 	"kill": ["at", "size"],
@@ -132,7 +132,7 @@ static func validate(source: Dictionary) -> GSResult:
 
 	doc["pieces"] = normalised
 
-	# Toys: dot-props' placements, `{toy, at, yaw}`. Which ids exist is the catalogue's to say when the stage is
+	# Toys: gs-props' placements, `{toy, at, yaw}`. Which ids exist is the catalogue's to say when the stage is
 	# built (an unknown one is left out and listed), so a newer toy still plays on an older server. Only when
 	# present, so a document without any is byte for byte unchanged.
 	if doc.has("toys"):

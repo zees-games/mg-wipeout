@@ -1,6 +1,6 @@
 extends GSMatchRules
 
-## A round ends when the game says so: neither of dot-match's shipped shapes fits, as nobody dies or scores on a
+## A round ends when the game says so: neither of gs-match's shipped shapes fits, as nobody dies or scores on a
 ## course. What decides is [WoGame], which knows who finished; this only reads that answer, and returns NONE every
 ## tick it has not decided.
 
@@ -9,14 +9,14 @@ var decision_fn: Callable = Callable()
 
 
 static func make() -> GSMatchRules:
-	# Not this class's own name, for dot-match's reason: a script that names itself in an
+	# Not this class's own name, for gs-match's reason: a script that names itself in an
 	# expression cuts Godot 4.7.2's exit teardown short. See docs/gdscript-hazards.md.
 	var rules := new()
 	rules.id = &"wipeout"
 	rules.display_name = "Wipeout"
 	rules.score_limit = 0
 	# The course and the final death keep their own clocks; this is the BACKSTOP, set by [WoGame] to their sum and a
-	# minute more, so a round with a hole in its rule ends as a draw rather than running for ever, and dot-match
+	# minute more, so a round with a hole in its rule ends as a draw rather than running for ever, and gs-match
 	# stops warning that only a custom outcome can end a round.
 	rules.time_limit_sec = 600.0
 	rules.rounds_to_win = 999

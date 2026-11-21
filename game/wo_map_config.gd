@@ -1,6 +1,6 @@
 extends RefCounted
 
-## The rules a course's per-map file may set: `cfg/game/mg-wipeout/dot_map/map/<course id>.yml`, anything else is logged and ignored.
+## The rules a course's per-map file may set: `cfg/game/mg-wipeout/gs_map/map/<course id>.yml`, anything else is logged and ignored.
 
 ## cvar -> its constraint. Server-side rules only; movement is the game's pinned profile.
 const KEYS := {

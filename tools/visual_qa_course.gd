@@ -1,8 +1,8 @@
 extends RefCounted
 
-## The course half of Wipeout's visual QA capture (tools/visual_qa.gd; the loop is dot-game's docs/visual-qa.md): the course objects, each filmed with a runner (WoFigure) in the real built course (WoCourse, drawn as a client draws it).
+## The course half of Wipeout's visual QA capture (tools/visual_qa.gd; the loop is gs-game's docs/visual-qa.md): the course objects, each filmed with a runner (WoFigure) in the real built course (WoCourse, drawn as a client draws it).
 ## object_<kind> is one of every piece kind the shipped courses are made of (mover, turntable, roller, seesaw, tiles, conveyor, bouncer, spinner, pendulum, pusher, fall, ramp, ball, cylinder), plus object_start (the start pen and its gate). Clip: approach. A mover, turntable, seesaw, tiles, conveyor, ramp or bouncer is stood on (a mover, turntable and seesaw carry the runner); a hazard is walked up to from 4 m.
-## The first-person camera is the runner's eye, so f shows what a runner sees; t and o are dot-game's outside views.
+## The first-person camera is the runner's eye, so f shows what a runner sees; t and o are gs-game's outside views.
 
 const WoCatalogue := preload("../game/wo_catalogue.gd")
 const WoCourse := preload("../game/wo_course.gd")

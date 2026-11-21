@@ -1,6 +1,6 @@
 extends RefCounted
 
-## The flashlight's config and the server's start rule (the beam, the click and the replication helpers are dot-flashlight's).
+## The flashlight's config and the server's start rule (the beam, the click and the replication helpers are gs-flashlight's).
 
 const WoAmbience := preload("wo_ambience.gd")
 

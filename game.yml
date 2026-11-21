@@ -1,6 +1,6 @@
 # This game's descriptor: what a server runs when it installs this repository's pack.
 #
-# It travels INSIDE the pack (dot-ci's package.sh --pack keeps it at the root), so a
+# It travels INSIDE the pack (gs-ci's package.sh --pack keeps it at the root), so a
 # server started with `TMC_GAMES=<owner>/<repo>` needs nothing but the content origin:
 # `./server install-games` fetches the pack, verifies it, and writes this file to
 # content/<repo>/game.yml, where an operator can then edit cvars and player counts.
@@ -10,9 +10,9 @@
 # neither of which this file can know. What is written here for them is a placeholder.
 #
 # Paths are relative to the pack's mount point, which is also this repository's root.
-# Not yet in dot-server-deploy's content/ (2026-10-05): this game has not been published.
+# Not yet in gs-server-deploy's content/ (2026-10-05): this game has not been published.
 # When it is, keep scene, client_scene and module in step with that copy;
-# dot-server-deploy's examples/install_descriptor suite fails when the two disagree.
+# gs-server-deploy's examples/install_descriptor suite fails when the two disagree.
 
 content_id: gamemann/mg-wipeout
 version: 0.0.0
@@ -26,7 +26,7 @@ client_scene: game/wo.tscn
 module: game/wo_module.gd
 
 # No maps pack is named here. Which courses a server runs is the server owner's choice, made in
-# their deployment's map config (dot-server-deploy's cfg/content.yml, gamemann/mg-wipeout-maps
+# their deployment's map config (gs-server-deploy's cfg/content.yml, gamemann/mg-wipeout-maps
 # for the stock set); the module fetches what the server names. This game's own pack ships
 # only its built-in wo_practice and its practice arena.
 

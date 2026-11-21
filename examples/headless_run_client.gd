@@ -100,11 +100,11 @@ func _test_a_carrier_is_drawn_carrying() -> void:
 	_finished()
 
 
-## The HUD's health and clock are dot-ui's glance pieces, health only in a final death. A
+## The HUD's health and clock are gs-ui's glance pieces, health only in a final death. A
 ## headless viewport is 64 x 64, so the layout is arithmetic on two bottom-anchored things;
 ## look at it with `tools/shot.sh --view=finale`.
 func _test_the_hud() -> void:
-	_section("the HUD draws health and the clock through dot-ui")
+	_section("the HUD draws health and the clock through gs-ui")
 	var game := await _world(func(c: WoConfig) -> void: c.countdown_seconds = 0.2)
 	var me := game.add_player(&"u1", "Ada")
 	var _other := game.add_player(&"u2", "Bo")
@@ -164,13 +164,13 @@ func _test_the_hud() -> void:
 	_t = settings.settings.set_value(&"ui_theme", &"midnight")
 	settings.queue_free()
 
-	# A pack naming these classes does not parse on a shell whose dot-ui predates them, so
-	# the requires.json dot-ci derives must ask for dot-ui 4, and nothing may lower it.
+	# A pack naming these classes does not parse on a shell whose gs-ui predates them, so
+	# the requires.json gs-ci derives must ask for gs-ui 4, and nothing may lower it.
 	var asks := GSAddonApi.derive()
 	_check(
-		int(asks.get("dot_ui", 0)) >= 13 and FileAccess.file_exists("res://" + GSAddonApi.FLOOR_FILE),
-		"the pack asks a shell for dot-ui level 13, the weapon icons (requires.floor.json)",
-		str(asks.get("dot_ui"))
+		int(asks.get("gs_ui", 0)) >= 13 and FileAccess.file_exists("res://" + GSAddonApi.FLOOR_FILE),
+		"the pack asks a shell for gs-ui level 13, the weapon icons (requires.floor.json)",
+		str(asks.get("gs_ui"))
 	)
 	hud.queue_free()
 	_finished()
@@ -187,10 +187,10 @@ func _test_help_and_menu() -> void:
 	_check(built.ok and keys != null and keys.key_for(GSMenuBindings.HELP_ACTION) == "H", "help is on H")
 	_check(keys.defaults_on("H").size() == 1, "and nothing else in the table defaults to H",
 		str(keys.defaults_on("H").map(func(r: Dictionary) -> String: return str(r["label"]))))
-	_check(keys.key_for(&"dot_menu_weapon_next") == "Wheel down"
-		and keys.key_for(&"dot_menu_weapon_previous") == "Wheel up",
+	_check(keys.key_for(&"gs_menu_weapon_next") == "Wheel down"
+		and keys.key_for(&"gs_menu_weapon_previous") == "Wheel up",
 		"the wheel is on the Controls page: up previous, down next",
-		"%s / %s" % [keys.key_for(&"dot_menu_weapon_previous"), keys.key_for(&"dot_menu_weapon_next")])
+		"%s / %s" % [keys.key_for(&"gs_menu_weapon_previous"), keys.key_for(&"gs_menu_weapon_next")])
 	var h := InputEventKey.new()
 	h.physical_keycode = KEY_H
 	h.keycode = KEY_H
@@ -210,7 +210,7 @@ func _test_help_and_menu() -> void:
 	_finished()
 
 
-## M opens the course list and, solo, a choice changes the course now (the vote is dot-vote's
+## M opens the course list and, solo, a choice changes the course now (the vote is gs-vote's
 ## suite). Offline the world samples movement itself, so the client's buttons must go onto
 ## that sample, not the controller's command, or no trigger reaches the gun.
 func _test_offline_trigger() -> void:
@@ -277,7 +277,7 @@ func _test_the_map_menu() -> void:
 
 
 ## The pack carries its art (a delivered game has only what is vendored in assets/), so every
-## model the weapons table names must be here. Sync it with zee-dot-weapons' tools/sync-art.sh.
+## model the weapons table names must be here. Sync it with zee-gs-weapons' tools/sync-art.sh.
 func _test_the_weapon_art_is_vendored() -> void:
 	_section("every model the weapon art table names is vendored in this game")
 	var models := ZeeWeaponArtTable.validate_models()
@@ -423,7 +423,7 @@ func _test_the_drawn_hud(hud: Node, drawn: ZeeWeaponRig) -> GSAmmoCounter:
 ## The client's GSWeaponWheel steps a real slot on the weapon-next action, and not with the pointer free.
 func _test_wheel(client: Node, drawn: ZeeWeaponRig) -> void:
 	var step := InputEventAction.new()
-	step.action = &"dot_menu_weapon_next"
+	step.action = &"gs_menu_weapon_next"
 	step.pressed = true
 	var _given := drawn.arsenal.give(ZeeWeaponIds.PISTOL)
 	var ring: Array = drawn.arsenal.slots()

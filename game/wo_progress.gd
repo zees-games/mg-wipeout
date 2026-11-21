@@ -2,7 +2,7 @@ extends Node
 
 const WoPlayer := preload("wo_player.gd")
 
-## What a player keeps from a round: the course's numbers, declared in [method schema] and reported to dot-stats as
+## What a player keeps from a round: the course's numbers, declared in [method schema] and reported to gs-stats as
 ## DELTAs, and the achievements over them via [GSAchievementStatsLink]. Stand-ins are never counted. Filed under the
 ## scoped profile key ([member durable_key_fn]) else `u<session>`, fixed when counting begins.
 
@@ -27,14 +27,14 @@ const FALLS := &"wo.falls"
 const KNOCKS := &"wo.knocks"
 ## A course finished without falling in once.
 const CLEAN_RUNS := &"wo.clean_runs"
-## The published skill figure the site orders by (dot-stats' GSStatsRank).
+## The published skill figure the site orders by (gs-stats' GSStatsRank).
 const RANK_SCORE := &"rank_score"
 
 signal earned(player_id: StringName, title: String, points: int)
 
 var stats: GSStatsTracker = null
 
-## Kills and hits by body zone, through dot-stats' event feed.
+## Kills and hits by body zone, through gs-stats' event feed.
 var feed: GSStatsEventFeed = null
 var achievements: GSAchievementTracker = null
 var link: GSAchievementStatsLink = null
@@ -59,7 +59,7 @@ var _round_kills: Dictionary = {}
 var _reached_finale: bool = false
 
 ## `func(player_id: StringName) -> String`: the durable key to file this player under, or
-## "" for none. Set by the module from dot-platform; see the class note.
+## "" for none. Set by the module from gs-platform; see the class note.
 var durable_key_fn: Callable = Callable()
 
 ## World id -> the key their numbers are filed under, and back. Fixed at [method record]'s

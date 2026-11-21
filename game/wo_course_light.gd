@@ -1,9 +1,9 @@
 extends RefCounted
-## A course's light: the dot-lighting document its theme describes and the profile this machine draws it with
+## A course's light: the gs-lighting document its theme describes and the profile this machine draws it with
 ## ([wo_course_base.gd] puts both on its rig).
 
 
-## The dot-lighting document a course's theme describes. The sun is high (a deck is not in its neighbour's shadow) and
+## The gs-lighting document a course's theme describes. The sun is high (a deck is not in its neighbour's shadow) and
 ## behind the start (the faces a runner runs toward are lit). The ambient is a pale cool grey whatever the theme, as a
 ## saturated fill turns shaded faces navy. Fog starts at 120 m so nothing a player must react to is hidden.
 static func light_document(theme: Dictionary) -> Dictionary:
@@ -28,7 +28,7 @@ static func light_document(theme: Dictionary) -> Dictionary:
 	}
 
 
-## What this machine draws of a course's light: dot-lighting's `painted()` profile (API 3), matched to the
+## What this machine draws of a course's light: gs-lighting's `painted()` profile (API 3), matched to the
 ## Compatibility renderer, which has no headroom above white. Shadows stay on in the browser, unlike `web()`: a mover's
 ## shadow on the deck is how a player sees where it is.
 static func light_profile() -> GSLightProfile:

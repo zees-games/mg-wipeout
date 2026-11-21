@@ -36,10 +36,10 @@ const ALIASES := {
 const ROSTER_INTERVAL := 2.0
 
 ## Where the services keep punishments; empty is [GSGameServices]'s default, the real store. Static, because no
-## instance exists to set a field on (dot-server constructs from a path); `examples/dedicated.tscn` points it elsewhere.
+## instance exists to set a field on (gs-server constructs from a path); `examples/dedicated.tscn` points it elsewhere.
 static var punishments_file: String = ""
 
-## dot-workbench over the config and the block rules; null before the module loads.
+## gs-workbench over the config and the block rules; null before the module loads.
 var workbench: GSGameWorkbench = null
 
 ## `mp_killcam_time`, which follows `wo_killcam_seconds` and the other way round.
@@ -51,7 +51,7 @@ var _bots: GSConVar = null
 ## `mp_forcecamera`, kept so the deprecated `wo_spectate_camera` writes through it.
 var _force_camera_cvar: Object = null
 
-## How many stand-ins, from how many people: dot-server's one rule for every game. See
+## How many stand-ins, from how many people: gs-server's one rule for every game. See
 ## [method _keep_the_round_full].
 var _quota: GSBotQuota = null
 
@@ -117,8 +117,8 @@ func _make_services() -> Node:
 	return services
 
 
-## Profiles, avatars and admission: dot-platform's [GSPlatformIdentity] over this game's one-slot schema. Not
-## authentication: that is the host's `dot_auth_server`; with it off everybody is a guest with a profile of their own.
+## Profiles, avatars and admission: gs-platform's [GSPlatformIdentity] over this game's one-slot schema. Not
+## authentication: that is the host's `gs_auth_server`; with it off everybody is a guest with a profile of their own.
 func _make_identity() -> Node:
 	var identity_layer := GSPlatformIdentity.new()
 	identity_layer.avatar_schema = WoAvatars.schema()
@@ -135,7 +135,7 @@ func _game_load() -> GSResult:
 
 	add_command("wo_status", _cmd_status, "Show the round, the course and who is where")
 	add_command("wo_net", _cmd_net, "Show what the netcode is doing")
-	# The game's own map commands are renameable from maps.yml's `commands:` block, like dot-vote's.
+	# The game's own map commands are renameable from maps.yml's `commands:` block, like gs-vote's.
 	for name in world.command_names("wo_courses"):
 		add_command(name, _cmd_courses, "List the courses and arenas, and any refused file")
 	for name in world.command_names("wo_reload"):
@@ -167,14 +167,14 @@ func _game_load() -> GSResult:
 		"Automatic stand-ins: 1 keeps as many as bot_quota and bot_quota_mode say, 0 none at all."
 	)
 
-	# dot-game's "still loading": a seat behind its client's cover is neither hurt, eliminated nor counted across.
+	# gs-game's "still loading": a seat behind its client's cover is neither hurt, eliminated nor counted across.
 	world.harm_gate = func(player_id: StringName) -> bool:
 		if bridge == null:
 			return true
 		var peer := int((bridge as WoNetBridge).peer_for_player(WoNetBridge.session_of(player_id)))
 		return peer <= 0 or can_peer_be_harmed(peer)
 
-	# dot-server's GSBotQuota: `bot_quota` means the same on every server; the default is this
+	# gs-server's GSBotQuota: `bot_quota` means the same on every server; the default is this
 	# game's `minimum_players` in fill mode, and `wo_bots` stays the switch.
 	_quota = GSBotQuota.install(self, world.config.minimum_players)
 
@@ -191,7 +191,7 @@ func _game_load() -> GSResult:
 	return GSResult.success(null)
 
 
-## `wo_rank`: "weighted", "elo", or "weighted:wo.rounds_won=3,wo.falls=-0.1" (dot-stats' GSStatsRank.apply_cvar).
+## `wo_rank`: "weighted", "elo", or "weighted:wo.rounds_won=3,wo.falls=-0.1" (gs-stats' GSStatsRank.apply_cvar).
 func _add_rank_cvar(world: WoGame) -> void:
 	add_cvar("wo_rank", "weighted",
 		"Skill rank formula: weighted, elo, or weighted:<stat>=<weight>,...",
@@ -205,7 +205,7 @@ func _add_rank_cvar(world: WoGame) -> void:
 func _bind_rule_cvars(world: WoGame) -> void:
 	var replicated := GSConVar.FLAG_ARCHIVE | GSConVar.FLAG_NOTIFY | GSConVar.FLAG_REPLICATED
 
-	# `mp_teammate_passthrough`: dot-combat's, live from the next shot; the client predicts its
+	# `mp_teammate_passthrough`: gs-combat's, live from the next shot; the client predicts its
 	# tracers under it (see the client's _build_netcode).
 	if world.combat != null:
 		var _passthrough := world.combat.bind_cvars(add_cvar, GSConVar.FLAG_NOTIFY | GSConVar.FLAG_REPLICATED)
@@ -228,7 +228,7 @@ func _bind_rule_cvars(world: WoGame) -> void:
 
 	# REPLICATED: where the clients' killcam camera sits (0 the killer's eye, 1 behind the killer).
 	var _killview := add_cvar("mp_killview_camera", "0",
-		"Killcam camera: 0 the killer's eye, 1 behind the killer (dot-replay GSKillcamFraming)",
+		"Killcam camera: 0 the killer's eye, 1 behind the killer (gs-replay GSKillcamFraming)",
 		replicated)
 
 	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: each client flies its own spectator
@@ -237,7 +237,7 @@ func _bind_rule_cvars(world: WoGame) -> void:
 		if str(made.get(&"name")) == GSSpectatorRules.CVAR_FORCE_CAMERA:
 			_force_camera_cvar = made
 
-	# sv_weapon_drop*: dot-weapon's drop rules. REPLICATED, because the drop key and the pickup reach follow them.
+	# sv_weapon_drop*: gs-weapon's drop rules. REPLICATED, because the drop key and the pickup reach follow them.
 	var _drops := world.drop_rules.bind_cvars(add_cvar, replicated)
 
 	# zee_ads_rules: spread and pace while aimed are part of the prediction, so the numbers cross as one JSON cvar.
@@ -252,8 +252,8 @@ func _bind_rule_cvars(world: WoGame) -> void:
 	var _toys := world.toy_rules.bind_cvars(add_cvar, replicated)
 
 
-## Who somebody is reaches the world: a face as they are seated, and the real name and face once dot-platform has
-## them. Admission finishes AFTER seating (dot-server has no stage to hold them), so `player_admitted` is when the
+## Who somebody is reaches the world: a face as they are seated, and the real name and face once gs-platform has
+## them. Admission finishes AFTER seating (gs-server has no stage to hold them), so `player_admitted` is when the
 ## real ones exist; wardrobe changes and `platform_name` come later. All end in [method WoNetBridge.refresh_player].
 func _wire_identity() -> void:
 	var link := bridge as WoNetBridge
@@ -267,9 +267,9 @@ func _wire_identity() -> void:
 	hook_post("player_renamed", _on_profile)
 
 
-## What a session looks like: what dot-platform resolved, or the stock person. Through the platform module's
+## What a session looks like: what gs-platform resolved, or the stock person. Through the platform module's
 ## `player_for`, never the hub by a key made here: the hub keys by a scoped profile key only admission knows, so
-## `u<session>` finds nobody. Duck-typed (no dot-platform is a configuration).
+## `u<session>` finds nobody. Duck-typed (no gs-platform is a configuration).
 func _avatar_for(session_id: int) -> GSAvatar:
 	var session := server.session_by_userid(session_id) if server != null else null
 	var platform: Object = server.modules.get_module("platform") \
@@ -303,7 +303,7 @@ func _on_profile(event: GSEvent) -> void:
 func _add_tunables(world: WoGame) -> void:
 	var config := world.config
 
-	# How the stand-ins race and fight is one word: dot-bot's `bot_difficulty` and the `bot_*` settings it bundles,
+	# How the stand-ins race and fight is one word: gs-bot's `bot_difficulty` and the `bot_*` settings it bundles,
 	# with this game's racing mistakes as `wo_bot_*` on top ([WoRacer]). On the world as metadata, never the
 	# registry.
 	var _bot_cvars := GSBotSettings.of(world).bind_cvars(add_cvar, GSConVar.FLAG_NOTIFY, add_command)
@@ -396,7 +396,7 @@ func _on_config_field(key: String, _value: Variant, _source: String) -> void:
 				vote.refresh_maps()
 
 
-## dot-workbench over the config and the block rules: the F9 panel off a dedicated server, the HTTP page only with `workbench.enabled` in cfg/server.yml. Admission by dot-auth ticket is [GSGameWorkbench]'s own (`admin_uids` / `admin_groups`), beside the server's admins.
+## gs-workbench over the config and the block rules: the F9 panel off a dedicated server, the HTTP page only with `workbench.enabled` in cfg/server.yml. Admission by gs-auth ticket is [GSGameWorkbench]'s own (`admin_uids` / `admin_groups`), beside the server's admins.
 func _start_workbench(world: WoGame) -> void:
 	workbench = GSGameWorkbench.new()
 	workbench.name = "Workbench"
@@ -519,7 +519,7 @@ func _game_tick(_tick: int, delta: float) -> void:
 	_note_pings()
 
 
-## Each session's ping onto its player, for the Tab board. dot-server already keeps it.
+## Each session's ping onto its player, for the Tab board. gs-server already keeps it.
 func _note_pings() -> void:
 	var world := game as WoGame
 	if world == null or server == null:
@@ -593,7 +593,7 @@ func _wire_chat() -> void:
 	services.connect("command_entered", _on_chat_command)
 
 
-## The players' vote for the next course, over dot-vote (`!vote`, `!rtv`, `!nominate`); see `game/wo_vote.gd`.
+## The players' vote for the next course, over gs-vote (`!vote`, `!rtv`, `!nominate`); see `game/wo_vote.gd`.
 ## Configured in `user://cfg/wipeout_vote.json` or `game.yml` `metadata: course_vote:`. A vote that cannot be built is
 ## a WARN, never a server that will not start.
 func _build_vote(world: WoGame) -> void:
@@ -680,9 +680,9 @@ func _build_vote(world: WoGame) -> void:
 	var commanded := vote.install_commands(self)
 	GSLog.result(CHANNEL, "the course vote's commands", commanded)
 
-	# The map menu (M), dot-vote's: a player holding the owner's `sv_map_menu_flag` changes the
+	# The map menu (M), gs-vote's: a player holding the owner's `sv_map_menu_flag` changes the
 	# course now, not next round, and sees the same rows a solo player does. Read by name,
-	# because a server on a dot-vote older than the menu has no `map_menu` and runs without it.
+	# because a server on a gs-vote older than the menu has no `map_menu` and runs without it.
 	var menu_half: Variant = vote.commands.get(&"map_menu") if vote.commands != null else null
 	if menu_half is Object:
 		(menu_half as Object).set(&"change_fn", world.change_course_now)
@@ -716,7 +716,7 @@ func _vote_follows_world(world: WoGame) -> void:
 		)
 
 
-## Per-map settings (`cfg/game/mg-wipeout/dot_map/map/<course id>.yml`): the rules a course may bend. Server-only rules, so no client hook; movement is the game's pinned profile and is not a map's to change.
+## Per-map settings (`cfg/game/mg-wipeout/gs_map/map/<course id>.yml`): the rules a course may bend. Server-only rules, so no client hook; movement is the game's pinned profile and is not a map's to change.
 func _map_config_keys() -> Dictionary:
 	return WoMapConfig.KEYS
 
@@ -765,7 +765,7 @@ func _wire_progress(world: WoGame) -> void:
 	if bridge == null:
 		return
 
-	# Filed under dot-game's stable per-server key (guests too), so it outlives the connection
+	# Filed under gs-game's stable per-server key (guests too), so it outlives the connection
 	# and a restart; see [WoProgress].
 	if world.progress != null:
 		world.progress.durable_key_fn = func(id: StringName) -> String:

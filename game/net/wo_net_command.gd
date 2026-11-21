@@ -6,7 +6,7 @@ const WoNetCommand := preload("wo_net_command.gd")
 ## and flies a chopper. The game buttons ride in [member GSFpsCommand.buttons], ordered against the movement they
 ## were aimed with; the slot is its own field ([member WoPlayer.wanted_slot]).
 
-## Fire, and the chopper's drop. `BUTTON_USER_0`, which dot-player-controller reserves.
+## Fire, and the chopper's drop. `BUTTON_USER_0`, which gs-player-controller reserves.
 const BUTTON_FIRE := GSFpsCommand.BUTTON_USER_0
 
 ## The alt-fire, which on every blaster in the pack is a bash.

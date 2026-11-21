@@ -1,6 +1,6 @@
 extends GSFpsController
 
-## The first-person controller with the hooks a course needs INSIDE the tick: dot-net's predictor replays ticks by
+## The first-person controller with the hooks a course needs INSIDE the tick: gs-net's predictor replays ticks by
 ## calling `simulate_tick` directly, so anything done around the tick is skipped on a replay and obstacles would be
 ## swept where they are now. [method _on_pre_simulate] and [method _on_post_simulate] run in replays.
 

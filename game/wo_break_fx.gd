@@ -1,8 +1,8 @@
 extends Node
 
-## Splinters and chips where a prop breaks, drawn by dot-fx's GSFxBreak and following fx_quality.
+## Splinters and chips where a prop breaks, drawn by gs-fx's GSFxBreak and following fx_quality.
 
-## Wire index -> dot-fx material; append only, the index travels in SHATTER.
+## Wire index -> gs-fx material; append only, the index travels in SHATTER.
 const MATERIALS: PackedStringArray = ["wood", "metal", "plastic", "stone"]
 const KIND_OF_PROP := {&"crate": 0, &"barrel": 1, &"cone": 2, &"tyre": 2, &"boulder": 3}
 

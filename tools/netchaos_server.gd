@@ -1,6 +1,6 @@
 extends GSGameNetchaosServer
 
-## Wipeout's side of `tools/netchaos.sh` (dot-game's GSGameNetchaosServer): the world scene and the module, as a dedicated server loads them, with no stand-ins and no warmup.
+## Wipeout's side of `tools/netchaos.sh` (gs-game's GSGameNetchaosServer): the world scene and the module, as a dedicated server loads them, with no stand-ins and no warmup.
 
 var _scene: Node = null
 

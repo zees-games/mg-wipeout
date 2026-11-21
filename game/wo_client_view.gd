@@ -146,11 +146,11 @@ var _beeped: int = -1
 ## is built, the local player exists and its camera is current.
 var gate: GSLoadGate = null
 
-## dot-game's client platform: the cover, settings and menu, console, HUD theme, Tab, M, the
+## gs-game's client platform: the cover, settings and menu, console, HUD theme, Tab, M, the
 ## pointer and the input block. See [GSGameClient].
 var platform: GSGameClient = null
 
-## Where the dead lie: dot-player-char's ragdolls under the game's (the server's) rules.
+## Where the dead lie: gs-player-char's ragdolls under the game's (the server's) rules.
 var ragdolls: GSPlayerRagdolls = null
 
 ## Simulated seconds the drawn gun has gone without a trigger, a reload or a switch.
@@ -162,7 +162,7 @@ func _build_camera() -> void:
 	pass
 
 
-## dot-game's chat box and microphone, with this game's channels and voice format, and dot-server's
+## gs-game's chat box and microphone, with this game's channels and voice format, and gs-server's
 ## own lines (arriving on the shell's client link, not the bridge). Static so a suite builds the
 ## same box the client does.
 static func new_chat() -> GSGameChatClient:
@@ -340,7 +340,7 @@ func _build_hud() -> void:
 
 
 
-## The Tab board: dot-menu's, with this game's columns. Built once the menu exists (see
+## The Tab board: gs-menu's, with this game's columns. Built once the menu exists (see
 ## [method _build_settings]). Online it is the server's roster (names, pings, time on) with this
 ## game's replicated numbers joined in by id; offline it is [method board_snapshot], all local.
 func _dress_board() -> void:

@@ -26,9 +26,9 @@ var weapons_fn: Callable = Callable()
 var hit_fx: GSHitFeedback = null
 var hit_marker: GSHitMarker = null
 
-## The clock with the phase line under it: dot-ui's [GSScoreStrip], clock alone.
+## The clock with the phase line under it: gs-ui's [GSScoreStrip], clock alone.
 var strip: GSScoreStrip = null
-## Health in a final death: dot-ui's [GSVitals], bar and number on one plate, red at a
+## Health in a final death: gs-ui's [GSVitals], bar and number on one plate, red at a
 ## quarter. Hidden on a course; see the class note.
 var vitals: GSVitals = null
 var _field: Label = null
@@ -96,9 +96,9 @@ static func piece_theme() -> Theme:
 	return t
 
 
-## The Escape menu, whose theme this HUD follows (dot-menu's `follow_hud`): it sets the theme on the HUD's root now
+## The Escape menu, whose theme this HUD follows (gs-menu's `follow_hud`): it sets the theme on the HUD's root now
 ## and at every change, and applies the player's HUD size. Duck-typed and called by name, for a client shell older
-## than dot-menu 7.
+## than gs-menu 7.
 var _menu: Object = null
 
 
@@ -346,7 +346,7 @@ func _build_vitals() -> void:
 ## The bottom-right widgets: ammo, weapon icon, hit marker and the field line.
 func _build_gun(size: int) -> void:
 	# Bottom right, above the field line: what is in hand and how much is in it. The play test
-	# found a gun with no counter anywhere; dot-ui's GSAmmoCounter is the family's one.
+	# found a gun with no counter anywhere; gs-ui's GSAmmoCounter is the family's one.
 	ammo = GSAmmoCounter.new()
 	ammo.name = "Ammo"
 	ammo.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -381,9 +381,9 @@ func _build_gun(size: int) -> void:
 	_field.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 
-## dot-ui's GSCrosshair as a plain dot (no arms, no spread) where the host has it (API 14), else the old square.
+## gs-ui's GSCrosshair as a plain dot (no arms, no spread) where the host has it (API 14), else the old square.
 func _make_crosshair() -> Control:
-	if GSAddonApi.build_level("dot_ui") >= 14:
+	if GSAddonApi.build_level("gs_ui") >= 14:
 		var shape: Variant = GSCrosshair
 		var cross := (shape as GDScript).new() as Control
 		cross.name = "Crosshair"

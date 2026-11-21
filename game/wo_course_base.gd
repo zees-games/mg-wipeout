@@ -10,8 +10,8 @@ const WoCourseLight := preload("wo_course_light.gd")
 
 const CHANNEL := "wo.course"
 
-## dot-lighting's contact shade, loaded by path (API 4): see [method _add_contact_shade].
-const CONTACT_SHADE_SCRIPT := "res://addons/dot_lighting/runtime/dot_contact_shade.gd"
+## gs-lighting's contact shade, loaded by path (API 4): see [method _add_contact_shade].
+const CONTACT_SHADE_SCRIPT := "res://addons/gs_lighting/runtime/gs_contact_shade.gd"
 
 ## How far below a start gate goes when it opens.
 const GATE_DROP := 80.0
@@ -59,7 +59,7 @@ var strikes: Array[Dictionary] = []
 var _gate: StaticBody3D = null
 var _gate_rest: Transform3D = Transform3D.IDENTITY
 
-## The stage's toys (dot-props' [GSPropBodyBox]): loose ones only (beach balls, a finale's balls), simulated where
+## The stage's toys (gs-props' [GSPropBodyBox]): loose ones only (beach balls, a finale's balls), simulated where
 ## [member authoritative] and posed from snapshots elsewhere, under the game's `sv_toys*` [member toy_rules]. A runner
 ## pushes one through (`WoGame._advance_toys`); a fixed toy would be a way past an obstacle. Set before building.
 var toys: GSPropBodyBox = null
@@ -429,10 +429,10 @@ func _add_box(parent: Node3D, size: Vector3, role: WoTextures.Role, moving: bool
 	return mesh
 
 
-## Marks a drawing as meant to be walked through, for dot-core's [GSCollisionAudit]: hazards (measured by [method
+## Marks a drawing as meant to be walked through, for gs-core's [GSCollisionAudit]: hazards (measured by [method
 ## _knock_pusher] and kin, never collided), the water plane and the markers. A SOLID piece is never marked.
 static func _not_collided(node: Node) -> void:
-	node.set_meta(&"dot_no_collision", true)
+	node.set_meta(&"gs_no_collision", true)
 
 
 ## A body the course moves by setting its transform each tick. STATIC, teleported: a kinematic body applies a new
@@ -960,11 +960,11 @@ func _build_gallery() -> void:
 		_put_on_world_layer(body)
 
 
-## The sky, the sun and the water. Client side. The light is a dot-lighting document made from the course's theme
+## The sky, the sun and the water. Client side. The light is a gs-lighting document made from the course's theme
 ## ([method WoCourseLight.light_document]). Contact shade (API 4, the Compatibility renderer has no AO) only on still boxes, bouncers
 ## and the start pen: moving pieces would leave it behind. By path, so an older shell draws without it.
 func _add_contact_shade() -> void:
-	if GSAddonApi.build_level("dot_lighting") < 4 or not ResourceLoader.exists(CONTACT_SHADE_SCRIPT):
+	if GSAddonApi.build_level("gs_lighting") < 4 or not ResourceLoader.exists(CONTACT_SHADE_SCRIPT):
 		return
 	var boxes: Array = _pen_boxes.duplicate()
 	for piece: Dictionary in pieces:
@@ -1272,7 +1272,7 @@ func start_spot(seat: int, of: int) -> Array:
 
 
 ## The map's own start points (`info_player_*`) when an io world is here, the team's first when
-## it has them: dot-map's spawn_points, in metres.
+## it has them: gs-map's spawn_points, in metres.
 func io_spawns() -> Array:
 	if io == null or io.world == null:
 		return []

@@ -1,6 +1,6 @@
 extends RefCounted
 
-## How a stand-in races, one column per dot-bot preset. A race is lost to mistakes, never speed (a slower bot reads as
+## How a stand-in races, one column per gs-bot preset. A race is lost to mistakes, never speed (a slower bot reads as
 ## broken), so difficulty is a set of mistake rates. Rows are cvars `wo_bot_<field>`, an override outliving a preset
 ## change; [method factor] varies each bot; `WoConfig.bot_mistakes` scales all, 0 being never wrong.
 
@@ -26,7 +26,7 @@ const COL_MAX := 2
 const COL_FIRST_PRESET := 3
 const COL_HELP := 7
 
-## The dot-bot preset the values below are for; follows [member settings].
+## The gs-bot preset the values below are for; follows [member settings].
 var preset: String = GSBotProfile.DEFAULT_PRESET
 
 ## Fields set by hand, field -> float. They survive a preset change.
@@ -35,7 +35,7 @@ var overrides: Dictionary = {}
 ## Scales every mistake; [code]WoConfig.bot_mistakes[/code]. 0 is never wrong.
 var mistakes: float = 1.0
 
-## The world's dot-bot settings, read for the preset and for `reaction`.
+## The world's gs-bot settings, read for the preset and for `reaction`.
 var settings: GSBotSettings = null
 
 
@@ -64,7 +64,7 @@ func value(field: String) -> float:
 			return raw * maxf(mistakes, 0.0)
 
 
-## The reaction to a window opening, seconds: dot-bot's `bot_reaction`, scaled like a mistake.
+## The reaction to a window opening, seconds: gs-bot's `bot_reaction`, scaled like a mistake.
 func reaction() -> float:
 	var seconds := settings.profile.reaction if settings != null else 0.3
 	return seconds * maxf(mistakes, 0.0)
@@ -124,7 +124,7 @@ var _cvars: Dictionary = {}
 var _writing: bool = false
 
 
-## Registers `wo_bot_<field>` for every row through [param add] (dot-server's
+## Registers `wo_bot_<field>` for every row through [param add] (gs-server's
 ## [code]GSModule.add_cvar(name, default, help, flags)[/code]). A value a config left waiting
 ## is read back as an override. Each cvar follows a preset change unless it was set by hand.
 func bind_cvars(add: Callable, flags: int = 0) -> Array:

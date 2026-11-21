@@ -105,7 +105,7 @@ func path_clear_script(from: Vector3, to: Vector3, tick: int, speed: float, marg
 	return true
 
 
-## Whether a stand-in's asks ([method bot_knock], [method path_clear]) go to dot-sim's `GSSimHazards` when the
+## Whether a stand-in's asks ([method bot_knock], [method path_clear]) go to gs-sim's `GSSimHazards` when the
 ## library has it: the course's hazards written once per build, each ask one call. A player's own knock
 ## ([method knock], in [WoPlayer]'s tick) stays in script. Off: the script for everything.
 static var native_knock := true
@@ -122,7 +122,7 @@ var _native_rate := -1
 var _native_cull := true
 
 
-## [method knock] for a stand-in: dot-sim's answer when the library has the hazards module, the script's otherwise.
+## [method knock] for a stand-in: gs-sim's answer when the library has the hazards module, the script's otherwise.
 ## The same throw to the bit (`headless_native_knock`).
 func bot_knock(feet: Vector3, crouched: bool, tick: int, limits: Vector3) -> Vector3:
 	var native: Variant = hazards_native()
@@ -232,7 +232,7 @@ func _make_native_hazards() -> Variant:
 				])
 
 		if not bool(table.add(kind, frame, aux, numbers, _hazard_centre(piece), _hazard_reach(piece))):
-			push_error("WoCourse: dot-sim refused hazard %s %d; stand-ins ask the script" % [kind, int(piece["index"])])
+			push_error("WoCourse: gs-sim refused hazard %s %d; stand-ins ask the script" % [kind, int(piece["index"])])
 			return null
 
 	return table

@@ -1,5 +1,5 @@
 extends "wo_client_view.gd"
-## The flashlight's presentation, split out of `wo_client.gd` (which extends this): the light on the eye and the others' beams (dot-flashlight); the server owns on/off. No `class_name`.
+## The flashlight's presentation, split out of `wo_client.gd` (which extends this): the light on the eye and the others' beams (gs-flashlight); the server owns on/off. No `class_name`.
 
 ## The light on the eye and the others' beams.
 var flash: GSFlashlight = null

@@ -1,6 +1,6 @@
 extends GSGameCheckSuite
 
-## The on-screen buttons: the layout fits a phone, the dot-mobile overlay drives the sampler and reaches the handlers, and the
+## The on-screen buttons: the layout fits a phone, the gs-mobile overlay drives the sampler and reaches the handlers, and the
 ## crosshair test holds fire on team-mates and the dead.
 ## Run: `godot --headless --path . res://examples/headless_touch.tscn`.
 
@@ -64,7 +64,7 @@ func _run() -> void:
 
 ## Every HUD piece's rectangle clear of every other's, of every touch button (scaled by [param k], as the screen fit
 ## leaves them, 28 units in from the corner) and of the Menu button, in one canvas.
-## Where dot-menu puts the touch Menu button: the corner this game's spec asks for (the one the real menu is built with, so
+## Where gs-menu puts the touch Menu button: the corner this game's spec asks for (the one the real menu is built with, so
 ## a spec that drifts back to the default top right fails here), a 96 x 52 button 14 units in from it.
 func _menu_rect(view: Vector2) -> Rect2:
 	var corner := WoSettings.spec_for().menu_button_corner

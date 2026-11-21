@@ -243,7 +243,7 @@ func _bot_late_takeoff(player: WoPlayer, command: GSFpsCommand, racing: Dictiona
 	_bot_route[player.player_id] = next_index
 
 
-## Waiting at a point for a window. The window is SEEN, then gone for a reaction later (dot-bot's `bot_reaction`):
+## Waiting at a point for a window. The window is SEEN, then gone for a reaction later (gs-bot's `bot_reaction`):
 ## a person does not set off on the tick a ram starts home. True while the bot still holds.
 func _bot_window_holds(player: WoPlayer, command: GSFpsCommand, racing: Dictionary, point: Dictionary, at: Vector3,
 		index: int) -> bool:

@@ -4,7 +4,7 @@ const WoWorld := preload("wo_world.gd")
 
 ## One local player, a camera and a HUD over an [WoGame], offline or against a server.
 ## One client for both: offline is the same world with `authoritative` true; the difference is [WoNetBridge]. A
-## `dot_client_link` in the registry means connected; none means a playable course, not an error. `--offline` forces it.
+## `gs_client_link` in the registry means connected; none means a playable course, not an error. `--offline` forces it.
 
 
 ## Where the camera sits behind the player in third person, in metres.
@@ -38,7 +38,7 @@ func _ready() -> void:
 	gate = platform.gate
 	gate.hold(&"map", "Loading the course")
 
-	# [b]zee-dot-weapons' art is this game's copy of it, wherever this game is mounted.[/b]
+	# [b]zee-gs-weapons' art is this game's copy of it, wherever this game is mounted.[/b]
 	# `ZeeWeaponArtTable` names `res://assets/…`, and in a delivered pack that is the one place
 	# the art is not: every gun and the arms would load invisible, one WARN each.
 	ZeeModelCache.set_asset_root(WoPaths.root())
@@ -207,7 +207,7 @@ func _bind_bot_console() -> void:
 		GSLog.result(CHANNEL, "bot difficulty from the command line", GSBotSettings.of(game).set_difficulty(args[index + 1]))
 
 
-## dot-team's block rules followed from the server, or, solo, the F9 tuning panel over this process's own config.
+## gs-team's block rules followed from the server, or, solo, the F9 tuning panel over this process's own config.
 func _add_noblock_and_workbench() -> void:
 	if not _offline:
 		GSLog.result(CHANNEL, "noblock", platform.add_noblock(game, Callable(game, "team_of_side")))
@@ -309,7 +309,7 @@ func _build_netcode() -> GSResult:
 	net.local_peer_id = multiplayer.get_unique_id() if multiplayer != null else 2
 	net.auto_tick = false
 	# [b]Empty, and it is not tidiness.[/b] The manager reads a JSON file by default, so a
-	# client with a stale `user://dot_net.json` runs at a tick rate the game did not choose
+	# client with a stale `user://gs_net.json` runs at a tick rate the game did not choose
 	# and nothing says so.
 	net.config_file = ""
 
@@ -360,7 +360,7 @@ func _build_netcode() -> GSResult:
 			chat.notice(text)
 	)
 
-	# The one thing that writes an RTT sample. dot-net never touches a transport, so nothing
+	# The one thing that writes an RTT sample. gs-net never touches a transport, so nothing
 	# in it can; without this the clock's input lead omits the flight time and past about
 	# thirty milliseconds every command arrives after its tick and is discarded as late.
 	if link != null and link.has_method("ping_ms"):
@@ -369,7 +369,7 @@ func _build_netcode() -> GSResult:
 
 	GSLog.result(CHANNEL, "chat and voice", chat.attach(bridge))
 
-	# READY, and not one byte before the scene exists. dot-server's signon finishes and THEN
+	# READY, and not one byte before the scene exists. gs-server's signon finishes and THEN
 	# the client builds this; anything the server sent in between landed on a node that did
 	# not exist and was lost, one "Node not found" per call.
 	if link != null and link.has_method("is_playing") and bool(link.call("is_playing")):
@@ -504,7 +504,7 @@ func _build_settings() -> void:
 	platform.board_snapshot_fn = board_snapshot
 	# M: the course list. Solo a choice changes the course here at once; connected the server
 	# decides, by the owner's `sv_map_menu_flag`, and anybody without it gets a vote instead
-	# (dot-vote's map menu, wired in [WoModule]).
+	# (gs-vote's map menu, wired in [WoModule]).
 	platform.maps_rows_fn = func() -> Array: return game.course_rows() if game != null else []
 	platform.maps_change_fn = func(id: StringName) -> GSResult: return game.change_course_now(id)
 	platform.maps_title = "Change course"
@@ -823,7 +823,7 @@ func _physics_process(delta: float) -> void:
 
 	# Each pass is its own tick. `advance` has already moved the clock by all of them, so `input_tick()` is the LAST
 	# on every pass: a two-tick frame sent the second twice and the first never, and the predictor's replay stopped
-	# at the hole. Arithmetic here, not a new dot-net call, so a pack runs on any client shell.
+	# at the hole. Arithmetic here, not a new gs-net call, so a pack runs on any client shell.
 	for i in range(ticks):
 		if not net.clock.is_synced():
 			continue
@@ -1176,7 +1176,7 @@ func _drive_spectator_camera() -> bool:
 	if view_model != null and is_instance_valid(view_model):
 		view_model.visible = false
 
-	# Chase and death cameras pulled out of the course by dot-spectate, given the level.
+	# Chase and death cameras pulled out of the course by gs-spectate, given the level.
 	var manager: GSSpectatorManager = game.spectate.manager
 	if manager != null and manager.camera_world == null and game.physics != null:
 		manager.camera_world = camera.get_world_3d()
@@ -1189,7 +1189,7 @@ func _drive_spectator_camera() -> bool:
 	else:
 		_free_cam = null
 
-	# Identity is dot-spectate's "no answer" — a target it could not find. Holding the last
+	# Identity is gs-spectate's "no answer" — a target it could not find. Holding the last
 	# frame is better than a camera at the world origin.
 	if where != Transform3D.IDENTITY:
 		camera.global_transform = where
@@ -1243,13 +1243,13 @@ func _fly_free_camera() -> Transform3D:
 
 	if _pointer_ours() and not _covered():
 		move = Vector3(
-			_strength(&"dot_fps_right") - _strength(&"dot_fps_left"),
-			_strength(&"dot_fps_jump") - _strength(&"dot_fps_crouch"),
-			_strength(&"dot_fps_forward") - _strength(&"dot_fps_back"),
+			_strength(&"gs_fps_right") - _strength(&"gs_fps_left"),
+			_strength(&"gs_fps_jump") - _strength(&"gs_fps_crouch"),
+			_strength(&"gs_fps_forward") - _strength(&"gs_fps_back"),
 		)
 
 	var pose := _free_cam.step(
-		move, _held(&"dot_fps_sprint"), _held(&"dot_fps_walk"), get_process_delta_time()
+		move, _held(&"gs_fps_sprint"), _held(&"gs_fps_walk"), get_process_delta_time()
 	)
 	var _kept := game.spectate.manager.move_free(String(player.player_id), pose.origin, pose.basis)
 	return pose
@@ -1430,7 +1430,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Tab, M and a click taking the pointer back are the platform's (GSGameClient).
 	if event.is_action_pressed("ui_cancel"):
 		# Opens the settings when the menu left this Escape alone, because a released pointer
-		# with nothing on screen to click was a key that did half a job. A second Escape never reaches here: dot-ui's stack
+		# with nothing on screen to click was a key that did half a job. A second Escape never reaches here: gs-ui's stack
 		# sits deeper in the tree, sees it first, and closes the screen.
 		if settings != null:
 			settings.open()
@@ -1473,7 +1473,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_roam_look += (event as InputEventMouseMotion).relative
 		return
 
-	# Every event, not only motion: the sampler also reads the wheel (dot-player-controller 5).
+	# Every event, not only motion: the sampler also reads the wheel (gs-player-controller 5).
 	# Motion still waits for the captured pointer.
 	if event is InputEventMouseMotion and not _pointer_ours():
 		return
@@ -1565,7 +1565,7 @@ func describe() -> Dictionary:
 	return out
 
 
-## Where a roster row's player stands, for dot-game's look-to-gag key (G, K).
+## Where a roster row's player stands, for gs-game's look-to-gag key (G, K).
 func _look_position(row: Dictionary) -> Variant:
 	if game == null:
 		return null

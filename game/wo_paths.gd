@@ -1,7 +1,7 @@
 extends RefCounted
 
 ## Where this game's own files are, wherever this copy lives. A delivered pack mounts at
-## `res://dot_cloud/<id>/<version>/`, so an absolute `res://` path to its OWN files resolves against the HOST project.
+## `res://gs_cloud/<id>/<version>/`, so an absolute `res://` path to its OWN files resolves against the HOST project.
 ## Hold paths in a `static var`, not a `const`: `load(WoPaths.rebase("res://props/wo_crate.tscn"))`.
 
 const _SELF := preload("wo_paths.gd")
@@ -30,7 +30,7 @@ static func rebase_onto(path: String, here: String) -> String:
 		return path
 
 	# Idempotent: the publisher rewrites `res://` in `.tscn`, `.tres` and `.import` but not `.gd`, so a game holds
-	# both kinds, and rebasing a rebased path doubles the prefix. See ../dot-server-deploy/docs/delivery-
+	# both kinds, and rebasing a rebased path doubles the prefix. See ../gs-server-deploy/docs/delivery-
 	# constraint.md. Built in, this returns its argument.
 	if path.begins_with(here):
 		return path

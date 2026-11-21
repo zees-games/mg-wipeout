@@ -2,66 +2,66 @@
 .godot/
 /android/
 
-# Every dot-* addon is a separate repository. For local development, symlink them:
-#   ln -s ../../dot-core/addons/dot_core addons/dot_core
+# Every gs-* addon is a separate repository. For local development, symlink them:
+#   ln -s ../../gs-core/addons/gs_core addons/gs_core
 # A shipped build copies them in instead.
 #
-# THIS LIST IS ALSO THE DEPENDENCY MANIFEST. dot-bootstrap derives what to link from
+# THIS LIST IS ALSO THE DEPENDENCY MANIFEST. gs-bootstrap derives what to link from
 # these lines rather than keeping a second copy, because the repository that gains a
 # dependency is the repository that has to ignore its link.
-/addons/dot_core
-/addons/dot_input
-/addons/dot_profile
-/addons/dot_profiler
-/addons/dot_lighting
-/addons/dot_entity
-/addons/dot_physics
-/addons/dot_player
-/addons/dot_player_char
-/addons/dot_animation
-/addons/dot_save
-/addons/dot_camera
-/addons/dot_player_controller
-/addons/dot_props
-/addons/dot_combat
-/addons/dot_match
-/addons/dot_vehicle
-/addons/dot_weapon
-/addons/dot_ui
-/addons/dot_settings
-/addons/dot_menu
-/addons/dot_mobile
-/addons/dot_console
-/addons/dot_fx
-/addons/dot_net
-/addons/dot_server
-/addons/dot_game
-# dot-sim: optional native library (snapshot codec); without its built library the GDScript twins run.
-# bootstrap fetches this release's library for the machine (dot-bootstrap: bootstrap-natives).
-# bootstrap-natives: dot-sim v0.2.10
-/addons/dot_sim
-/addons/dot_workbench
-/addons/dot_chat
-/addons/dot_voice
-/addons/dot_moderation
-/addons/dot_spectate
-/addons/dot_audio
-/addons/dot_stats
-/addons/dot_achievements
-/addons/dot_cloud
-/addons/dot_auth
-/addons/dot_user
-/addons/dot_user_avatar
-/addons/dot_platform
-/addons/dot_map
-/addons/dot_vote
-/addons/dot_replay
-/addons/dot_bot
-/addons/dot_spawn
-/addons/dot_team
+/addons/gs_core
+/addons/gs_input
+/addons/gs_profile
+/addons/gs_profiler
+/addons/gs_lighting
+/addons/gs_entity
+/addons/gs_physics
+/addons/gs_player
+/addons/gs_player_char
+/addons/gs_animation
+/addons/gs_save
+/addons/gs_camera
+/addons/gs_player_controller
+/addons/gs_props
+/addons/gs_combat
+/addons/gs_match
+/addons/gs_vehicle
+/addons/gs_weapon
+/addons/gs_ui
+/addons/gs_settings
+/addons/gs_menu
+/addons/gs_mobile
+/addons/gs_console
+/addons/gs_fx
+/addons/gs_net
+/addons/gs_server
+/addons/gs_game
+# gs-sim: optional native library (snapshot codec); without its built library the GDScript twins run.
+# bootstrap fetches this release's library for the machine (gs-bootstrap: bootstrap-natives).
+# bootstrap-natives: gs-sim v0.2.10
+/addons/gs_sim
+/addons/gs_workbench
+/addons/gs_chat
+/addons/gs_voice
+/addons/gs_moderation
+/addons/gs_spectate
+/addons/gs_audio
+/addons/gs_stats
+/addons/gs_achievements
+/addons/gs_cloud
+/addons/gs_auth
+/addons/gs_user
+/addons/gs_user_avatar
+/addons/gs_platform
+/addons/gs_map
+/addons/gs_vote
+/addons/gs_replay
+/addons/gs_bot
+/addons/gs_spawn
+/addons/gs_team
 /addons/zee_weapons
 
-# The courses and arenas: the mg-wipeout-maps repository, linked here by dot-bootstrap off
+# The courses and arenas: the mg-wipeout-maps repository, linked here by gs-bootstrap off
 # the comment line below (copied, on Windows). A checkout without it plays the one practice
 # course built into game/wo_catalogue.gd, which is a supported state, not a broken one.
 # bootstrap-link: mg-wipeout-maps/courses ci
@@ -69,7 +69,7 @@
 # The courses' own cvar files (cfg/<course id>.cfg), the same repository.
 # bootstrap-link: mg-wipeout-maps/cfg ci
 /cfg
-# Imported course geometry (dot-bsp-mesh files), the same repository.
+# Imported course geometry (gs-bsp-mesh files), the same repository.
 # bootstrap-link: mg-wipeout-maps/worlds ci
 /worlds
 
@@ -89,5 +89,5 @@ Thumbs.db
 # art stores the worlds name (licence.pbr_store ../pbr-library): symlinks to mg-wipeout-maps, see its CLAUDE.md
 /pbr-library
 /model-library
-/addons/dot_weather
-/addons/dot_flashlight
+/addons/gs_weather
+/addons/gs_flashlight

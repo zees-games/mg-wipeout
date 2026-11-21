@@ -259,7 +259,7 @@ static func read_team(r: GSNetReader) -> Dictionary:
 	return {"player_id": player_id, "team": team, "ok": r.ok()}
 
 
-## [param death] is how the body falls (dot-player-char's [GSPlayerDeath], the server's pick),
+## [param death] is how the body falls (gs-player-char's [GSPlayerDeath], the server's pick),
 ## last and optional, so every client draws the same fall. There is no event version: a client
 ## built before weapon_id reads the fall's first bytes as the weapon, so mixed builds misread.
 static func write_death(player_id: int, by: int, why: StringName, death: GSPlayerDeath = null,
@@ -440,8 +440,8 @@ static func read_shatter(r: GSNetReader) -> Dictionary:
 	return {"position": at, "material": material, "ok": r.ok()}
 
 
-## A view dot-spectate decided, for the one player it belongs to. The death position travels: without it a mirror puts
-## every death camera at the world origin. Bit-packed and keyed by session (zero is nobody), where dot-spectate's is a
+## A view gs-spectate decided, for the one player it belongs to. The death position travels: without it a mirror puts
+## every death camera at the world origin. Bit-packed and keyed by session (zero is nobody), where gs-spectate's is a
 ## string-keyed dictionary.
 static func write_spectate(
 	viewer: int, mode: int, target: int, killer: int, death_at: Vector3
@@ -551,7 +551,7 @@ const CHAT_KEY_BYTES := 48
 const CHAT_KIND_BITS := 4
 
 
-## Whether every [enum GSChatMessage.Kind] fits in [constant CHAT_KIND_BITS]. dot-chat owns
+## Whether every [enum GSChatMessage.Kind] fits in [constant CHAT_KIND_BITS]. gs-chat owns
 ## that enum, so it can grow under this game; headless_net reads this.
 static func chat_kinds_fit() -> bool:
 	return GSChatMessage.KIND_NAMES.size() <= (1 << CHAT_KIND_BITS)

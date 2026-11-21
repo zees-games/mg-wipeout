@@ -2,16 +2,16 @@ extends GSMenuGameSettings
 
 const WoBindings := preload("wo_bindings.gd")
 
-## A player's settings and their menu: dot-menu's `GSMenuGameSettings` with this game's spec. Scopes are the family's:
+## A player's settings and their menu: gs-menu's `GSMenuGameSettings` with this game's spec. Scopes are the family's:
 ## `sensitivity` ACCOUNT, `field_of_view` SERVER_CLAMPED, volumes this machine's. Use: `setup()`, `bind_look/camera/audio`, `open()`.
-## Help and Leave are dot-menu's stock; the keys are [WoBindings], so the help screen lists them.
+## Help and Leave are gs-menu's stock; the keys are [WoBindings], so the help screen lists them.
 
 const SCHEMA_VERSION := 1
 
-## Where this game's own document lives. The shared account document is dot-settings'.
+## Where this game's own document lives. The shared account document is gs-settings'.
 const SETTINGS_DIR := "user://wipeout_settings"
 
-## The app's namespace. ACCOUNT settings are shared under dot-menu's `tmc_account`.
+## The app's namespace. ACCOUNT settings are shared under gs-menu's `tmc_account`.
 const APP_NAMESPACE := &"wipeout"
 
 ## The field of view the camera had before this existed, and still the default.

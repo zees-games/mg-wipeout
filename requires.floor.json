@@ -1,8 +1,8 @@
 {
   "format": 1,
   "addons": {
-    "dot_mobile": 1,
-    "dot_team": 6,
-    "dot_ui": 19
+    "gs_mobile": 1,
+    "gs_team": 6,
+    "gs_ui": 19
   }
 }

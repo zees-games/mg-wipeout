@@ -202,7 +202,7 @@ func _io_event(kind: String, data: Dictionary) -> void:
 		io_events.pop_front()
 
 
-## A finale shot against an io course's own breakables, buttons and doors (dot-map's `GSMapWorld.shoot`):
+## A finale shot against an io course's own breakables, buttons and doors (gs-map's `GSMapWorld.shoot`):
 ## each pellet's ray, no further than where the combat stopped it, so a player in front shields the panel.
 func _shoot_io(shooter: WoPlayer, shot: GSShot) -> void:
 	if not authoritative or stage == null or stage.io == null or stage.io.world == null or physics == null or shooter == null:

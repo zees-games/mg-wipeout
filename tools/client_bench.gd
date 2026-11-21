@@ -2,7 +2,7 @@ extends GSGameClientBench
 
 const WoConfig := preload("../game/wo_config.gd")
 
-## Client prediction bench (dot-game's GSGameClientBench): see that class for the flags.
+## Client prediction bench (gs-game's GSGameClientBench): see that class for the flags.
 ## The world is the server scene and module a dedicated server loads, on wo_spin_cycle with no warmup; `--bots` is ignored (the module's stand-ins are off).
 
 

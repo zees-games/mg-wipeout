@@ -1,6 +1,6 @@
 extends RefCounted
 
-## What a player looks like as a dot-user-avatar document: schema, stock avatar, and which skin a document asks for.
+## What a player looks like as a gs-user-avatar document: schema, stock avatar, and which skin a document asks for.
 ## One slot: the six people [WoFigure] draws are six atlases on one mesh; side is a torso tint, the game's to decide.
 ## Data only, so a server validates without the art; [constant SKINS] and `WoFigure.ATLASES` stay the same list.
 

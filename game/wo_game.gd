@@ -13,7 +13,7 @@ const WoWorld := preload("wo_world.gd")
 
 ## The simulation. Headless, authoritative, and the only thing that decides anything.
 ## A round is a course and sometimes a fight: a fall costs time, never the round; two or more finishers go on to a
-## final death while the rest watch. Round and scoreboard are dot-match's (via [WoRules]), health dot-combat's.
+## final death while the rest watch. Round and scoreboard are gs-match's (via [WoRules]), health gs-combat's.
 
 const CHANNEL := "wo.game"
 
@@ -23,7 +23,7 @@ const SERVICE := &"wo_game"
 
 ## Where a host that runs this game with no server (the client shell's Solo play) publishes
 ## the map packs it mounted for it. See [method solo_map_dirs].
-const SOLO_SERVICE := &"dot_solo"
+const SOLO_SERVICE := &"gs_solo"
 
 ## Snapshots a second. Thirty, like mg-smash-copter: what a player reads continuously here is
 ## other people on moving ground, and at twenty a rider on a turntable steps.
@@ -34,7 +34,7 @@ const NET_SNAPSHOT_RATE := 30
 ## two files once drew sky in every direction.
 const NET_WORLD_EXTENT := 512.0
 
-## What the stand-ins are called, solo and on a server, through dot-bot's [GSBotNames]
+## What the stand-ins are called, solo and on a server, through gs-bot's [GSBotNames]
 ## (never doubled up, and numbered only past the end of the list). Not "Stand-in 2": a board of
 ## numbered stand-ins tells a player they are alone.
 const BOT_NAMES := [
@@ -124,10 +124,10 @@ var prop_damage: GSPropDamage = null
 
 var match_node: GSMatch = null
 
-## dot-props' `sv_toys*` (whether toys are there, how many simulate, how hard a walk pushes one): bound by the module (REPLICATED), followed by a client.
+## gs-props' `sv_toys*` (whether toys are there, how many simulate, how hard a walk pushes one): bound by the module (REPLICATED), followed by a client.
 var toy_rules: GSPropBodyRules = GSPropBodyRules.new()
 
-## What a dead body does, and which death reactions the server allows: dot-player-char's
+## What a dead body does, and which death reactions the server allows: gs-player-char's
 ## `sv_ragdoll*` cvars, bound by the module (REPLICATED) and followed by a client through its
 ## link, because the client draws the bodies. The game's, not the map's.
 var ragdoll_rules: GSPlayerRagdollRules = GSPlayerRagdollRules.new()
@@ -136,7 +136,7 @@ var ragdoll_rules: GSPlayerRagdollRules = GSPlayerRagdollRules.new()
 var weapon_layer: WoWeaponLayer = null
 var drop_rules: GSWeaponDropRules = _walk_over_drops()
 
-## dot-player-controller's `mp_forceview` (camera) and `mp_solidplayers` (own-player prediction), bound by the module (REPLICATED), followed by a client.
+## gs-player-controller's `mp_forceview` (camera) and `mp_solidplayers` (own-player prediction), bound by the module (REPLICATED), followed by a client.
 var view_rules: GSPlayerViewRules = GSPlayerViewRules.new()
 ## The phone controls the server allows (sv_mobile_*, sv_autofire*, sv_aim_assist*), followed by every client.
 var mobile_rules: GSMobileRules = GSMobileRules.new()
@@ -161,7 +161,7 @@ func ensure_runtime() -> GSProfileRuntime:
 			return typeof(actor) == TYPE_STRING_NAME and actor == &"local"
 	return profile_runtime
 
-## dot-team's block rules (`!block`, `!noblock`, `mp_teamblock`), set by the server module or `GSGameClient.add_noblock`. They feed [member body_rules]'s `pair_fn`.
+## gs-team's block rules (`!block`, `!noblock`, `mp_teamblock`), set by the server module or `GSGameClient.add_noblock`. They feed [member body_rules]'s `pair_fn`.
 var block_rules: Object = null:
 	set(value):
 		if block_rules != null and block_rules.is_connected(&"changed", body_rules.refresh):
@@ -174,7 +174,7 @@ var block_rules: Object = null:
 var _weapon_defs: Dictionary = {}
 var effects: GSFxManager = null
 var spectate: WoSpectate = null
-## dot-spectate's `mp_forcecamera`, `mp_freeroam` and `mp_freeroam_speed`. One object for the life of the game, shared
+## gs-spectate's `mp_forcecamera`, `mp_freeroam` and `mp_freeroam_speed`. One object for the life of the game, shared
 ## with [WoSpectate]'s manager so a cvar change reaches the rules in use; the client is the end that flies the camera.
 var spectate_rules: GSSpectatorRules = GSSpectatorRules.new()
 
@@ -259,7 +259,7 @@ func _ready() -> void:
 		# The Workshop's courses, solo only by the index's own session (an online session lists none).
 		catalogue.follow_content(GSContentIndex.shared(), WoCatalogue.accepted_map_kinds())
 		var _rotation := load_rotation()
-		# Laid out now, not on the first round: dot-match runs a warmup first, and an empty
+		# Laid out now, not on the first round: gs-match runs a warmup first, and an empty
 		# world through the warmup is indistinguishable from a map that failed to load.
 		_lay_out_course()
 
@@ -299,7 +299,7 @@ func _on_body_rules_changed() -> void:
 	apply_pass_through()
 
 
-## The side id dot-team's block rules compare ("" for none): team-mates pass each other under `mp_teamblock 0`; solo, nobody has a team-mate.
+## The side id gs-team's block rules compare ("" for none): team-mates pass each other under `mp_teamblock 0`; solo, nobody has a team-mate.
 func team_of_side(player_id: Variant) -> Variant:
 	var side := team_of(StringName(str(player_id)))
 	return str(side) if config.teams() and side > 0 else ""
@@ -343,7 +343,7 @@ func _build_physics() -> void:
 				layer.collides_with = [&"world", &"prop"]
 			&"prop":
 				layer.collides_with = [&"world", &"player", &"bot", &"prop", &"toy"]
-			# A stage's loose toy (dot-props'): the course, its machinery, a thrown prop and the
+			# A stage's loose toy (gs-props'): the course, its machinery, a thrown prop and the
 			# other toys, never a person, who walks through it and pushes it (`_advance_toys`).
 			&"toy":
 				layer.collides_with = [&"world", &"prop", &"toy"]
@@ -460,7 +460,7 @@ func _build_combat() -> void:
 	combat.resolver.team_of = func(entity_id: int) -> int:
 		return team_of(entities.key_for_id(entity_id))
 
-	# dot-game's "still loading": the one place every hurt passes, so a covered seat is neither hurt nor eliminated,
+	# gs-game's "still loading": the one place every hurt passes, so a covered seat is neither hurt nor eliminated,
 	# and the final death counts the living from health. An admin's slay or slap passes.
 	combat.resolver.adjust = func(damage: GSDamage) -> void:
 		if damage.context.get("admin", false):
@@ -546,7 +546,7 @@ func _build_match() -> void:
 	match_node.teams.teams = teams
 	match_node.teams.force_balance = config.autobalance
 	match_node.teams.allow_choice = config.allow_team_choice
-	# Off: `sides` decides a team and dot-match is told. Its default of 1 refused joins and
+	# Off: `sides` decides a team and gs-match is told. Its default of 1 refused joins and
 	# left stand-ins on no team in two games before this one.
 	match_node.teams.max_difference = 0
 	match_node.teams.reindex()
@@ -685,7 +685,7 @@ func add_player(
 		)
 
 		if not seated.ok:
-			GSLog.error(CHANNEL, "dot-match refused a player", {
+			GSLog.error(CHANNEL, "gs-match refused a player", {
 				"id": String(player_id), "side": side, "why": seated.error.message,
 			})
 
@@ -794,7 +794,7 @@ func remove_player(player_id: StringName) -> void:
 	if player.grab != null:
 		var _dropped := player.grab.drop()
 
-	# Before the node goes: dot-combat keyed a health on this entity, and a stale record has
+	# Before the node goes: gs-combat keyed a health on this entity, and a stale record has
 	# no symptom until the process runs out of memory.
 	if combat != null and is_instance_valid(combat) and player.entity_id != 0:
 		combat.forget(player.entity_id)
@@ -1051,7 +1051,7 @@ func _fetch_in_background(doc: Dictionary) -> void:
 
 ## Every course this server plays, as the map menu (M) lists them: `{id, name, detail,
 ## current}`, the blurb under the name. Solo the client's list, online the
-## server's (the module hands it to dot-vote's map menu), so both say the same.
+## server's (the module hands it to gs-vote's map menu), so both say the same.
 func course_rows() -> Array:
 	var out: Array = []
 	if catalogue == null:
@@ -1073,7 +1073,7 @@ func course_rows() -> Array:
 
 
 ## The map menu's change: [param id] now, not after this round. The next course is set and a
-## fresh round begins on it (dot-match's `begin_round_now`: the round called off has no
+## fresh round begins on it (gs-match's `begin_round_now`: the round called off has no
 ## winner); with no match running yet it is simply built. Authority only.
 func change_course_now(id: StringName) -> GSResult:
 	if not authoritative:
@@ -1388,7 +1388,7 @@ func course_number() -> int:
 	return _courses_run
 
 
-## dot-match's backstop for a round: every course it may run, then the final death.
+## gs-match's backstop for a round: every course it may run, then the final death.
 func _round_time_limit() -> float:
 	return float(config.courses_per_round) * (config.countdown_seconds + config.course_seconds) \
 		+ config.handover_seconds + config.finale_seconds + 60.0
@@ -1864,7 +1864,7 @@ func weapon_command_for(player: WoPlayer) -> GSWeaponCommand:
 
 
 ## Each player's hand: pick up what they look at, carry it, throw it on the trigger.
-## dot-props' gravity gun, server only: a prop is not predicted (two solvers diverge), so neither is carrying. The
+## gs-props' gravity gun, server only: a prop is not predicted (two solvers diverge), so neither is carrying. The
 ## grab is an edge (see [WoNetCommand]) so holding is one pick-up.
 func _advance_grabs(delta: float) -> void:
 	if phase != Phase.FINALE and phase != Phase.HANDOVER:
@@ -2093,7 +2093,7 @@ func _step(delta: float) -> void:
 	match_node.tick(_tick)
 
 
-## A barrel's blast at its centre, m/s to a toy (dot-props' `blast`).
+## A barrel's blast at its centre, m/s to a toy (gs-props' `blast`).
 const TOY_BLAST_SPEED := 12.0
 
 
@@ -2116,7 +2116,7 @@ func _advance_toys(delta: float) -> void:
 
 
 ## A finale shot against the toys: the first one on its ray, nearer than the arena, is pushed
-## (dot-props' `shot_along`). The shot goes on to the combat, whose trace never sees a toy, so a
+## (gs-props' `shot_along`). The shot goes on to the combat, whose trace never sees a toy, so a
 ## ball is never cover. Server side.
 func _shoot_toys(shot: GSShot) -> void:
 	if not authoritative or stage == null or stage.toys == null or stage.toys.count() == 0 or physics == null:
@@ -2329,7 +2329,7 @@ func fling_wildness(health_before: float) -> float:
 	return 1.0 - fraction / below
 
 
-## The fall a death gets: dot-player-char's reaction rule over the server's weights, seeded from the player and the
+## The fall a death gets: gs-player-char's reaction rule over the server's weights, seeded from the player and the
 ## tick, with the killing weapon's def (zee's sniper and launcher always throw the body). A course knockout at low
 ## health is a flight ([constant FLING]): the lower the health the blow found, the harder the push.
 func decide_death(player: WoPlayer, damage: GSDamage) -> GSPlayerDeath:
@@ -2372,7 +2372,7 @@ func _on_player_died(player: WoPlayer, damage: GSDamage) -> void:
 	if authoritative and weapon_layer != null:
 		weapon_layer.drop_dead(player.player_id)
 
-	# Spectating and progress BEFORE dot-match: `report_kill` can end the round inside the
+	# Spectating and progress BEFORE gs-match: `report_kill` can end the round inside the
 	# call, and a kill counted after that is counted in no round. mg-smash-copter's finding.
 	if spectate != null and authoritative:
 		spectate.on_died(

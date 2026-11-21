@@ -38,7 +38,7 @@ var _order: Array[StringName] = []
 var _next: int = 0
 
 ## The server's maps.yml, or null when there is none (every course rotates, as it always did).
-## dot-map's rotation file speaks GSMapDef; this catalogue holds course documents, so [member _defs]
+## gs-map's rotation file speaks GSMapDef; this catalogue holds course documents, so [member _defs]
 ## mirrors the ids and the file marks `in_rotation` on the mirror. See [method rotating].
 var rotation_file: GSMapRotationFile = null
 var _defs: GSMapCatalogue = GSMapCatalogue.new()
@@ -71,7 +71,7 @@ func load_from(directory: String) -> int:
 
 
 ## Adds every document under [param root] (an absolute `res://` path) to what is loaded: a course pack mounted beside
-## the game. Absolute, not rebased: a delivered pack mounts at its OWN prefix (`res://dot_cloud/<owner>/mg-wipeout-
+## the game. Absolute, not rebased: a delivered pack mounts at its OWN prefix (`res://gs_cloud/<owner>/mg-wipeout-
 ## maps/<version>/`).
 func add_directory(root: String) -> int:
 	var loaded := _read_directory(root)
@@ -236,7 +236,7 @@ func _workshop_doc(entry: GSContentEntry) -> Dictionary:
 	return doc
 
 
-## The file a game pack states what it takes from subscriptions in (dot-cloud's
+## The file a game pack states what it takes from subscriptions in (gs-cloud's
 ## docs/workshop.md, "What a game accepts"). Read from there so the site and this list cannot drift.
 const PROVIDES_PATH := "res://provides.json"
 const ACCEPTED_MAP_KINDS_FALLBACK := ["obstacle", "race"]
@@ -513,7 +513,7 @@ static func practice() -> Dictionary:
 			{"at": [0.0, 0.0, -45.5], "board": true, "reach": 0.9},
 			{"at": [0.0, 0.0, -47.5]},
 		],
-		# dot-props' beach balls in the back corners of the start pen, to bat about while the
+		# gs-props' beach balls in the back corners of the start pen, to bat about while the
 		# gate is up. headless_run walks into one; nothing on the course itself.
 		"toys": [
 			{"toy": "beach_ball", "at": [-3.8, 0.0, 2.8]},

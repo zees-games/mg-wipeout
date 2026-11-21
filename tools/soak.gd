@@ -5,8 +5,8 @@ const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
 const WoPlayer := preload("../game/wo_player.gd")
 
-## Bot soak on the real game: N stand-ins race one course for M simulated minutes through dot-bot's GSBotSoak,
-## fed by dot-spawn's GSSpawnWatch. Run `./game.sh soak [course] [minutes]`; also takes GSBotSoakConfig's flags.
+## Bot soak on the real game: N stand-ins race one course for M simulated minutes through gs-bot's GSBotSoak,
+## fed by gs-spawn's GSSpawnWatch. Run `./game.sh soak [course] [minutes]`; also takes GSBotSoakConfig's flags.
 ## Writes .godot/test-logs/soak-<course>.json, prints the SOAK line, exits 1 on failure. No warm-up; kills are off.
 
 const DEFAULT_MAP := &"wo_first_splash"

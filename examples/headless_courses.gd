@@ -321,7 +321,7 @@ func _check_finish_marker(game: WoGame, doc: Dictionary) -> void:
 		"a finish arch stands at the finish box")
 
 
-## A stage's toys (dot-props', loose only): every one built, none inside a piece, and after a
+## A stage's toys (gs-props', loose only): every one built, none inside a piece, and after a
 ## second and a half of real physics every one still where the document put it. Two checks.
 ## Real physics frames, unlike the course run: a toy is a rigid body, simulated only by them.
 func _check_toys(game: WoGame, doc: Dictionary) -> void:
@@ -343,7 +343,7 @@ func _check_toys(game: WoGame, doc: Dictionary) -> void:
 				break
 	# Every course has the start pen's; an arena may have none (the turning floor's).
 	_check(box.count() == placed and (placed > 0 or str(doc["kind"]) == "arena") and box.missing.is_empty() and stuck.is_empty(),
-		"%d toys, every one dot-props' and loose, standing clear" % placed, "; ".join(stuck))
+		"%d toys, every one gs-props' and loose, standing clear" % placed, "; ".join(stuck))
 	for _i in range(90):
 		await get_tree().physics_frame
 	var strayed: Array = []
@@ -358,7 +358,7 @@ func _floor_under(space: PhysicsDirectSpaceState3D, at: Vector3) -> bool:
 	return not space.intersect_ray(query).is_empty()
 
 
-## dot-core's [GSCollisionAudit] over the stage as a client draws it: visible geometry nothing
+## gs-core's [GSCollisionAudit] over the stage as a client draws it: visible geometry nothing
 ## collides with, which a runner walks through. Pieces are static bodies the course moves, and
 ## their drawing sits beside their shape, so the lenient audit is used.
 func _audit_collision(doc: Dictionary) -> void:

@@ -2,7 +2,7 @@ extends Node3D
 
 const WoPaths := preload("wo_paths.gd")
 
-## What somebody ELSE looks like: dot-player-char's `GSHumanoidFigure` dressed from the avatar's atlas ([constant
+## What somebody ELSE looks like: gs-player-char's `GSHumanoidFigure` dressed from the avatar's atlas ([constant
 ## ATLASES]). Client side only, top level and placed by `WoClient.present_frame` every frame, as the player node steps
 ## once a tick and would jitter under a blended camera.
 

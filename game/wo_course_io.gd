@@ -2,7 +2,7 @@ extends RefCounted
 
 const WoWorld := preload("wo_world.gd")
 
-## A course that runs a map's own entity logic: dot-map's [GSMapWorld] hosted under a stage.
+## A course that runs a map's own entity logic: gs-map's [GSMapWorld] hosted under a stage.
 ## The server steps it once a tick and sends changes through [signal message]; a client builds the same world
 ## without logic and poses every mover for its tick (game tick `T` is logic tick `T - base`).
 
@@ -24,7 +24,7 @@ var base: int = NO_BASE
 var _movers: Dictionary = {}
 ## Touch doors, teleports and kill volumes read from the map ([GSBotLinks]); built on first use.
 var _links: GSBotLinks = null
-## Set while a stand-in plays: it opens touch doors the way a body walking in would (dot-map does it); a person is not helped.
+## Set while a stand-in plays: it opens touch doors the way a body walking in would (gs-map does it); a person is not helped.
 var touch_doors: bool = false:
 	set(value):
 		touch_doors = value

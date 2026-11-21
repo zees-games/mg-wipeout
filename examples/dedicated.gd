@@ -76,7 +76,7 @@ func _shut_down() -> void:
 func _boot() -> void:
 	_section("booting")
 
-	# `startup_config`, because `sv_tickrate` is startup-only and dot-server execs this file
+	# `startup_config`, because `sv_tickrate` is startup-only and gs-server execs this file
 	# before the listener for exactly that reason.
 	var cfg_path := "%s/server.cfg" % SERVER_DIR
 	var cfg := FileAccess.open(cfg_path, FileAccess.WRITE)
@@ -149,7 +149,7 @@ func _test_the_module_loads() -> void:
 
 	var module := _module()
 	_check(game != null and game.progress != null and game.progress.durable_key_fn.is_valid(),
-		"progress is filed under dot-game's stable stats key")
+		"progress is filed under gs-game's stable stats key")
 	_check(module != null and module.get("net") != null and module.get("bridge") != null,
 		"with its netcode and the game's bridge")
 
@@ -189,7 +189,7 @@ func _test_the_commands() -> void:
 	var _props_back := _run_command("wo_props_per_side 6")
 	var _weapons_back := _run_command("wo_weapons_per_side 2")
 	var _budget_back := _run_command("wo_prop_budget 60")
-	# And it is REPLICATED: dot-server sends it to every client before its scene loads and on
+	# And it is REPLICATED: gs-server sends it to every client before its scene loads and on
 	# every change, so a client's own combat manager (following its link) predicts tracers
 	# under the server's level rather than its default.
 	var shared := server.console.find_cvar("mp_teammate_passthrough")
@@ -203,7 +203,7 @@ func _test_the_commands() -> void:
 
 
 ## A whole round, played by the stand-ins the module seats on its own.
-## The config as cvars and a workbench set, the old cvar names as aliases, and dot-team's block rules through dot-game.
+## The config as cvars and a workbench set, the old cvar names as aliases, and gs-team's block rules through gs-game.
 func _test_config_and_noblock() -> void:
 	_section("config and noblock")
 	var console := server.console
@@ -264,7 +264,7 @@ func _test_a_round_runs() -> void:
 	var quota_bridge: Object = quota_module.get("bridge") if quota_module != null else null
 	_check(server.console.find_cvar("bot_quota") != null and server.console.find_cvar("bot_quota_mode") != null,
 		"the shared bot_quota cvars are registered")
-	# How the stand-ins race and aim is one word, dot-bot's, plus this game's racing settings.
+	# How the stand-ins race and aim is one word, gs-bot's, plus this game's racing settings.
 	var bot_settings := GSBotSettings.of(game)
 	_check(server.console.get_string("bot_difficulty", "") == "medium" and bot_settings.difficulty() == "medium",
 		"bot_difficulty is the module's and medium is the default")
@@ -275,7 +275,7 @@ func _test_a_round_runs() -> void:
 		"%s / %s" % [server.console.get_string("bot_reaction"), server.console.get_string("wo_bot_fumble")])
 	var _medium := _run_command("bot_difficulty medium")
 	_check(server.console.find_cvar("wo_bot_spread") == null and server.console.find_cvar("wo_bot_mistakes") != null,
-		"wo_bot_spread is gone (dot-bot's bot_aim_error took it over), wo_bot_mistakes scales the racing")
+		"wo_bot_spread is gone (gs-bot's bot_aim_error took it over), wo_bot_mistakes scales the racing")
 	var _alias := _run_command("wo_min_players 3")
 	_check(server.console.find_cvar("bot_quota") != null and server.console.find_cvar("bot_quota").get_int() == 3,
 		"and the old wo_min_players sets bot_quota",
@@ -294,7 +294,7 @@ func _test_a_round_runs() -> void:
 		var bots_after: int = (quota_module.get("_bot_ids") as Array).size()
 		_check(bots_after == bots_before, "and a stand-in comes back when they leave",
 			"%d -> %d" % [bots_with, bots_after])
-		# Named from the game's list through dot-bot, never "Stand-in 2", never twice.
+		# Named from the game's list through gs-bot, never "Stand-in 2", never twice.
 		var names: Array = []
 		for id: StringName in quota_module.get("_bot_ids"):
 			names.append((game.players[id] as WoPlayer).display_name)
@@ -316,10 +316,10 @@ func _test_a_round_runs() -> void:
 
 ## A reload keeps the courses the server names: `wo_reload` re-reads the directory with `load_from`, which forgets
 ## everything before, and delivered courses were once gone until a restart with nothing logged. A pack "mounted" on
-## disk and a descriptor stand in for dot-cloud and the deployment's map config.
+## disk and a descriptor stand in for gs-cloud and the deployment's map config.
 func _test_a_reload_keeps_delivered_courses() -> void:
 	_section("a reload keeps the courses the server names")
-	var key := "dot-test/wo-delivered@1.0.0"
+	var key := "gs-test/wo-delivered@1.0.0"
 	var mount := GSGameContent.mount_of(key)
 	var dir := mount.path_join("courses")
 	var id := &"wo_delivered_check"
@@ -356,10 +356,10 @@ func _test_a_reload_keeps_delivered_courses() -> void:
 
 	DirAccess.remove_absolute(dir.path_join("delivered_check.json"))
 	var path := dir
-	while path != "res://dot_cloud":
+	while path != "res://gs_cloud":
 		DirAccess.remove_absolute(path)
 		path = path.get_base_dir()
-	DirAccess.remove_absolute("res://dot_cloud")
+	DirAccess.remove_absolute("res://gs_cloud")
 	_finished()
 
 
@@ -454,7 +454,7 @@ func _test_the_course_vote() -> void:
 	# vote then brings the ballot forward instead of waiting for open_after_sec.
 	_check(director.current_id() == StringName(wanted) and not director.is_voting(),
 		"the new course starts the vote over", str(director.current_id()))
-	# Past dot-vote's cooldown between two ballots, on the director alone so the course's own
+	# Past gs-vote's cooldown between two ballots, on the director alone so the course's own
 	# ballot timer does not open one first. In play a course outlasts it.
 	director.rules.rtv_delay_sec = 0.0
 	director.advance(director.rules.vote_cooldown_sec + 0.1)
@@ -477,7 +477,7 @@ func _test_the_course_vote() -> void:
 
 func _course_vote_menu(vote: Node) -> void:
 	# The map menu's server half (M): the owner's flag changes the course now, anybody else
-	# gets a nomination and a rock-the-vote. Contexts as dot-server makes them for a chat line.
+	# gets a nomination and a rock-the-vote. Contexts as gs-server makes them for a chat line.
 	var menu_half: Object = vote.get("commands").get("map_menu")
 	_check(menu_half != null and server.console.find_command("mapmenu") != null
 		and server.console.find_cvar("sv_map_menu_flag").get_string() == "generic"
@@ -526,7 +526,7 @@ func _test_rotation_file_frees() -> void:
 	file.close()
 
 	var read := GSMapRotationFile.load_files(PackedStringArray([path]), "mg-wipeout")
-	_check(read.ok, "and read by dot-map", str(read.error))
+	_check(read.ok, "and read by gs-map", str(read.error))
 	var probe := _apply_and_drop(read.value)
 	_check(probe.get_ref() == null, "the catalogue it was applied to is freed with its last reference")
 	_finished()
@@ -540,7 +540,7 @@ func _apply_and_drop(rotation_file: GSMapRotationFile) -> WeakRef:
 	return weakref(catalogue)
 
 
-## `maps.yml` (dot_map tiers): which courses rotate. What the GAME does with it: a course left out is installed and
+## `maps.yml` (gs_map tiers): which courses rotate. What the GAME does with it: a course left out is installed and
 ## loadable but never drawn, balloted or nominated, and is marked in the map list; a rotation switch takes effect; a
 ## renamed command is registered; no file means every course.
 func _test_rotation_file() -> void:
@@ -652,13 +652,13 @@ func _test_stats_report() -> void:
 	script.source_code = "extends Node\nfunc post_integration(_a = null, _b = null, _c = null): return null\n"
 	var _reloaded := script.reload()
 	client.set_script(script)
-	GSRegistry.register(&"dot_backbone_client", client)
+	GSRegistry.register(&"gs_backbone_client", client)
 	var _r0 := cv.set_value("0")
 	var _r1 := cv.set_value("1")
 	_check(progress.stats.report_to_backbone, "on with a backbone client makes the tracker report")
 	var _r2 := cv.set_value("0")
 	_check(not progress.stats.report_to_backbone, "off stops it again")
-	GSRegistry.unregister_instance(&"dot_backbone_client", client)
+	GSRegistry.unregister_instance(&"gs_backbone_client", client)
 	client.free()
 
 	var zoned := GSDamage.make(1, 2, 5.0, game_node.combat.damage_type(&"kinetic"))
@@ -669,7 +669,7 @@ func _test_stats_report() -> void:
 	var _ok: bool = progress.feed.report_hit(&"wo-test", &"wo-victim", "probe", zoned.hit_group, 5.0)
 	_check(
 		progress.stats.session_values(&"wo-test").get_cell(GSStatsHitzones.HITS, "zone:neck") >= 1.0,
-		"a hit with a hit_group is filed by body zone through the dot-stats hitzone hook"
+		"a hit with a hit_group is filed by body zone through the gs-stats hitzone hook"
 	)
 	_check(preload("../game/wo_progress.gd").schema().validate().ok, "the stats schema, hitzones included, validates")
 	_check(progress.rank != null and server.console.find_cvar("wo_rank") != null, "wo_rank is registered and the rank is built")

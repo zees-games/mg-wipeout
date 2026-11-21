@@ -1,8 +1,8 @@
 extends GSGameVisualQaCapture
 
-## Wipeout's visual QA capture (the loop is dot-game's docs/visual-qa.md), frame by frame at --fps in three views
+## Wipeout's visual QA capture (the loop is gs-game's docs/visual-qa.md), frame by frame at --fps in three views
 ## (f first person, t behind-right, o an opponent in front). Items: person_<letter> (one of the six WoFigure people idling, walking, running, crouching, jumping and carrying a prop; f is a rival's eye a few metres ahead), object_* (the course objects, see visual_qa_course.gd), weapon_<id> (f the real ZeeViewModel with its arms, t and o the person holding it through draw, fire and reload).
-## The outside views and frame saving are dot-game's GSGameVisualQaViews, through GSGameVisualQaCapture.
+## The outside views and frame saving are gs-game's GSGameVisualQaViews, through GSGameVisualQaCapture.
 
 const WoFigure := preload("../game/wo_figure.gd")
 const WoCatalogue := preload("../game/wo_catalogue.gd")

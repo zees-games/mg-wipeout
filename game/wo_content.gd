@@ -22,7 +22,7 @@ const CONE := &"cone"
 const BARREL := &"barrel"
 const BOULDER := &"boulder"
 
-## Who owns anything the world puts out itself. Not the empty string, which dot-props reads
+## Who owns anything the world puts out itself. Not the empty string, which gs-props reads
 ## as a player and charges a per-player budget to.
 const WORLD_OWNER := &"world"
 

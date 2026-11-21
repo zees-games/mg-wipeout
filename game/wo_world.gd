@@ -2,19 +2,19 @@ extends RefCounted
 
 const WoPaths := preload("wo_paths.gd")
 
-## A course's imported geometry: a `world` piece names a dot-bsp-mesh (`worlds/<mesh>.json` and `.bin`) that
-## dot-map's converter wrote; this draws the faces and builds one convex hull per player-solid brush.
+## A course's imported geometry: a `world` piece names a gs-bsp-mesh (`worlds/<mesh>.json` and `.bin`) that
+## gs-map's converter wrote; this draws the faces and builds one convex hull per player-solid brush.
 ## The mesh is never in the document (a megabyte against the wire's 64 KB); `maps_delivery: client` mounts it.
 
 const CHANNEL := "wo.world"
 
-const CLOUD_SERVICE := &"dot_cloud_client"
+const CLOUD_SERVICE := &"gs_cloud_client"
 
 ## Hull kinds a player is stopped by. A piece's `skip` lists model numbers the course replaces
 ## with its own scripted pieces.
 const SOLID_KINDS := ["solid", "clip", "glass"]
 
-## Brightest to dimmest channel an imported bake may keep, on every surface and an actor's ambient (dot-map's shader limit); tighter than its floor's 2.5 because a blue author bake tinted every wall.
+## Brightest to dimmest channel an imported bake may keep, on every surface and an actor's ambient (gs-map's shader limit); tighter than its floor's 2.5 because a blue author bake tinted every wall.
 const MAX_CHROMA_RATIO := 1.6
 
 ## Directories that hold `<mesh>.json`; the catalogue adds `<courses>/../worlds`.
@@ -220,7 +220,7 @@ static func fetch_missing(doc: Dictionary) -> PackedStringArray:
 
 static func _mounted_dirs() -> PackedStringArray:
 	var out := PackedStringArray()
-	var root := "res://dot_cloud"
+	var root := "res://gs_cloud"
 
 	# A client that has fetched no pack has no such directory.
 	if not DirAccess.dir_exists_absolute(root):
@@ -285,7 +285,7 @@ static func build(spec: Dictionary, physics: Object) -> StaticBody3D:
 	return body
 
 
-## The map's own world through dot-map's [GSMapWorld] (models, entity logic, volumes); [param hooks] is what the
+## The map's own world through gs-map's [GSMapWorld] (models, entity logic, volumes); [param hooks] is what the
 ## game plugs in (damage, move, event, send). The stage sets the bodies' layer. Null with a line when the files
 ## or the source document are missing.
 static func build_io(spec: Dictionary, hooks: Dictionary, authoritative: bool, draw: bool, rate: int) -> GSMapWorld:

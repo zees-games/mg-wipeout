@@ -111,14 +111,14 @@ var _entities: Node = null
 ## session id -> [WoPlayerNet].
 var _behaviours: Dictionary = {}
 
-## The next session id for a bot, kept well above dot-server's: a player called `bot` parses
-## back to session zero, which is dot-net's broadcast address.
+## The next session id for a bot, kept well above gs-server's: a player called `bot` parses
+## back to session zero, which is gs-net's broadcast address.
 const FIRST_BOT_SESSION := 900000
 
 var _next_bot_session: int = FIRST_BOT_SESSION
 
 ## net id -> the behaviour replicating that body, on BOTH ends.
-## Keyed by net id, not instance id: an instance id is a counter in dot-props a client does not share.
+## Keyed by net id, not instance id: an instance id is a counter in gs-props a client does not share.
 var _bodies: Dictionary = {}
 
 ## Server only: `"p<instance>"` -> net id, so a removal can
@@ -274,7 +274,7 @@ func _wire_server() -> void:
 	weapon_net.watch(game.weapon_layer)
 
 
-## Hands dot-combat the rewind and restore callables; unset, it resolves every shot against
+## Hands gs-combat the rewind and restore callables; unset, it resolves every shot against
 ## the present while the setting still reports lag compensation as on.
 ## The shooter is not excluded: `resolve_shot` fixes the muzzle before it rewinds anything.
 func _wire_lag_compensation() -> void:
@@ -418,7 +418,7 @@ func _on_player_added(id: StringName) -> void:
 		return
 
 	# Every id on the wire is `u<session>`; anything else parses back to zero. A player called `bot` would replicate
-	# under session 0, also dot-net's broadcast address, and a second would silently replace the first. Refused with
+	# under session 0, also gs-net's broadcast address, and a second would silently replace the first. Refused with
 	# a line rather than accepted quietly.
 	if player_key(session_id) != id:
 		GSLog.warn(CHANNEL, "a player whose id is not a session key is not replicated", {
@@ -499,7 +499,7 @@ func _release_entity(session_id: int) -> void:
 
 
 ## The stage is about to be rebuilt. Nothing on it is replicated, so there is nothing to
-## let go of; the props on it go through `PROP_GONE` as dot-props removes them.
+## let go of; the props on it go through `PROP_GONE` as gs-props removes them.
 func _on_world_clearing() -> void:
 	pass
 
@@ -535,7 +535,7 @@ func _register_toys() -> void:
 
 
 ## Client, on TOYS: a mirror for every id at once. A client must know every entity a snapshot
-## carries, as dot-net stops reading at the first unknown one. Paired with this end's toys by index.
+## carries, as gs-net stops reading at the first unknown one. Paired with this end's toys by index.
 func _apply_toys(told: Dictionary) -> void:
 	if net == null or net.is_server:
 		return
@@ -771,7 +771,7 @@ func ensure_game_ticked(tick: int) -> void:
 
 	# After the world moved everything, before the snapshot is built: a body pulled before the physics step would
 	# replicate where it was last tick, correct data at the wrong instant.
-	# Checked for life: a freed body's behaviour is not removed from dot-net's registry.
+	# Checked for life: a freed body's behaviour is not removed from gs-net's registry.
 	for net_id in _bodies.keys():
 		var behaviour: Variant = _bodies[net_id]
 
@@ -932,7 +932,7 @@ func _on_request(message: GSNetMessage) -> void:
 	if ask == null or net == null or not net.is_server:
 		return
 
-	# [b]From the message, which dot-net stamped from the TRANSPORT.[/b] A peer id inside a
+	# [b]From the message, which gs-net stamped from the TRANSPORT.[/b] A peer id inside a
 	# body is a claim; `sender_peer_id` is what the socket said, which is the only version
 	# of it a server may act on.
 	var peer_id := ask.sender_peer_id
@@ -1017,7 +1017,7 @@ func _switch_team(peer_id: int, team: int) -> void:
 		return
 
 	# It lands on the next round, by rule: a player who changed sides half way along a course would carry their old
-	# side's progress into their new side's win (dot-player-class documents the same for changing class).
+	# side's progress into their new side's win (gs-player-class documents the same for changing class).
 	game.sides[id] = team
 	(game.players[id] as WoPlayer).team = team
 
@@ -1026,7 +1026,7 @@ func _switch_team(peer_id: int, team: int) -> void:
 	notice(peer_id, "You are on the other side from the next round.")
 
 
-## Everything in the world, to one peer, once its own copy exists. On READY and not on connect: dot-server's signon
+## Everything in the world, to one peer, once its own copy exists. On READY and not on connect: gs-server's signon
 ## finishes and THEN the client builds its scene, so JOIN and STAGE sent at connect land on a node that does not exist
 ## yet and are lost.
 func _admit(peer_id: int) -> void:
@@ -1147,7 +1147,7 @@ func _broadcast(kind: int, body: PackedByteArray) -> void:
 		_tell(int(peer_id), kind, body)
 
 
-## One peer, and never zero: `net.send(msg, 0)` is a BROADCAST in dot-net, so passing a missing peer id straight
+## One peer, and never zero: `net.send(msg, 0)` is a BROADCAST in gs-net, so passing a missing peer id straight
 ## through would send one player's private message to everybody.
 func _tell(peer_id: int, kind: int, body: PackedByteArray) -> void:
 	if peer_id <= 0 or net == null or body.is_empty():
@@ -1440,10 +1440,10 @@ func _adopt_tick_rate(rate: int) -> void:
 	# The LIVE one, which is built from the config back at `setup()` and is therefore not
 	# updated by writing the config alone.
 	net.clock.tick_rate = game.tick_rate
-	# dot-net API 7 has GSNetClock.adopt_tick_rate(), which also raises the engine's step cap to
+	# gs-net API 7 has GSNetClock.adopt_tick_rate(), which also raises the engine's step cap to
 	# a quarter second of ticks, so a slow-frame client keeps up with the server. A shell built
 	# before it gets the same rule here; remove this branch when the oldest shell is API 7.
-	if GSAddonApi.build_level("dot_net") >= 7:
+	if GSAddonApi.build_level("gs_net") >= 7:
 		GSNetClock.adopt_tick_rate(game.tick_rate)
 	else:
 		Engine.max_physics_steps_per_frame = maxi(Engine.max_physics_steps_per_frame, ceili(0.25 * float(game.tick_rate)))

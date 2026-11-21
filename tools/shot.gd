@@ -107,7 +107,7 @@ func _ready() -> void:
 	_client.set("force_offline", true)
 	_client.set("third_person", _view == "third" or _view == "action")
 	add_child(_client)
-	# --view=cover: the loading cover dot-game's GSGameClient puts up first, before it lifts.
+	# --view=cover: the loading cover gs-game's GSGameClient puts up first, before it lifts.
 	if _view == "cover":
 		for _i in 2:
 			await RenderingServer.frame_post_draw

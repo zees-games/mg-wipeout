@@ -213,7 +213,7 @@ func _test_delivery() -> void:
 	_check(named.is_empty(), "no class_name anywhere", ", ".join(named))
 	_check(bare.is_empty(), "no bare res:// path to this game's own files", ", ".join(bare))
 
-	var root := "res://dot_cloud/someone/mg-wipeout/1.0.0/"
+	var root := "res://gs_cloud/someone/mg-wipeout/1.0.0/"
 	var once := WoPaths.rebase_onto("res://props/wo_crate.tscn", root)
 	_check(once == root + "props/wo_crate.tscn", "a path is rebased onto a mount", once)
 	_check(WoPaths.rebase_onto(once, root) == once, "and a rebased path is left alone")
@@ -305,7 +305,7 @@ func _test_world_builds() -> void:
 
 func _test_client_finds_the_mesh() -> void:
 	_section("a client with no courses directory finds an imported mesh in a mounted pack")
-	var mount := "res://dot_cloud/test/maps/1.0.0/worlds"
+	var mount := "res://gs_cloud/test/maps/1.0.0/worlds"
 	var kept := WoWorld.dirs.duplicate()
 	var src := "res://worlds"
 	var copied := 0
@@ -332,11 +332,11 @@ func _test_client_finds_the_mesh() -> void:
 
 	var path := mount
 
-	while path != "res://dot_cloud":
+	while path != "res://gs_cloud":
 		DirAccess.remove_absolute(path)
 		path = path.get_base_dir()
 
-	DirAccess.remove_absolute("res://dot_cloud")
+	DirAccess.remove_absolute("res://gs_cloud")
 	_finished()
 
 
@@ -678,11 +678,11 @@ func _test_a_bot_runs_the_course() -> void:
 	_finished()
 
 
-## How the stand-ins race: dot-bot's preset picks the column, an override outlives a preset,
+## How the stand-ins race: gs-bot's preset picks the column, an override outlives a preset,
 ## `bot_mistakes` 0 is never wrong, every bot is its own runner, and the finale aims through
-## dot-bot's GSBotAim.
+## gs-bot's GSBotAim.
 func _test_the_racers() -> void:
-	_section("stand-ins race by bot_difficulty, each its own runner, and aim with dot-bot")
+	_section("stand-ins race by bot_difficulty, each its own runner, and aim with gs-bot")
 	var game := await _world()
 	var settings := GSBotSettings.of(game)
 	var racer: WoRacer = game.racer
@@ -713,7 +713,7 @@ func _test_the_racers() -> void:
 	_check(not is_equal_approx(fa, fb) and absf(fa - 1.0) <= spread + 0.001 and absf(fb - 1.0) <= spread + 0.001,
 		"two stand-ins are two runners: their own share of the mistakes", "%.2f and %.2f" % [fa, fb])
 
-	# The finale's aim: dot-bot's GSBotAim, so the view turns at bot_turn_rate and the trigger
+	# The finale's aim: gs-bot's GSBotAim, so the view turns at bot_turn_rate and the trigger
 	# waits for bot_reaction after the target first comes into view.
 	var _medium := settings.set_difficulty("medium")
 	var profile := settings.profile
@@ -970,7 +970,7 @@ func _test_the_final_death() -> void:
 	_finished()
 
 
-## dot-props' loose toys: beach balls in the start pen, balls in a finale's arena. A runner walks
+## gs-props' loose toys: beach balls in the start pen, balls in a finale's arena. A runner walks
 ## through one and sends it on without losing a step; a shot pushes one and goes on, because the
 ## combat's trace never sees a toy; a barrel's blast throws one; `sv_toys 0` takes them away.
 func _test_the_toys() -> void:
@@ -1263,7 +1263,7 @@ func _high_arm_course() -> Dictionary:
 
 ## The machinery is heard, and from the course alone: an arm or a hammer going past, a ram
 ## arriving, a tile starting its warning. A real course of each kind, a listener stood beside
-## one machine, twelve seconds of frames, and what dot-audio's null sink recorded.
+## one machine, twelve seconds of frames, and what gs-audio's null sink recorded.
 func _test_the_machinery_is_heard() -> void:
 	_section("the machinery is heard, from the course and nothing else")
 	# One machine of each kind, copied from the course it was measured on, in the built-in

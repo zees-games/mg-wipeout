@@ -5,7 +5,7 @@ const WoCourseIo := preload("../game/wo_course_io.gd")
 const WoWorld := preload("../game/wo_world.gd")
 const WoEvents := preload("../game/net/wo_events.gd")
 
-## A course that runs its map's own entities (dot-map's GSMapWorld), played on the server's step.
+## A course that runs its map's own entities (gs-map's GSMapWorld), played on the server's step.
 ## A bot cannot finish such a course (its buttons and doors are the puzzle), so this checks the machinery on the real
 ## map: nothing unhandled, spawns, every kind of entity fires, movers move and carry, state crosses the wire.
 
@@ -165,7 +165,7 @@ func _world_section(game: WoGame, world: GSMapWorld, runner: WoPlayer, plan: Dic
 	var manifest: Dictionary = world.mesh.manifest
 
 	_section("the world loads")
-	_check(world != null, "dot-map built it")
+	_check(world != null, "gs-map built it")
 	var arch := game.stage.finish_arch()
 	_check(arch != null and game.stage.finish_box().grow(0.6).has_point(arch.position + Vector3(0.0, 1.0, 0.0)),
 		"a finish arch stands at the finish box")

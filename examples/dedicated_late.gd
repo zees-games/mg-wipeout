@@ -1,7 +1,7 @@
 extends "dedicated_rig.gd"
 
 ## `time_up: finish_round` waits for a round being played, never for warmup: the game hands
-## dot-vote `round_in_progress_fn`. Run on a director of its own, so the real vote's clock is
+## gs-vote `round_in_progress_fn`. Run on a director of its own, so the real vote's clock is
 ## untouched; the match's state is set by hand and put back.
 func _test_finish_round_waits_for_a_live_round() -> void:
 	_section("finish_round waits for a live round, not warmup")
@@ -40,7 +40,7 @@ func _test_finish_round_waits_for_a_live_round() -> void:
 
 
 ## A director under `time_up: finish_round` carrying [param hook], its clock run out with a
-## winner already decided: what dot-vote's own suite builds, with the game's answer in it.
+## winner already decided: what gs-vote's own suite builds, with the game's answer in it.
 func _finish_round_probe(hook: Callable, applied: Array) -> GSVoteDirector:
 	var source := GSVoteListSource.new()
 	var _a := source.add(GSVoteChoice.of(&"a", "A"))
@@ -138,7 +138,7 @@ func _test_a_module_reload() -> void:
 	_finished()
 
 
-## A seat whose client has not lifted its loading cover (dot-game's "still loading") cannot be
+## A seat whose client has not lifted its loading cover (gs-game's "still loading") cannot be
 ## harmed, eliminated or put across, and can once it does; an admin's slay still passes. Over a
 ## real ENet socket: the client joins and says nothing, then sends `game.cover`.
 func _test_a_covered_seat_is_not_harmed() -> void:

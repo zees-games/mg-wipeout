@@ -112,7 +112,7 @@ func _course(doc: Dictionary, id: StringName, plan: Dictionary) -> String:
 	var start: Vector3 = ctx["start"]
 	var tps: Array = ctx["tps"]
 	var finish: AABB = ctx["finish"]
-	_check(ctx["world"] != null, "dot-map built the world")
+	_check(ctx["world"] != null, "gs-map built the world")
 
 	# the floor alone, then the machinery on the map's own io graph (this world), then the machinery again on a fresh world
 	# that never crosses a live hurt volume.

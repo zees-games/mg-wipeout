@@ -9,7 +9,7 @@ const CHECKS := 7
 var _entered := 0
 var _finished := 0
 
-const DIR := "res://cfg/game/mg-wipeout/dot_map/map/"
+const DIR := "res://cfg/game/mg-wipeout/gs_map/map/"
 
 
 func _ready() -> void:
@@ -18,7 +18,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("mg-wipeout: per-map cvars from cfg/game/mg-wipeout/dot_map/map")
+	print("mg-wipeout: per-map cvars from cfg/game/mg-wipeout/gs_map/map")
 	_entered += 1
 	GSAddonConfig.game = "mg-wipeout"
 	var fixture := DIR + "wo_mapcfg_fixture_*.yml"

@@ -1,6 +1,6 @@
 extends RefCounted
 
-## The phone's controls: dot-mobile's stick, drag-look and buttons (fire, alt-fire (throw), jump, duck, grab, reload,
+## The phone's controls: gs-mobile's stick, drag-look and buttons (fire, alt-fire (throw), jump, duck, grab, reload,
 ## the weapon arrows, the held board and the chat box) over the HUD, driving the client's own [GSFpsTouchSampler].
 ## Fire is read through [method is_held], so a thumb and auto-fire (the server's `sv_autofire`, off unless it says so)
 ## take one path. Built only where [method GSPlatform.has_touch] is true.
@@ -25,7 +25,7 @@ const BOARD := GSGameTouchLayout.BOARD
 const CHAT := GSGameTouchLayout.CHAT
 
 var controls: GSMobileControls = null
-## dot-ui's buttons inside the overlay, for the shell's DPI fit and the HUD's clearance.
+## gs-ui's buttons inside the overlay, for the shell's DPI fit and the HUD's clearance.
 var buttons: GSTouchButtons:
 	get:
 		return controls.buttons if controls != null else null
@@ -118,7 +118,7 @@ static func cap_button_height(platform: Object) -> void:
 		fit.set(&"button_max_height", MAX_HEIGHT)
 
 
-## The Menu button moves to the top left, clear of the buttons. By name: an older dot-menu has no such property.
+## The Menu button moves to the top left, clear of the buttons. By name: an older gs-menu has no such property.
 static func menu_button_top_left(platform: Object) -> void:
 	var menu: Object = platform.menu if platform != null else null
 	var menu_config: Object = menu.get(&"config") if menu != null else null

@@ -106,7 +106,7 @@ func _walk(game: WoGame, me: WoPlayer, other: WoPlayer, spot: Vector3, from: Vec
 	var to_spot := spot - from
 	me.controller.teleport(from + Vector3.UP * 0.05, rad_to_deg(atan2(-to_spot.x, -to_spot.z)), 0.0)
 	await get_tree().physics_frame
-	Input.action_press(&"dot_fps_forward")
+	Input.action_press(&"gs_fps_forward")
 	var closest := INF
 	for i in 90:
 		other.controller.teleport(spot, NAN, NAN)
@@ -122,7 +122,7 @@ func _walk(game: WoGame, me: WoPlayer, other: WoPlayer, spot: Vector3, from: Vec
 					closest = minf(closest, Vector2(a.x - b.x, a.z - b.z).length())
 		else:
 			closest = minf(closest, Vector2(a.x - spot.x, a.z - spot.z).length())
-	Input.action_release(&"dot_fps_forward")
+	Input.action_release(&"gs_fps_forward")
 	print("    %s: closest %.2f m" % ["solid" if solid else "pass-through", closest])
 	return closest
 

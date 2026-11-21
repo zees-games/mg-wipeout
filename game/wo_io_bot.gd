@@ -1,6 +1,6 @@
 extends RefCounted
 
-## How a stand-in runs a course that is a map's own world (see [WoCourseIo]): it walks dot-bot's navigation mesh,
+## How a stand-in runs a course that is a map's own world (see [WoCourseIo]): it walks gs-bot's navigation mesh,
 ## baked from static colliders, to the finish; teleports are edges and kill volumes are cut out ([GSBotLinks]).
 ## Movers are left out of the bake, so where the way on needs one the path ends short; [method reaches_finish] says.
 
@@ -76,7 +76,7 @@ var _wander_rng := GSRandomStream.new(900).stream(&"wo_io_bot_wander")
 var _clock := 0
 var _hops: Array[Dictionary] = []
 var _ladder_rides: Array[Dictionary] = []
-## The ladder being climbed (dot-bot's step function), or null.
+## The ladder being climbed (gs-bot's step function), or null.
 var _climb: GSBotClimb = null
 var _hops_for: NavigationMesh = null
 var _ride := {}
@@ -332,7 +332,7 @@ func _kill_ahead(feet: Vector3, toward: Vector3) -> bool:
 	return false
 
 
-## Climbs a ladder edge the path crosses: begins at its foot, then follows dot-bot's [GSBotClimb] to the top.
+## Climbs a ladder edge the path crosses: begins at its foot, then follows gs-bot's [GSBotClimb] to the top.
 ## Returns whether it set the command. A ladder is no hop: a jump at its foot only bounces off it.
 func _climb_step(feet: Vector3, tick: int, command: GSFpsCommand) -> bool:
 	var now := float(tick) / 64.0

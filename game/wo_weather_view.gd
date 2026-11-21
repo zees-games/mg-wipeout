@@ -12,7 +12,7 @@ var camera: Camera3D = null
 ## The game's tick, as a Callable, so this reads the same clock the simulation does.
 var tick_fn: Callable = Callable()
 
-## dot-weather draws the rain round the camera; the strikes below stay this view's own, because
+## gs-weather draws the rain round the camera; the strikes below stay this view's own, because
 ## they are gameplay (WoCourse.strike_at) and must land on the tick the simulation says.
 var _weather: GSWeather = null
 var _stormy: bool = false

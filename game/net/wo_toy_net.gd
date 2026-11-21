@@ -1,6 +1,6 @@
 extends GSNetBehaviour
 
-## One of the stage's toys on the wire (dot-props' [GSPropBody]): its moving part, whether it is on, and a use count.
+## One of the stage's toys on the wire (gs-props' [GSPropBody]): its moving part, whether it is on, and a use count.
 ## The server's physics, never predicted; the client's toy is frozen and posed from these. Paired by index, and
 ## registered before the stage is built, as a snapshot is read no further than its first unknown entity.
 

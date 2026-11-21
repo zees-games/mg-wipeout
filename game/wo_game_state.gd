@@ -9,14 +9,14 @@ const WoProgress := preload("wo_progress.gd")
 const WoRacer := preload("wo_racer.gd")
 
 ## The ragdoll reaction a knockout at low health gets: a flight, not a fall. This game's own
-## entry on dot-player-char's stock set, on the server (which picks it) and on the client (which
+## entry on gs-player-char's stock set, on the server (which picks it) and on the client (which
 ## looks it up by this id). Weight 0 so a roll never picks it; only [method decide_death] names it.
 const FLING := &"wipeout_fling"
 
 ## How far a prop may be from somebody's eyes to be picked up, in metres.
 const GRAB_REACH := 3.5
 
-# Team colours and names are dot-team's, for any number of teams: [method GSTeamSet.palette_colour] and
+# Team colours and names are gs-team's, for any number of teams: [method GSTeamSet.palette_colour] and
 # [method GSTeamSet.palette_name] (index 0 is team id 1).
 
 ## Which part of the round it is.
@@ -67,7 +67,7 @@ var _tick: int = 0
 var combat: GSCombatManager = null
 
 ## `func(player_id: StringName) -> bool`: whether a player may be hurt now, assigned by the
-## module from dot-game's `can_peer_be_harmed`. Unset offline, and a bot is never loading.
+## module from gs-game's `can_peer_be_harmed`. Unset offline, and a bot is never loading.
 var harm_gate: Callable = Callable()
 
 var physics: GSPhysicsLayout = null

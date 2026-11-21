@@ -1,10 +1,10 @@
 # Stand-ins
 
-Stand-ins run the document's route (`route` in mg-wipeout-maps) and make the mistakes a person makes. How many there are follows dot-server's `GSBotQuota`: a person replaces a bot, and leaving brings it back. Solo starts with eight (`offline_bots`, `-- --bots N` at launch); a server's default is `bot_quota 9` in fill mode, a person and eight (`minimum_players`, `game.yml`).
+Stand-ins run the document's route (`route` in mg-wipeout-maps) and make the mistakes a person makes. How many there are follows gs-server's `GSBotQuota`: a person replaces a bot, and leaving brings it back. Solo starts with eight (`offline_bots`, `-- --bots N` at launch); a server's default is `bot_quota 9` in fill mode, a person and eight (`minimum_players`, `game.yml`).
 
 ## How a stand-in races
 
-**The difficulty is dot-bot's `bot_difficulty`** (easy, medium, hard, nightmare; medium by default), the same word that sets how a stand-in aims in a final death (dot-bot's `GSBotAim`: `bot_turn_rate`, `bot_reaction`, `bot_aim_error`). The race is decided by mistakes, never by a slower run: everybody runs at the same speed. `WoRacer` holds one column of racing settings per preset, each a cvar (`wo_bot_<field>`, at the solo console too) that outlives a preset change once set by hand, the way dot-bot's own do:
+**The difficulty is gs-bot's `bot_difficulty`** (easy, medium, hard, nightmare; medium by default), the same word that sets how a stand-in aims in a final death (gs-bot's `GSBotAim`: `bot_turn_rate`, `bot_reaction`, `bot_aim_error`). The race is decided by mistakes, never by a slower run: everybody runs at the same speed. `WoRacer` holds one column of racing settings per preset, each a cvar (`wo_bot_<field>`, at the solo console too) that outlives a preset change once set by hand, the way gs-bot's own do:
 
 | Setting | easy | medium | hard | nightmare | What |
 | --- | --- | --- | --- | --- | --- |
@@ -16,7 +16,7 @@ Stand-ins run the document's route (`route` in mg-wipeout-maps) and make the mis
 | `wo_bot_recover` | 1.4 | 0.9 | 0.5 | 0.25 | seconds stood still after a fall |
 | `wo_bot_variety` | 0.45 | 0.45 | 0.4 | 0.3 | how much one stand-in differs from the next |
 | `wo_bot_risk` | 15 | 40 | 70 | 90 | chance in 100 of taking a fork's faster, riskier branch (a choice, so not scaled by `wo_bot_mistakes`) |
-| `bot_reaction` (dot-bot) | 0.5 | 0.3 | 0.21 | 0.12 | seconds between a window opening and setting off |
+| `bot_reaction` (gs-bot) | 0.5 | 0.3 | 0.21 | 0.12 | seconds between a window opening and setting off |
 
 - Every mistake is a seeded draw per bot, route point and ATTEMPT (`falls`), so a replayed round makes the same mistakes and a fumbled jump is not fumbled again on every attempt. Each bot's share of the preset (`factor`, up to `wo_bot_variety` either way) is drawn per bot and round: eight medium stand-ins are eight runners, and a different eight next round.
 - `wo_bot_mistakes` (`WoConfig.bot_mistakes`, default 1) scales all of it; 0 is a stand-in that is never wrong, which is what `headless_courses` runs to prove a course can be finished.
@@ -46,7 +46,7 @@ Each was earned by watching a bot fail in `tools/trace_course` (one runner) or `
 
 ## Courses that are a map's own world
 
-An io course has no `route`, so a stand-in walks a navigation mesh to the finish (`game/wo_io_bot.gd`: dot-bot's `GSBotNav` baked from the map's static colliders, movers left out). That gets it as far as the floor goes; what lies beyond (buttons, doors, teleports, rides) is the map's own logic and needs a human's route, which nothing records yet. `examples/headless_io_bots` pins per course whether the floor reaches the finish and whether a stand-in finishes: none finishes now (2026-10-27: hop edges are denser and drops start at 0.6 m, which joins Waytobar's start room to eight islands; the end of the floor is dived off toward a finish within 80 m); each stops at the end of the floor, and Scary, Lego, Dc, Waytobar and Labo keep walking into a kill volume there. A ladder edge (id from `GSBotLinks.LADDER_ID`) is not a hop: `WoIoBot` walks to its foot and follows dot-bot's `GSBotClimb` (face it, push forward, hop off at the top); `examples/headless_ladder_bot` proves it on a toy level, since no shipped course's goal needs one.
+An io course has no `route`, so a stand-in walks a navigation mesh to the finish (`game/wo_io_bot.gd`: gs-bot's `GSBotNav` baked from the map's static colliders, movers left out). That gets it as far as the floor goes; what lies beyond (buttons, doors, teleports, rides) is the map's own logic and needs a human's route, which nothing records yet. `examples/headless_io_bots` pins per course whether the floor reaches the finish and whether a stand-in finishes: none finishes now (2026-10-27: hop edges are denser and drops start at 0.6 m, which joins Waytobar's start room to eight islands; the end of the floor is dived off toward a finish within 80 m); each stops at the end of the floor, and Scary, Lego, Dc, Waytobar and Labo keep walking into a kill volume there. A ladder edge (id from `GSBotLinks.LADDER_ID`) is not a hop: `WoIoBot` walks to its foot and follows gs-bot's `GSBotClimb` (face it, push forward, hop off at the top); `examples/headless_ladder_bot` proves it on a toy level, since no shipped course's goal needs one.
 
 ## A field of them
 

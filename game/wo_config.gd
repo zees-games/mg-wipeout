@@ -162,8 +162,8 @@ extends GSConfig
 ## Whether the next course is drawn at random (seeded) rather than taken in order.
 @export var shuffle_courses: bool = true
 
-## The file that says which courses this server ROTATES: `maps.yml` in `cfg/server/addons/dot_map/` of the `--config`
-## directory (dot-map's `GSMapRotationFile`); the game ships none. Empty rotates every course. A course it leaves out
+## The file that says which courses this server ROTATES: `maps.yml` in `cfg/server/addons/gs_map/` of the `--config`
+## directory (gs-map's `GSMapRotationFile`); the game ships none. Empty rotates every course. A course it leaves out
 ## stays installed but is never drawn, balloted or nominated. Replaces [member shuffle_courses]. `sv_map_rotation_file`.
 @export var map_rotation_file: String = GSMapRotationFile.DEFAULT_STEM
 
@@ -216,7 +216,7 @@ extends GSConfig
 ## Nine, so one person races eight even solo: the final death needs two finishers.
 @export_range(0, 24, 1, "or_greater") var minimum_players: int = 9
 
-## Scales every mistake a stand-in makes (`wo_bot_mistakes`): 1 is the difficulty preset's (dot-bot's
+## Scales every mistake a stand-in makes (`wo_bot_mistakes`): 1 is the difficulty preset's (gs-bot's
 ## `bot_difficulty`, through [WoRacer]), 0 a stand-in never wrong. Not zero: a bot that never falls finishes in the
 ## same time every round. 0 is for the course suite, which proves a course can be finished.
 @export_range(0.0, 4.0, 0.05) var bot_mistakes: float = 1.0

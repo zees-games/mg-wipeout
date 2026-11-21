@@ -1,6 +1,6 @@
 extends Node
 
-## The final killcam. Client side: every drawn frame goes into dot-replay's [GSKillcamBuffer]; when a round ends on
+## The final killcam. Client side: every drawn frame goes into gs-replay's [GSKillcamBuffer]; when a round ends on
 ## a kill, [GSKillcam] replays it from the killer's eye before the reveal. No killer (a fall, a clock) goes straight
 ## to [signal over]. The length is `mp_killcam_time`.
 
@@ -9,7 +9,7 @@ const WoPlayer := preload("wo_player.gd")
 const WoWeaponIcons := preload("wo_weapon_icons.gd")
 
 ## Skip keys: the ones a runner's hands are on.
-const SKIP_ACTIONS: PackedStringArray = ["dot_fps_jump", "ui_cancel", "ui_accept"]
+const SKIP_ACTIONS: PackedStringArray = ["gs_fps_jump", "ui_cancel", "ui_accept"]
 
 ## The killcam is over, or never began; the end-of-round flow goes on from here.
 signal over(skipped: bool)
