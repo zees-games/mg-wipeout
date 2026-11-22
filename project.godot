@@ -10,10 +10,17 @@ config_version=5
 
 [application]
 
-config/name="mg-wipeout"
+config/name="Wipeout"
 config/description="Players race obstacle courses over open water; if two or more finish, they fight a final death in a random arena with props to throw and weapons on the floor."
 run/main_scene="res://game/wo.tscn"
 config/features=PackedStringArray("4.7")
+config/icon="res://branding/icon.png"
+config/windows_native_icon="res://branding/icon.ico"
+boot_splash/bg_color=Color(0.051, 0.0588, 0.0784, 1)
+boot_splash/fullsize=true
+boot_splash/image="res://branding/splash.png"
+boot_splash/show_image=true
+boot_splash/use_filter=true
 
 [audio]
 
