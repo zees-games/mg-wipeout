@@ -13,16 +13,16 @@ const WoEvents := preload("../game/net/wo_events.gd")
 ## enables after a delay), `ladders`, `push`, `button`, `floor` (metres a runner may sink in 1.5 s on its start, 0.5
 ## where the course passes), `rejects` (volumes a team filter turns a teamless body away from), `gun` (what the sidearm must reach: "breakable", "button" or "both"; "" only checks it fires harmlessly).
 const COURSES := {
-	&"wo_oaks_course": {"sections": 10, "checks": 40, "lava": false, "ladders": false, "rejects": 0, "gun": "breakable"},
-	&"wo_office_course": {"sections": 12, "checks": 45, "lava": true, "ladders": true, "rejects": 0, "gun": "breakable"},
-	&"wo_dans_course": {"sections": 11, "checks": 43, "lava": false, "ladders": true, "rejects": 0, "gun": "both"},
-	&"wo_pauls_course": {"sections": 10, "checks": 39, "lava": false, "ladders": false, "push": false, "floor": 0.7, "rejects": 3, "gun": "breakable"},
-	&"wo_scary_course": {"sections": 10, "checks": 39, "lava": false, "ladders": false, "push": false, "rejects": 0, "gun": "breakable"},
-	&"wo_lego_course": {"sections": 10, "checks": 36, "lava": false, "ladders": false, "push": false, "button": false, "rejects": 0, "gun": "breakable"},
-	&"wo_dc_course": {"sections": 10, "checks": 39, "lava": false, "ladders": false, "rejects": 0, "gun": ""},
-	&"wo_waytobar_course": {"sections": 10, "checks": 40, "lava": false, "ladders": false, "rejects": 0, "gun": "breakable"},
-	&"wo_labo_course": {"sections": 10, "checks": 40, "lava": false, "ladders": false, "rejects": 0, "gun": "breakable"},
-	&"wo_sweet_course": {"sections": 10, "checks": 40, "lava": false, "ladders": false, "rejects": 0, "gun": "breakable"},
+	&"wo_oaks_course": {"sections": 10, "checks": 41, "lava": false, "ladders": false, "rejects": 0, "gun": "breakable"},
+	&"wo_office_course": {"sections": 12, "checks": 46, "lava": true, "ladders": true, "rejects": 0, "gun": "breakable"},
+	&"wo_dans_course": {"sections": 11, "checks": 44, "lava": false, "ladders": true, "rejects": 0, "gun": "both"},
+	&"wo_pauls_course": {"sections": 10, "checks": 40, "lava": false, "ladders": false, "push": false, "floor": 0.7, "rejects": 3, "gun": "breakable"},
+	&"wo_scary_course": {"sections": 10, "checks": 40, "lava": false, "ladders": false, "push": false, "rejects": 0, "gun": "breakable"},
+	&"wo_lego_course": {"sections": 10, "checks": 37, "lava": false, "ladders": false, "push": false, "button": false, "rejects": 0, "gun": "breakable"},
+	&"wo_dc_course": {"sections": 10, "checks": 40, "lava": false, "ladders": false, "rejects": 0, "gun": ""},
+	&"wo_waytobar_course": {"sections": 10, "checks": 41, "lava": false, "ladders": false, "rejects": 0, "gun": "breakable"},
+	&"wo_labo_course": {"sections": 10, "checks": 41, "lava": false, "ladders": false, "rejects": 0, "gun": "breakable"},
+	&"wo_sweet_course": {"sections": 10, "checks": 41, "lava": false, "ladders": false, "rejects": 0, "gun": "breakable"},
 }
 
 var _expect_sections := 1
@@ -698,6 +698,10 @@ func _gun_section(game: WoGame, world: GSMapWorld, wants: String) -> void:
 	game.config.course_deaths_eliminate = false
 	var shooter := game.add_player(&"u8", "Shooter")
 	var bystander := game.add_player(&"u9", "Bystander")
+	await _steps(game, 4)
+	_check(shooter.weapons == null and bystander.weapons == null and game.phase == WoGame.Phase.COURSE,
+		"by default a runner on an io course spawns with an empty loadout: no weapon, no view model, no ammo")
+	game.config.io_sidearm = true
 	await _steps(game, 4)
 	_check(shooter.weapons != null and game.phase == WoGame.Phase.COURSE, "a runner on an io course carries a weapon", str(shooter.weapons))
 	var bystander_health := bystander.health.health if bystander.health != null else 0.0

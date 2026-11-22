@@ -1756,9 +1756,9 @@ func arm(player: WoPlayer, weapon_id: StringName) -> bool:
 	return true
 
 
-## Whether this is the running part of an io course, where everybody carries the sidearm.
+## Whether this is the running part of an io course with `io_sidearm` on (off by default: the race has no weapons).
 func _io_gun_phase() -> bool:
-	return phase == Phase.COURSE and stage != null and stage.io != null
+	return config.io_sidearm and phase == Phase.COURSE and stage != null and stage.io != null
 
 
 func _arm_for_io_course() -> void:
