@@ -1,6 +1,5 @@
 extends Label
 
-const WoHud := preload("wo_hud.gd")
 ## A course's one-paragraph introduction, top left: wrapped to a fixed share of the screen, outlined, gone after a few seconds.
 
 const MARGIN := Vector2(16.0, 72.0)
@@ -49,7 +48,8 @@ func layout() -> void:
 	var view := get_viewport_rect().size if is_inside_tree() else Vector2(1280.0, 720.0)
 	var r := rect_for(view)
 	if touch:
-		r = WoHud.touch_rects(view)["blurb"]
+		# Loaded on demand: a preload would drag wo_hud and the whole player graph (static weapon state) into every script that only measures the blurb, which then leaks at exit.
+		r = load("res://game/wo_hud.gd").touch_rects(view)["blurb"]
 		add_theme_font_size_override("font_size", TOUCH_FONT)
 	set_anchors_preset(Control.PRESET_TOP_LEFT)
 	position = r.position
