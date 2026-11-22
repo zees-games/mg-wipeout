@@ -59,7 +59,7 @@ func _run() -> void:
 	print("the library has the hazards")
 	if not GSSim.has(&"hazards"):
 		print("  gs-sim's hazards module is not loaded: the native half is skipped")
-		var required := (OS.get_environment("GS_SIM_REQUIRE_NATIVE") if OS.has_environment("GS_SIM_REQUIRE_NATIVE") else OS.get_environment("GS_SIM_REQUIRE_NATIVE")) == "1"
+		var required := OS.get_environment("GS_SIM_REQUIRE_NATIVE") == "1"
 		_check(not required, "the library is loaded (GS_SIM_REQUIRE_NATIVE=1)")
 		_done += 1
 		_report_sections(_entered, _done, 2, 4)
