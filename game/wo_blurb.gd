@@ -2,6 +2,7 @@ extends Label
 
 ## A course's one-paragraph introduction, top left: wrapped to a fixed share of the screen, outlined, gone after a few seconds.
 
+const WoPaths := preload("wo_paths.gd")
 const MARGIN := Vector2(16.0, 72.0)
 const MAX_WIDTH := 420.0
 ## The widest share of the view it may take, so a narrow or 4:3 window keeps the middle (the runner) clear.
@@ -49,7 +50,7 @@ func layout() -> void:
 	var r := rect_for(view)
 	if touch:
 		# Loaded on demand: a preload would drag wo_hud and the whole player graph (static weapon state) into every script that only measures the blurb, which then leaks at exit.
-		r = load("res://game/wo_hud.gd").touch_rects(view)["blurb"]
+		r = load(WoPaths.rebase("res://game/wo_hud.gd")).touch_rects(view)["blurb"]
 		add_theme_font_size_override("font_size", TOUCH_FONT)
 	set_anchors_preset(Control.PRESET_TOP_LEFT)
 	position = r.position
