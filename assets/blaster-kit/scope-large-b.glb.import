@@ -3,7 +3,7 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dgk6d2qk6no7k"
+uid="uid://diwlps44xhrhs"
 path="res://.godot/imported/scope-large-b.glb-081b82a417435bd94e8576ee0fab79ad.scn"
 
 [deps]
@@ -41,5 +41,5 @@ materials/extract_format=0
 materials/extract_path=""
 _subresources={}
 gltf/naming_version=2
-gltf/embedded_image_handling=1
+gltf/embedded_image_handling=2
 gltf/texture_map_mode=1

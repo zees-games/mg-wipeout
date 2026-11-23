@@ -3,7 +3,7 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://duw3flhasayme"
+uid="uid://bm6g4ubjrp1jg"
 path="res://.godot/imported/tool-axe.glb-fc0b51e7408b4808e18c169f1a08ac00.scn"
 
 [deps]
@@ -41,5 +41,5 @@ materials/extract_format=0
 materials/extract_path=""
 _subresources={}
 gltf/naming_version=2
-gltf/embedded_image_handling=1
+gltf/embedded_image_handling=2
 gltf/texture_map_mode=1

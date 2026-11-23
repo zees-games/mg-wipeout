@@ -3,7 +3,7 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dlc7dyavefgdf"
+uid="uid://cnh4bqtheo3j3"
 path="res://.godot/imported/knife_sharp.glb-230c61ffd444c83fd5935b61a3070344.scn"
 
 [deps]
@@ -41,5 +41,5 @@ materials/extract_format=0
 materials/extract_path=""
 _subresources={}
 gltf/naming_version=2
-gltf/embedded_image_handling=1
+gltf/embedded_image_handling=2
 gltf/texture_map_mode=1

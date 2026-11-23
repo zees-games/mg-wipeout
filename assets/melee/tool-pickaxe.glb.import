@@ -3,7 +3,7 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://buxffhnu2k16b"
+uid="uid://8brt1vlkval8"
 path="res://.godot/imported/tool-pickaxe.glb-587f404df027c2fae7cd5d57475276a4.scn"
 
 [deps]
@@ -41,5 +41,5 @@ materials/extract_format=0
 materials/extract_path=""
 _subresources={}
 gltf/naming_version=2
-gltf/embedded_image_handling=1
+gltf/embedded_image_handling=2
 gltf/texture_map_mode=1
