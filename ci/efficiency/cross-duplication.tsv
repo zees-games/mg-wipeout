@@ -16,12 +16,12 @@ game/wo_avatars.gd	50
 game/wo_catalogue.gd	32
 game/wo_client.gd	123
 game/wo_client_view.gd	36
-game/wo_course_doc.gd	54
-game/wo_figure.gd	87
+game/wo_course_doc.gd	30
+game/wo_figure.gd	67
 game/wo_game.gd	62
 game/wo_hud.gd	36
 game/wo_progress.gd	78
-game/wo_services.gd	120
+game/wo_services.gd	79
 game/wo_textures.gd	76
 props/wo_prop_body.gd	44
 tools/client_bench.gd	31
