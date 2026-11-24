@@ -2,8 +2,7 @@ extends RefCounted
 
 ## The phone's controls: gs-mobile's stick, drag-look and buttons (fire, alt-fire (throw), jump, duck, grab, reload,
 ## the weapon arrows, the held board and the chat box) over the HUD, driving the client's own [GSFpsTouchSampler].
-## Fire is read through [method is_held], so a thumb and auto-fire (the server's `sv_autofire`, off unless it says so)
-## take one path. Built only where [method GSPlatform.has_touch] is true.
+## Fire is read through [method is_held], so a thumb and auto-fire take one path. Built only where [method GSPlatform.has_touch] is true.
 
 const WoPlayer := preload("wo_player.gd")
 

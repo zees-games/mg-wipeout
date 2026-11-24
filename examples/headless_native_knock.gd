@@ -5,14 +5,9 @@ const WoConfig := preload("../game/wo_config.gd")
 const WoCourse := preload("../game/wo_course.gd")
 const WoGame := preload("../game/wo_game.gd")
 
-## What a stand-in asks of the course's hazards ([method WoCourse.bot_knock], [method WoCourse.path_clear]) goes to
-## gs-sim's `GSSimHazards` when the library is there, and it must answer as the script does: on every course, seeded
-## feet round the route and the hazards, ticks, crouches and limits give the same throw to the bit with the cull on and
-## off, and seeded runs between route points the same path_clear; [member WoCourse.native_knock] off asks the script;
-## a rebuilt course writes its table again; and a field of stand-ins racing with [member WoCourse.knock_verify] on
-## re-runs the script beside every live ask with no difference. Last, what it saves: the same round's ticks timed
-## native and script, alternated. With no library the native half is skipped; [code]GS_SIM_REQUIRE_NATIVE=1[/code]
-## (CI) fails instead.
+## What a stand-in asks of the course's hazards goes to gs-sim's `GSSimHazards` when the library is there, and it must
+## answer as the script does, on every course, with the cull on and off, native_knock off, a rebuilt course and a field
+## of stand-ins with knock_verify on; then the saving, timed native and script. [code]GS_SIM_REQUIRE_NATIVE=1[/code] (CI) fails without it.
 
 const TICK_RATE := 64
 const TICK := 1.0 / float(TICK_RATE)
@@ -177,9 +172,8 @@ func _seeded_section(catalogue: WoCatalogue, ids: Array) -> void:
 	_check(differ.is_empty(), "the native knock and path_clear answer as the script does", "; ".join(differ))
 
 
-## [method WoCourse.high_arm_near], [method WoCourse.tile_cell] and [method WoCourse.tile_columns] walk the spinners and
-## tile grids they keep, not every piece: on every course, built one after another in one world (so each build's clear
-## must drop the last course's), seeded points round the route, the hubs and the grids answer as the walk over every
+## [method WoCourse.high_arm_near], [method WoCourse.tile_cell] and [method WoCourse.tile_columns] walk the kept spinners
+## and tile grids, not every piece: on every course built in one world, seeded points answer as the walk over every
 ## piece does. Then the cost of each, kept and walked, alternated.
 func _kinds_section(catalogue: WoCatalogue, ids: Array) -> void:
 	var game := await _fresh_world(catalogue.courses[StringName(LIVE_COURSE)])

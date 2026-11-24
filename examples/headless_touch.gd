@@ -62,10 +62,8 @@ func _run() -> void:
 	_report_sections(_entered, _finished, 1, CHECKS)
 
 
-## Every HUD piece's rectangle clear of every other's, of every touch button (scaled by [param k], as the screen fit
-## leaves them, 28 units in from the corner) and of the Menu button, in one canvas.
-## Where gs-menu puts the touch Menu button: the corner this game's spec asks for (the one the real menu is built with, so
-## a spec that drifts back to the default top right fails here), a 96 x 52 button 14 units in from it.
+## Every HUD piece's rectangle clear of every other's, of every touch button (scaled by [param k], 28 units in) and of the Menu button, in one canvas.
+## Where gs-menu puts the touch Menu button: the corner this game's spec asks for, a 96 x 52 button 14 units in from it.
 func _menu_rect(view: Vector2) -> Rect2:
 	var corner := WoSettings.spec_for().menu_button_corner
 	var size := Vector2(96.0, 52.0)
