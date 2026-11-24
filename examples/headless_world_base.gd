@@ -2,6 +2,7 @@ extends GSGameCheckSuite
 
 const WoConfig := preload("../game/wo_config.gd")
 const WoGame := preload("../game/wo_game.gd")
+const WoCaches := preload("../game/wo_caches.gd")
 
 ## The fixed-step world the io suites share: stepping, a fresh WoGame per course and the failure prefix.
 
@@ -63,3 +64,9 @@ func _fresh_world(doc: Dictionary) -> WoGame:
 
 func _failure_prefix() -> String:
 	return "%s: " % (_world.config.course_ids[0] if _world != null else "?")
+
+
+## The suite ends with the static caches released, so no built world is still held at exit.
+func _report(expected := -1) -> void:
+	WoCaches.release()
+	super._report(expected)

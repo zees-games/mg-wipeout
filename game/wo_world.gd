@@ -314,3 +314,8 @@ static func build_io(spec: Dictionary, hooks: Dictionary, authoritative: bool, d
 		return null
 
 	return built.value
+
+
+## Drops the shared surfaces, for a suite that quits after building worlds.
+static func forget_cache() -> void:
+	_surfaces = null

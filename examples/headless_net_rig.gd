@@ -6,6 +6,7 @@ const WoCourseDoc := preload("../game/wo_course_doc.gd")
 const WoWorld := preload("../game/wo_world.gd")
 const WoEvents := preload("../game/net/wo_events.gd")
 const WoGame := preload("../game/wo_game.gd")
+const WoCaches := preload("../game/wo_caches.gd")
 const WoNetBridge := preload("../game/net/wo_net_bridge.gd")
 const WoPlayer := preload("../game/wo_player.gd")
 const WoEvent := preload("../game/net/wo_event.gd")
@@ -194,3 +195,9 @@ func _shape_of(piece: Dictionary) -> Transform3D:
 			return (node.get_child(0) as Node3D).transform
 		_:
 			return node.transform
+
+
+## The suite ends with the static caches released, so no built world is still held at exit.
+func _report(expected := -1) -> void:
+	WoCaches.release()
+	super._report(expected)

@@ -648,3 +648,8 @@ func describe() -> Dictionary:
 		"flashlight": flashlight,
 		"avatar": avatar.digest() if avatar != null else "stock",
 	}
+
+
+## Drops the shared weapon catalogue, for a suite that quits.
+static func forget_cache() -> void:
+	_weapon_catalogue = null
