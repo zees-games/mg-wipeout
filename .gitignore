@@ -91,3 +91,8 @@ Thumbs.db
 /model-library
 /addons/gs_weather
 /addons/gs_flashlight
+/addons/gs_player_class
+/addons/gs_server_query
+/addons/gs_bot_record
+/addons/gs_sql
+/addons/godot-sqlite
