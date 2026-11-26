@@ -214,7 +214,7 @@ check_weapon_art() {
     local tool
     tool="$(readlink -f addons/zee_weapons)/../../tools/sync-art.sh"
     [ -x "$tool" ] || return 0
-    "$tool" . --check >/dev/null 2>&1 || {
+    GODOT="$GODOT" "$tool" . --check >/dev/null 2>&1 || {
         printf '  %sFAIL%s weapon art is stale: run zee-gs-weapons/tools/sync-art.sh . and commit\n' "$RED" "$OFF"
         return 1
     }
