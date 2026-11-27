@@ -47,6 +47,9 @@ cd "$ROOT" || exit 1
 GODOT="${GODOT:-godot}"
 TIMEOUT=900
 PARSE=1
+# A suite that legitimately needs at least this long, as name=seconds; a larger --timeout still wins.
+# headless_routes takes 660-785 s on PH and was killed at 900 s under load (Nightly #12656).
+MIN_TIMEOUTS="headless_routes=1800"
 RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; OFF=$'\033[0m'
 CR=$'\r\033[K'
 [ -t 1 ] || { RED=""; GRN=""; YLW=""; OFF=""; CR=""; }
@@ -117,7 +120,11 @@ run_suite() {
     mkdir -p .godot/test-logs
     log=".godot/test-logs/$scene.log"
     [ -t 1 ] && printf '  ..   %s' "$scene"
-    timeout "$TIMEOUT" "$GODOT" --headless --path . "res://examples/$scene.tscn" >"$log" 2>&1
+    local limit="$TIMEOUT" mkv
+    for mkv in $MIN_TIMEOUTS; do
+        [ "${mkv%%=*}" = "$scene" ] && [ "$limit" -lt "${mkv#*=}" ] && limit="${mkv#*=}"
+    done
+    timeout "$limit" "$GODOT" --headless --path . "res://examples/$scene.tscn" >"$log" 2>&1
     status=$?
     summary="$(grep -Eo '[0-9]+ (passed|checks), [0-9]+ failed' "$log" | tail -1)"
     # Section accounting: "N sections entered, M finished" from GSGameCheckSuite._report_sections.
@@ -130,7 +137,7 @@ run_suite() {
         summary="$summary  [no section accounting]"
     fi
     if [ "$status" -eq 124 ]; then
-        out="did not finish within ${TIMEOUT}s"
+        out="did not finish within ${limit}s"
     elif [ "$status" -ne 0 ]; then
         out="exited $status"
     elif grep -qE 'SCRIPT ERROR|Parse Error|Lambda capture' "$log"; then
@@ -214,7 +221,7 @@ check_weapon_art() {
     local tool
     tool="$(readlink -f addons/zee_weapons)/../../tools/sync-art.sh"
     [ -x "$tool" ] || return 0
-    "$tool" . --check >/dev/null 2>&1 || {
+    GODOT="$GODOT" "$tool" . --check >/dev/null 2>&1 || {
         printf '  %sFAIL%s weapon art is stale: run zee-gs-weapons/tools/sync-art.sh . and commit\n' "$RED" "$OFF"
         return 1
     }
