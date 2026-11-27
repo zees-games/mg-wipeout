@@ -38,7 +38,7 @@
 /addons/gs_game
 # gs-sim: optional native library (snapshot codec); without its built library the GDScript twins run.
 # bootstrap fetches this release's library for the machine (gs-bootstrap: bootstrap-natives).
-# bootstrap-natives: gs-sim v0.2.12
+# bootstrap-natives: gs-sim v0.2.35
 /addons/gs_sim
 /addons/gs_workbench
 /addons/gs_chat
